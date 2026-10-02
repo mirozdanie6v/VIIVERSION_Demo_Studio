@@ -2,6 +2,7 @@ import { chromium, type Page } from "playwright";
 import { mkdir, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { animateClick, focusTarget, resetPresentation } from "./presentation.js";
+import { attachNetworkGuard } from "./security.js";
 import { describeTarget, resolveTarget } from "./targets.js";
 import {
   interpolate,
@@ -150,6 +151,7 @@ export async function runScenario(
     viewport,
     recordVideo: { dir: runDir, size: viewport },
   });
+  await attachNetworkGuard(context);
 
   const page = await context.newPage();
   const video = page.video();
