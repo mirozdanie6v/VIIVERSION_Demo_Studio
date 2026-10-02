@@ -1,7 +1,14 @@
 import { chromium, type Page } from "playwright";
 import { mkdir, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { DemoScenario, DemoStep, RunResult } from "./types.js";
+import { describeTarget, resolveTarget } from "./targets.js";
+import {
+  interpolate,
+  interpolateTarget,
+  normalizeLegacyTarget,
+  resolveUrl,
+} from "./scenario.js";
+import type { DemoScenario, DemoStep, RunResult, Target } from "./types.js";
 
 const DEFAULT_VIEWPORT = { width: 1440, height: 900 };
 
@@ -9,6 +16,12 @@ function makeRunId(name: string) {
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
   const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
   return `${stamp}-${slug || "demo"}`;
+}
+
+function requiredTarget(step: DemoStep, scenario: DemoScenario): Target {
+  const raw = normalizeLegacyTarget(step);
+  if (!raw) throw new Error(`Step "${step.action}" requires a target.`);
+  return interpolateTarget(raw, scenario.variables ?? {});
 }
 
 async function ensurePointerOverlay(page: Page) {
@@ -45,11 +58,11 @@ async function ensurePointerOverlay(page: Page) {
   });
 }
 
-async function movePointerTo(page: Page, selector: string) {
-  const locator = page.locator(selector).first();
+async function movePointerTo(page: Page, target: Target) {
+  const locator = resolveTarget(page, target);
   await locator.scrollIntoViewIfNeeded();
   const box = await locator.boundingBox();
-  if (!box) throw new Error(`Element has no visible box: ${selector}`);
+  if (!box) throw new Error(`Element has no visible box: ${describeTarget(target)}`);
 
   await ensurePointerOverlay(page);
   await page.evaluate(
@@ -74,31 +87,83 @@ async function animateClick(page: Page) {
   });
 }
 
-async function runStep(page: Page, step: DemoStep) {
+async function runAssertion(page: Page, step: Extract<DemoStep, { action: "assert" }>, scenario: DemoScenario) {
+  const target = interpolateTarget(step.target, scenario.variables ?? {});
+  const locator = resolveTarget(page, target);
+
+  switch (step.assertion) {
+    case "visible":
+      if (!(await locator.isVisible())) {
+        throw new Error(`Assertion failed: ${describeTarget(target)} is not visible.`);
+      }
+      return;
+    case "hidden":
+      if (await locator.isVisible()) {
+        throw new Error(`Assertion failed: ${describeTarget(target)} is visible.`);
+      }
+      return;
+    case "textContains": {
+      const expected = interpolate(step.expected ?? "", scenario.variables ?? {});
+      const actual = (await locator.textContent()) ?? "";
+      if (!actual.includes(expected)) {
+        throw new Error(
+          `Assertion failed: ${describeTarget(target)} text does not contain "${expected}". Actual: "${actual}".`,
+        );
+      }
+      return;
+    }
+    case "valueEquals": {
+      const expected = interpolate(step.expected ?? "", scenario.variables ?? {});
+      const actual = await locator.inputValue();
+      if (actual !== expected) {
+        throw new Error(
+          `Assertion failed: ${describeTarget(target)} value "${actual}" !== "${expected}".`,
+        );
+      }
+      return;
+    }
+  }
+}
+
+async function runStep(page: Page, step: DemoStep, scenario: DemoScenario) {
+  const variables = scenario.variables ?? {};
+
   switch (step.action) {
-    case "goto":
-      await page.goto(step.url, { waitUntil: "domcontentloaded" });
+    case "goto": {
+      const rawUrl = interpolate(step.url, variables);
+      const baseUrl = scenario.baseUrl ? interpolate(scenario.baseUrl, variables) : undefined;
+      await page.goto(resolveUrl(rawUrl, baseUrl), { waitUntil: "domcontentloaded" });
       await page.waitForLoadState("networkidle").catch(() => undefined);
       return;
-    case "click":
-      await movePointerTo(page, step.selector);
+    }
+    case "click": {
+      const target = requiredTarget(step, scenario);
+      await movePointerTo(page, target);
       await animateClick(page);
-      await page.locator(step.selector).first().click();
+      await resolveTarget(page, target).click();
       return;
-    case "fill":
-      await movePointerTo(page, step.selector);
-      await page.locator(step.selector).first().fill(step.value);
+    }
+    case "fill": {
+      const target = requiredTarget(step, scenario);
+      await movePointerTo(page, target);
+      await resolveTarget(page, target).fill(interpolate(step.value, variables));
       return;
-    case "hover":
-      await movePointerTo(page, step.selector);
-      await page.locator(step.selector).first().hover();
+    }
+    case "hover": {
+      const target = requiredTarget(step, scenario);
+      await movePointerTo(page, target);
+      await resolveTarget(page, target).hover();
       return;
+    }
     case "press": {
-      if (step.selector) {
-        await movePointerTo(page, step.selector);
-        await page.locator(step.selector).first().press(step.key);
+      const target = normalizeLegacyTarget(step);
+      const key = interpolate(step.key, variables);
+      if (target) {
+        const resolved = interpolateTarget(target, variables);
+        await movePointerTo(page, resolved);
+        await resolveTarget(page, resolved).press(key);
       } else {
-        await page.keyboard.press(step.key);
+        await page.keyboard.press(key);
       }
       return;
     }
@@ -108,6 +173,22 @@ async function runStep(page: Page, step: DemoStep) {
     case "wait":
       await page.waitForTimeout(step.ms);
       return;
+    case "waitFor": {
+      const target = interpolateTarget(step.target, variables);
+      await resolveTarget(page, target).waitFor({
+        state: step.state ?? "visible",
+        timeout: step.timeoutMs ?? 10_000,
+      });
+      return;
+    }
+    case "waitForNavigation":
+      await page.waitForLoadState(step.waitUntil ?? "domcontentloaded", {
+        timeout: step.timeoutMs ?? 15_000,
+      });
+      return;
+    case "assert":
+      await runAssertion(page, step, scenario);
+      return;
   }
 }
 
@@ -115,11 +196,6 @@ export async function runScenario(
   scenario: DemoScenario,
   options: { headed?: boolean; artifactsRoot?: string } = {},
 ): Promise<RunResult> {
-  if (!scenario.name?.trim()) throw new Error("Scenario name is required.");
-  if (!Array.isArray(scenario.steps) || scenario.steps.length === 0) {
-    throw new Error("Scenario must contain at least one step.");
-  }
-
   const startedAt = new Date().toISOString();
   const runId = makeRunId(scenario.name);
   const runDir = path.resolve(options.artifactsRoot ?? "artifacts", runId);
@@ -141,26 +217,48 @@ export async function runScenario(
     action: DemoStep["action"];
     startedAt: string;
     finishedAt: string;
+    success: boolean;
+    error?: string;
   }> = [];
+
+  let runError: unknown;
 
   try {
     for (let index = 0; index < scenario.steps.length; index += 1) {
       const step = scenario.steps[index];
       const stepStartedAt = new Date().toISOString();
 
-      await runStep(page, step);
+      try {
+        await runStep(page, step, scenario);
 
-      const pause = step.pauseAfterMs ?? scenario.defaultPauseMs ?? 650;
-      if (step.action !== "wait" && pause > 0) await page.waitForTimeout(pause);
+        const pause = step.pauseAfterMs ?? scenario.defaultPauseMs ?? 650;
+        if (!["wait", "waitFor", "waitForNavigation"].includes(step.action) && pause > 0) {
+          await page.waitForTimeout(pause);
+        }
 
-      timeline.push({
-        index,
-        label: step.label ?? `${step.action} #${index + 1}`,
-        action: step.action,
-        startedAt: stepStartedAt,
-        finishedAt: new Date().toISOString(),
-      });
+        timeline.push({
+          index,
+          label: step.label ?? `${step.action} #${index + 1}`,
+          action: step.action,
+          startedAt: stepStartedAt,
+          finishedAt: new Date().toISOString(),
+          success: true,
+        });
+      } catch (error) {
+        timeline.push({
+          index,
+          label: step.label ?? `${step.action} #${index + 1}`,
+          action: step.action,
+          startedAt: stepStartedAt,
+          finishedAt: new Date().toISOString(),
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        throw error;
+      }
     }
+  } catch (error) {
+    runError = error;
   } finally {
     await context.close();
     await browser.close();
@@ -176,11 +274,22 @@ export async function runScenario(
   }
 
   const finishedAt = new Date().toISOString();
+  const success = runError === undefined;
+
   await writeFile(
     path.join(runDir, "run.json"),
-    JSON.stringify({ scenario, timeline, startedAt, finishedAt, videoPath }, null, 2),
+    JSON.stringify({
+      scenario,
+      timeline,
+      startedAt,
+      finishedAt,
+      videoPath,
+      success,
+      error: runError instanceof Error ? runError.message : runError ? String(runError) : undefined,
+    }, null, 2),
     "utf8",
   );
 
-  return { runId, runDir, videoPath, startedAt, finishedAt };
+  if (runError) throw runError;
+  return { runId, runDir, videoPath, startedAt, finishedAt, success };
 }
