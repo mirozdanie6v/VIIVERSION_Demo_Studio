@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { planDemo } from "./director.js";
+import { recordUsageEvent } from "./metering.js";
 import { renderRun, type RenderPreset } from "./render.js";
 import { runScenario } from "./runner.js";
 import { assertSafeHttpUrl } from "./security.js";
@@ -54,7 +55,7 @@ function positiveInteger(value: string | undefined, fallback: number): number {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
 }
 
-function narrationFor(job: DemoJob, scenario: Awaited<ReturnType<typeof planDemo>>["scenario"]): string {
+function narrationFor(scenario: Awaited<ReturnType<typeof planDemo>>["scenario"]): string {
   return scenario.steps
     .map((step) => step.narration?.trim())
     .filter((value): value is string => Boolean(value))
@@ -191,6 +192,7 @@ export class DemoJobManager {
 
   private async execute(job: DemoJob): Promise<void> {
     const jobDir = path.join(this.rootDir, job.id);
+    const startedMs = Date.now();
 
     try {
       await this.update(job, {
@@ -233,7 +235,7 @@ export class DemoJobManager {
 
       let voiceoverPath: string | undefined;
       if (job.request.voiceover) {
-        const narration = narrationFor(job, directed.scenario);
+        const narration = narrationFor(directed.scenario);
         if (!narration) {
           throw new Error("Voiceover requested, but the generated scenario contains no narration.");
         }
@@ -274,13 +276,38 @@ export class DemoJobManager {
         artifactPath,
         completedAt,
       });
+
+      void recordUsageEvent({
+        jobId: job.id,
+        outcome: "completed",
+        preset,
+        captions: job.request.captions !== false,
+        voiceover: Boolean(job.request.voiceover),
+        durationMs: Date.now() - startedMs,
+        occurredAt: completedAt,
+      }, this.rootDir).catch((meterError) => {
+        console.error("[metering]", meterError);
+      });
     } catch (error) {
+      const completedAt = new Date().toISOString();
       await this.update(job, {
         status: "failed",
         progress: 100,
         message: "Demo generation failed.",
         error: error instanceof Error ? error.message : String(error),
-        completedAt: new Date().toISOString(),
+        completedAt,
+      });
+
+      void recordUsageEvent({
+        jobId: job.id,
+        outcome: "failed",
+        preset: job.request.preset ?? "16:9",
+        captions: job.request.captions !== false,
+        voiceover: Boolean(job.request.voiceover),
+        durationMs: Date.now() - startedMs,
+        occurredAt: completedAt,
+      }, this.rootDir).catch((meterError) => {
+        console.error("[metering]", meterError);
       });
     }
   }
