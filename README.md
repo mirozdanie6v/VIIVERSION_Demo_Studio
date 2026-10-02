@@ -131,6 +131,43 @@ Secrets remain outside the scenario file.
 
 Assertions: `visible`, `hidden`, `textContains`, `valueEquals`.
 
+## Final MP4 render
+
+After capture:
+
+```bash
+npm run render -- --run artifacts/<run-id> --preset 16:9
+```
+
+Export presets:
+
+- `16:9` → 1920×1080
+- `9:16` → 1080×1920
+- `1:1` → 1080×1080
+
+The renderer currently supports:
+
+- H.264 MP4 output;
+- burned-in captions generated from `narration` / `label`;
+- VIIVERSION branding and optional CTA;
+- optional existing voiceover audio;
+- optional looping background music;
+- automatic music ducking under narration;
+- AI voiceover generation through OpenAI Text-to-Speech when `--tts` is used.
+
+Example with AI voiceover:
+
+```bash
+OPENAI_API_KEY=... npm run render -- \
+  --run artifacts/<run-id> \
+  --preset 9:16 \
+  --tts \
+  --voice marin \
+  --cta "Book your demo"
+```
+
+For narration, add `narration` to the relevant scenario steps. FFmpeg must be available as `ffmpeg` or through `FFMPEG_PATH`.
+
 ## Product architecture
 
 - **Scenario Engine** — deterministic and validated demo workflow.
