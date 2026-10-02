@@ -4,9 +4,9 @@ Automatic presentation-video generation for web applications.
 
 ## Current flow
 
-`scenario.json → Playwright runner → recorded browser walkthrough + timeline metadata`
+`scenario.json → autonomous browser walkthrough → presentation camera → recorded video + timeline metadata`
 
-The runner can already navigate the product, find UI by semantic selectors, fill forms, click, wait for UI/navigation, assert expected states and record the complete session.
+The runner can navigate the product, find UI by semantic selectors, fill forms, click, wait for UI/navigation, assert expected states and automatically emphasize the active interface element while recording.
 
 ## Quick start
 
@@ -33,6 +33,18 @@ artifacts/<run-id>/
   "variables": {
     "product": "Premium Tour"
   },
+  "presentation": {
+    "smartZoom": {
+      "scale": 1.14,
+      "mobileScale": 1.04
+    },
+    "focusRing": {
+      "enabled": true
+    },
+    "clickRipple": {
+      "enabled": true
+    }
+  },
   "steps": [
     { "action": "goto", "url": "/catalog" },
     {
@@ -51,6 +63,31 @@ artifacts/<run-id>/
   ]
 }
 ```
+
+### Presentation Motion
+
+For targeted actions the camera now:
+
+1. smoothly centers the active element;
+2. calculates its on-screen geometry;
+3. applies adaptive zoom around the element;
+4. moves the presentation cursor to it;
+5. shows a configurable focus ring;
+6. adds click ripple feedback;
+7. returns safely to the normal view before the next scene.
+
+Desktop and mobile use separate zoom defaults. Each camera frame is also written into `run.json`, so the later renderer can reuse exact element geometry for post-production zooms.
+
+Configuration:
+
+- `presentation.enabled`
+- `presentation.smartZoom.scale`
+- `presentation.smartZoom.mobileScale`
+- `presentation.smartZoom.transitionMs`
+- `presentation.smartZoom.settleMs`
+- `presentation.cursor.*`
+- `presentation.focusRing.*`
+- `presentation.clickRipple.*`
 
 ### Targets
 
