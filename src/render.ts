@@ -196,10 +196,10 @@ export async function renderRun(options: RenderOptions): Promise<string> {
   if (voiceIndex !== undefined && musicIndex !== undefined) {
     const volume = options.musicVolume ?? 0.16;
     filterParts.push(
-      `[${voiceIndex}:a]apad[voicepad]`,
+      `[${voiceIndex}:a]apad,asplit=2[voice_sidechain][voice_mix]`,
       `[${musicIndex}:a]volume=${volume}[music]`,
-      "[music][voicepad]sidechaincompress=threshold=0.03:ratio=10:attack=20:release=350[ducked]",
-      "[voicepad][ducked]amix=inputs=2:duration=longest:normalize=0[aout]",
+      "[music][voice_sidechain]sidechaincompress=threshold=0.03:ratio=10:attack=20:release=350[ducked]",
+      "[voice_mix][ducked]amix=inputs=2:duration=longest:normalize=0[aout]",
     );
   } else if (voiceIndex !== undefined) {
     filterParts.push(`[${voiceIndex}:a]apad[aout]`);
