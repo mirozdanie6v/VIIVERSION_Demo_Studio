@@ -54,6 +54,7 @@ export type CameraFrame = {
 
 type BaseStep = {
   label?: string;
+  narration?: string;
   pauseAfterMs?: number;
 };
 
