@@ -3,7 +3,7 @@ import { mkdir, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { animateClick, focusTarget, resetPresentation } from "./presentation.js";
 import { attachNetworkGuard } from "./security.js";
-import { describeTarget, resolveTarget } from "./targets.js";
+import { describeTarget, resolveTarget, resolveTargetWithRecovery } from "./targets.js";
 import {
   interpolate,
   interpolateTarget,
@@ -64,11 +64,19 @@ async function runAssertion(page: Page, step: Extract<DemoStep, { action: "asser
   }
 }
 
+type StepExecution = {
+  camera?: CameraFrame;
+  recovery?: {
+    original: Target;
+    resolved: Target;
+  };
+};
+
 async function runStep(
   page: Page,
   step: DemoStep,
   scenario: DemoScenario,
-): Promise<CameraFrame | undefined> {
+): Promise<StepExecution> {
   const variables = scenario.variables ?? {};
 
   switch (step.action) {
@@ -77,62 +85,97 @@ async function runStep(
       const baseUrl = scenario.baseUrl ? interpolate(scenario.baseUrl, variables) : undefined;
       await page.goto(resolveUrl(rawUrl, baseUrl), { waitUntil: "domcontentloaded" });
       await page.waitForLoadState("networkidle").catch(() => undefined);
-      return undefined;
+      return {};
     }
     case "click": {
       const target = requiredTarget(step, scenario);
-      const camera = await focusTarget(page, target, scenario.presentation);
+      const resolved = await resolveTargetWithRecovery(page, target);
+      const camera = await focusTarget(page, resolved.target, scenario.presentation);
       await animateClick(page, scenario.presentation);
-      await resolveTarget(page, target).click();
-      return camera;
+      await resolved.locator.click();
+      return {
+        camera,
+        recovery: resolved.recovered
+          ? { original: target, resolved: resolved.target }
+          : undefined,
+      };
     }
     case "fill": {
       const target = requiredTarget(step, scenario);
-      const camera = await focusTarget(page, target, scenario.presentation);
-      await resolveTarget(page, target).fill(interpolate(step.value, variables));
-      return camera;
+      const resolved = await resolveTargetWithRecovery(page, target);
+      const camera = await focusTarget(page, resolved.target, scenario.presentation);
+      await resolved.locator.fill(interpolate(step.value, variables));
+      return {
+        camera,
+        recovery: resolved.recovered
+          ? { original: target, resolved: resolved.target }
+          : undefined,
+      };
     }
     case "hover": {
       const target = requiredTarget(step, scenario);
-      const camera = await focusTarget(page, target, scenario.presentation);
-      await resolveTarget(page, target).hover();
-      return camera;
+      const resolved = await resolveTargetWithRecovery(page, target);
+      const camera = await focusTarget(page, resolved.target, scenario.presentation);
+      await resolved.locator.hover();
+      return {
+        camera,
+        recovery: resolved.recovered
+          ? { original: target, resolved: resolved.target }
+          : undefined,
+      };
     }
     case "press": {
       const target = normalizeLegacyTarget(step);
       const key = interpolate(step.key, variables);
       if (target) {
-        const resolved = interpolateTarget(target, variables);
-        const camera = await focusTarget(page, resolved, scenario.presentation);
-        await resolveTarget(page, resolved).press(key);
-        return camera;
+        const original = interpolateTarget(target, variables);
+        const resolved = await resolveTargetWithRecovery(page, original);
+        const camera = await focusTarget(page, resolved.target, scenario.presentation);
+        await resolved.locator.press(key);
+        return {
+          camera,
+          recovery: resolved.recovered
+            ? { original, resolved: resolved.target }
+            : undefined,
+        };
       }
 
       await page.keyboard.press(key);
-      return undefined;
+      return {};
     }
     case "scroll":
       await page.mouse.wheel(step.x ?? 0, step.y);
-      return undefined;
+      return {};
     case "wait":
       await page.waitForTimeout(step.ms);
-      return undefined;
+      return {};
     case "waitFor": {
       const target = interpolateTarget(step.target, variables);
+      if ((step.state ?? "visible") === "visible") {
+        const resolved = await resolveTargetWithRecovery(page, target, {
+          primaryTimeoutMs: step.timeoutMs ?? 10_000,
+        });
+        return {
+          recovery: resolved.recovered
+            ? { original: target, resolved: resolved.target }
+            : undefined,
+        };
+      }
+
       await resolveTarget(page, target).waitFor({
-        state: step.state ?? "visible",
+        state: step.state,
         timeout: step.timeoutMs ?? 10_000,
       });
-      return undefined;
+      return {};
     }
     case "waitForNavigation":
       await page.waitForLoadState(step.waitUntil ?? "domcontentloaded", {
         timeout: step.timeoutMs ?? 15_000,
       });
-      return undefined;
+      return {};
     case "assert":
       await runAssertion(page, step, scenario);
-      return undefined;
+      return {};
   }
 }
 
@@ -164,6 +207,10 @@ export async function runScenario(
     finishedAt: string;
     success: boolean;
     camera?: CameraFrame;
+    recovery?: {
+      original: Target;
+      resolved: Target;
+    };
     error?: string;
   }> = [];
 
@@ -175,14 +222,14 @@ export async function runScenario(
       const stepStartedAt = new Date().toISOString();
 
       try {
-        const camera = await runStep(page, step, scenario);
+        const execution = await runStep(page, step, scenario);
 
         const pause = step.pauseAfterMs ?? scenario.defaultPauseMs ?? 650;
         if (!["wait", "waitFor", "waitForNavigation"].includes(step.action) && pause > 0) {
           await page.waitForTimeout(pause);
         }
 
-        if (camera) {
+        if (execution.camera) {
           await resetPresentation(page, scenario.presentation);
         }
 
@@ -193,7 +240,8 @@ export async function runScenario(
           startedAt: stepStartedAt,
           finishedAt: new Date().toISOString(),
           success: true,
-          camera,
+          camera: execution.camera,
+          recovery: execution.recovery,
         });
       } catch (error) {
         await resetPresentation(page, scenario.presentation).catch(() => undefined);

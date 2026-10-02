@@ -29,10 +29,14 @@ async function main() {
   let voiceoverPath = arg("--voiceover");
 
   if (has("--tts")) {
-    const manifest = JSON.parse(await readFile(path.join(runDir, "run.json"), "utf8")) as Parameters<typeof buildNarration>[0];
+    const manifest = JSON.parse(
+      await readFile(path.join(runDir, "run.json"), "utf8"),
+    ) as Parameters<typeof buildNarration>[0];
     const narration = buildNarration(manifest);
     if (!narration) {
-      throw new Error("No step narration found. Add narration to scenario steps before using --tts.");
+      throw new Error(
+        "No step narration found. Add narration to scenario steps before using --tts.",
+      );
     }
 
     voiceoverPath = path.join(runDir, "voiceover.mp3");
@@ -49,9 +53,14 @@ async function main() {
     captions: !has("--no-captions"),
     voiceoverPath,
     musicPath: arg("--music"),
-    musicVolume: arg("--music-volume") ? Number(arg("--music-volume")) : undefined,
+    musicVolume: arg("--music-volume")
+      ? Number(arg("--music-volume"))
+      : undefined,
     brandLabel: arg("--brand") ?? "VIIVERSION",
     cta: arg("--cta"),
+    title: arg("--title"),
+    intro: !has("--no-intro"),
+    outro: !has("--no-outro"),
   });
 
   console.log(output);

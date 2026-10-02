@@ -1,6 +1,13 @@
 import { spawn } from "node:child_process";
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import {
+  buildScenePlan,
+  editedDuration,
+  type EditScene,
+  type SceneManifest,
+  type SceneTimelineEntry,
+} from "./scenes.js";
 
 export type RenderPreset = "16:9" | "9:16" | "1:1";
 
@@ -14,28 +21,19 @@ export type RenderOptions = {
   musicVolume?: number;
   brandLabel?: string;
   cta?: string;
+  title?: string;
+  intro?: boolean;
+  outro?: boolean;
+  introSeconds?: number;
+  outroSeconds?: number;
   ffmpegPath?: string;
 };
 
-type TimelineEntry = {
-  index: number;
-  label: string;
-  action: string;
-  startedAt: string;
-  finishedAt: string;
-  success: boolean;
-};
-
-type Manifest = {
-  scenario: {
-    steps: Array<{
-      action: string;
-      label?: string;
-      narration?: string;
-    }>;
+type Manifest = SceneManifest & {
+  scenario: SceneManifest["scenario"] & {
+    name?: string;
   };
-  timeline: TimelineEntry[];
-  startedAt: string;
+  timeline: SceneTimelineEntry[];
   videoPath?: string;
   success: boolean;
 };
@@ -67,7 +65,17 @@ function sanitizeCaption(text: string): string {
   return text.replace(/\r?\n/g, " ").trim();
 }
 
-export function buildCaptions(manifest: Manifest): string {
+function sceneForStep(
+  index: number,
+  scenes: EditScene[],
+): EditScene | undefined {
+  return scenes.find((scene) => scene.stepIndexes.includes(index));
+}
+
+export function buildCaptions(
+  manifest: Manifest,
+  scenes: EditScene[] = buildScenePlan(manifest),
+): string {
   const entries: string[] = [];
   let counter = 1;
 
@@ -77,14 +85,34 @@ export function buildCaptions(manifest: Manifest): string {
     const text = sanitizeCaption(step?.narration ?? step?.label ?? "");
     if (!text) continue;
 
-    const start = secondsBetween(manifest.startedAt, item.startedAt);
-    const rawEnd = secondsBetween(manifest.startedAt, item.finishedAt);
-    const end = Math.max(start + 1.2, rawEnd + 0.35);
+    const sourceStart = secondsBetween(manifest.startedAt, item.startedAt);
+    const sourceEnd = secondsBetween(manifest.startedAt, item.finishedAt);
+
+    let start = sourceStart;
+    let end = Math.max(sourceStart + 1.2, sourceEnd + 0.35);
+
+    if (scenes.length > 0) {
+      const scene = sceneForStep(item.index, scenes);
+      if (!scene) continue;
+
+      start =
+        scene.outputStart +
+        Math.max(0, sourceStart - scene.sourceStart);
+      end =
+        scene.outputStart +
+        Math.min(
+          scene.sourceEnd - scene.sourceStart,
+          Math.max(
+            sourceStart - scene.sourceStart + 1.2,
+            sourceEnd - scene.sourceStart + 0.35,
+          ),
+        );
+    }
 
     entries.push(
       [
         String(counter),
-        `${srtTime(start)} --> ${srtTime(end)}`,
+        `${srtTime(start)} --> ${srtTime(Math.max(start + 0.6, end))}`,
         text,
       ].join("\n"),
     );
@@ -113,6 +141,10 @@ function escapeDrawText(value: string): string {
     .replace(/%/g, "\\%");
 }
 
+function number(value: number): string {
+  return value.toFixed(3).replace(/0+$/, "").replace(/\.$/, "");
+}
+
 async function runFfmpeg(executable: string, args: string[]): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     const child = spawn(executable, args, { stdio: ["ignore", "inherit", "inherit"] });
@@ -122,6 +154,47 @@ async function runFfmpeg(executable: string, args: string[]): Promise<void> {
       else reject(new Error(`ffmpeg exited with code ${code ?? "unknown"}.`));
     });
   });
+}
+
+function buildMainVideoFilters(
+  width: number,
+  height: number,
+  scenes: EditScene[],
+): string[] {
+  const filters: string[] = [];
+  const base =
+    `scale=${width}:${height}:force_original_aspect_ratio=decrease,` +
+    `pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2,` +
+    "setsar=1,fps=30,settb=AVTB";
+
+  if (scenes.length === 0) {
+    filters.push(`[0:v]${base}[mainraw]`);
+    return filters;
+  }
+
+  if (scenes.length === 1) {
+    const scene = scenes[0];
+    filters.push(
+      `[0:v]${base},trim=start=${number(scene.sourceStart)}:end=${number(scene.sourceEnd)},setpts=PTS-STARTPTS[mainraw]`,
+    );
+    return filters;
+  }
+
+  const splitLabels = scenes.map((_, index) => `[source${index}]`).join("");
+  filters.push(`[0:v]${base},split=${scenes.length}${splitLabels}`);
+
+  scenes.forEach((scene, index) => {
+    filters.push(
+      `[source${index}]trim=start=${number(scene.sourceStart)}:end=${number(scene.sourceEnd)},setpts=PTS-STARTPTS[scene${index}]`,
+    );
+  });
+
+  const sceneInputs = scenes.map((_, index) => `[scene${index}]`).join("");
+  filters.push(
+    `${sceneInputs}concat=n=${scenes.length}:v=1:a=0[mainraw]`,
+  );
+
+  return filters;
 }
 
 export async function renderRun(options: RenderOptions): Promise<string> {
@@ -143,8 +216,26 @@ export async function renderRun(options: RenderOptions): Promise<string> {
     options.outputPath ?? path.join(runDir, `final-${preset.replace(":", "x")}.mp4`),
   );
 
+  const scenes = buildScenePlan(manifest);
+  await writeFile(
+    path.join(runDir, "scenes.json"),
+    JSON.stringify(
+      {
+        sourceDurationSeconds: secondsBetween(
+          manifest.startedAt,
+          manifest.finishedAt ?? manifest.timeline.at(-1)?.finishedAt ?? manifest.startedAt,
+        ),
+        editedDurationSeconds: editedDuration(manifest, scenes),
+        scenes,
+      },
+      null,
+      2,
+    ) + "\n",
+    "utf8",
+  );
+
   const captionsPath = path.join(runDir, "captions.srt");
-  const captions = buildCaptions(manifest);
+  const captions = buildCaptions(manifest, scenes);
   if (options.captions !== false && captions) {
     await writeFile(captionsPath, captions, "utf8");
   }
@@ -166,43 +257,87 @@ export async function renderRun(options: RenderOptions): Promise<string> {
     args.push("-stream_loop", "-1", "-i", path.resolve(options.musicPath));
   }
 
-  const videoFilters = [
-    `scale=${width}:${height}:force_original_aspect_ratio=decrease`,
-    `pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2`,
-    "setsar=1",
-  ];
+  const filterParts = buildMainVideoFilters(width, height, scenes);
+  const mainDecor: string[] = [];
 
   if (options.captions !== false && captions) {
-    videoFilters.push(
+    mainDecor.push(
       `subtitles='${escapeFilterPath(captionsPath)}':force_style='FontName=DejaVu Sans,FontSize=18,PrimaryColour=&H00FFFFFF,OutlineColour=&H66000000,BorderStyle=1,Outline=2,Shadow=0,MarginV=58'`,
     );
   }
 
   const brandLabel = options.brandLabel ?? "VIIVERSION";
   if (brandLabel) {
-    videoFilters.push(
+    mainDecor.push(
       `drawtext=font='DejaVu Sans':text='${escapeDrawText(brandLabel)}':fontcolor=white@0.88:fontsize=28:x=w-tw-42:y=34`,
     );
   }
 
-  if (options.cta) {
-    videoFilters.push(
+  if (options.cta && options.outro === false) {
+    mainDecor.push(
       `drawtext=font='DejaVu Sans':text='${escapeDrawText(options.cta)}':fontcolor=white:fontsize=24:x=(w-tw)/2:y=h-th-38:box=1:boxcolor=black@0.42:boxborderw=12`,
     );
   }
 
-  const filterParts = [`[0:v]${videoFilters.join(",")}[vout]`];
+  filterParts.push(
+    mainDecor.length > 0
+      ? `[mainraw]${mainDecor.join(",")}[main]`
+      : "[mainraw]null[main]",
+  );
+
+  const introEnabled = options.intro !== false;
+  const outroEnabled = options.outro !== false;
+  const introSeconds = introEnabled ? Math.max(0.4, options.introSeconds ?? 1.15) : 0;
+  const outroSeconds = outroEnabled ? Math.max(0.6, options.outroSeconds ?? 1.55) : 0;
+  const title = options.title ?? manifest.scenario.name ?? "Product demonstration";
+
+  const finalVideoInputs: string[] = [];
+
+  if (introEnabled) {
+    filterParts.push(
+      `color=c=0x090B10:s=${width}x${height}:r=30:d=${number(introSeconds)},` +
+      `drawtext=font='DejaVu Sans':text='${escapeDrawText(brandLabel)}':fontcolor=white:fontsize=46:x=(w-tw)/2:y=(h-th)/2-34,` +
+      `drawtext=font='DejaVu Sans':text='${escapeDrawText(title)}':fontcolor=white@0.72:fontsize=24:x=(w-tw)/2:y=(h-th)/2+32,` +
+      "format=yuv420p,settb=AVTB[intro]",
+    );
+    finalVideoInputs.push("[intro]");
+  }
+
+  finalVideoInputs.push("[main]");
+
+  if (outroEnabled) {
+    const outroText = options.cta ?? "Powered by VIIVERSION Demo Studio";
+    filterParts.push(
+      `color=c=0x090B10:s=${width}x${height}:r=30:d=${number(outroSeconds)},` +
+      `drawtext=font='DejaVu Sans':text='${escapeDrawText(brandLabel)}':fontcolor=white:fontsize=44:x=(w-tw)/2:y=(h-th)/2-26,` +
+      `drawtext=font='DejaVu Sans':text='${escapeDrawText(outroText)}':fontcolor=white@0.8:fontsize=24:x=(w-tw)/2:y=(h-th)/2+34,` +
+      "format=yuv420p,settb=AVTB[outro]",
+    );
+    finalVideoInputs.push("[outro]");
+  }
+
+  if (finalVideoInputs.length === 1) {
+    filterParts.push("[main]null[vout]");
+  } else {
+    filterParts.push(
+      `${finalVideoInputs.join("")}concat=n=${finalVideoInputs.length}:v=1:a=0[vout]`,
+    );
+  }
+
+  const voiceDelayMs = Math.round(introSeconds * 1000);
 
   if (voiceIndex !== undefined && musicIndex !== undefined) {
     const volume = options.musicVolume ?? 0.16;
     filterParts.push(
-      `[${voiceIndex}:a]apad,asplit=2[voice_sidechain][voice_mix]`,
+      `[${voiceIndex}:a]adelay=${voiceDelayMs}|${voiceDelayMs},apad,asplit=2[voice_sidechain][voice_mix]`,
       `[${musicIndex}:a]volume=${volume}[music]`,
       "[music][voice_sidechain]sidechaincompress=threshold=0.03:ratio=10:attack=20:release=350[ducked]",
       "[voice_mix][ducked]amix=inputs=2:duration=longest:normalize=0[aout]",
     );
   } else if (voiceIndex !== undefined) {
-    filterParts.push(`[${voiceIndex}:a]apad[aout]`);
+    filterParts.push(
+      `[${voiceIndex}:a]adelay=${voiceDelayMs}|${voiceDelayMs},apad[aout]`,
+    );
   } else if (musicIndex !== undefined) {
     filterParts.push(`[${musicIndex}:a]volume=${options.musicVolume ?? 0.16}[aout]`);
   }
