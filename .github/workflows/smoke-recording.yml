@@ -49,6 +49,8 @@ jobs:
           exit 1
 
       - name: Record local walkthrough
+        env:
+          ALLOW_PRIVATE_TARGETS: "true"
         run: npm run capture -- --scenario examples/smoke.json
 
       - name: Resolve run directory

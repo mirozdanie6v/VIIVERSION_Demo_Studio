@@ -1,5 +1,8 @@
 node_modules/
 dist/
 artifacts/
+generated/
+.demo-studio-data/
+.env
 *.log
 .DS_Store

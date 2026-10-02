@@ -1,4 +1,5 @@
 import { chromium } from "playwright";
+import { assertSafeHttpUrl, attachNetworkGuard } from "./security.js";
 import type { Target, Viewport } from "./types.js";
 
 export type UiElementSnapshot = {
@@ -52,8 +53,10 @@ export async function inspectApplication(
   url: string,
   viewport: Viewport = { width: 1440, height: 900 },
 ): Promise<ApplicationSnapshot> {
+  await assertSafeHttpUrl(url);
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({ viewport });
+  await attachNetworkGuard(context);
   const page = await context.newPage();
 
   try {
