@@ -3,6 +3,7 @@ import { stat } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { toNodeHandler } from "@modelcontextprotocol/node";
 import { authenticateBearer } from "./auth.js";
+import { assertTrustedHttpRequest } from "./http-security.js";
 import type { DemoJobRequest } from "./job-manager.js";
 import { createDemoStudioMcpHandler } from "./mcp-server.js";
 import { buildOpenApiDocument } from "./openapi.js";
@@ -123,6 +124,7 @@ function errorStatus(error: unknown): number {
     return 401;
   }
   if (message.includes("DEMO_STUDIO_API_KEY is not configured")) return 503;
+  if (message.includes("Host header") || message.includes("Origin is not allowed")) return 403;
   return 400;
 }
 
@@ -152,6 +154,14 @@ export function createDemoStudioHttpServer(
 
   return createServer(async (request, response) => {
     try {
+      assertTrustedHttpRequest({
+        host: request.headers.host,
+        origin:
+          typeof request.headers.origin === "string"
+            ? request.headers.origin
+            : undefined,
+      });
+
       const pathname = requestPath(request);
 
       if (request.method === "GET" && pathname === "/health") {
