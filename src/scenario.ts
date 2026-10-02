@@ -46,6 +46,88 @@ function validateTarget(target: unknown, path: string, problems: string[]) {
   }
 }
 
+function validateOptionalBoolean(value: unknown, path: string, problems: string[]) {
+  if (value !== undefined && typeof value !== "boolean") problems.push(`${path} must be boolean.`);
+}
+
+function validateOptionalNumber(
+  value: unknown,
+  path: string,
+  problems: string[],
+  options: { min?: number } = {},
+) {
+  if (value === undefined) return;
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    problems.push(`${path} must be a finite number.`);
+    return;
+  }
+  if (options.min !== undefined && value < options.min) {
+    problems.push(`${path} must be >= ${options.min}.`);
+  }
+}
+
+function validateOptionalString(value: unknown, path: string, problems: string[]) {
+  if (value !== undefined && !isNonEmptyString(value)) {
+    problems.push(`${path} must be a non-empty string.`);
+  }
+}
+
+function validatePresentation(value: unknown, problems: string[]) {
+  if (value === undefined) return;
+  if (!isRecord(value)) {
+    problems.push("presentation must be an object.");
+    return;
+  }
+
+  validateOptionalBoolean(value.enabled, "presentation.enabled", problems);
+
+  if (value.smartZoom !== undefined) {
+    if (!isRecord(value.smartZoom)) {
+      problems.push("presentation.smartZoom must be an object.");
+    } else {
+      validateOptionalBoolean(value.smartZoom.enabled, "presentation.smartZoom.enabled", problems);
+      validateOptionalNumber(value.smartZoom.scale, "presentation.smartZoom.scale", problems, { min: 1 });
+      validateOptionalNumber(value.smartZoom.mobileScale, "presentation.smartZoom.mobileScale", problems, { min: 1 });
+      validateOptionalNumber(value.smartZoom.transitionMs, "presentation.smartZoom.transitionMs", problems, { min: 0 });
+      validateOptionalNumber(value.smartZoom.settleMs, "presentation.smartZoom.settleMs", problems, { min: 0 });
+    }
+  }
+
+  if (value.cursor !== undefined) {
+    if (!isRecord(value.cursor)) {
+      problems.push("presentation.cursor must be an object.");
+    } else {
+      validateOptionalNumber(value.cursor.size, "presentation.cursor.size", problems, { min: 1 });
+      validateOptionalNumber(value.cursor.borderWidth, "presentation.cursor.borderWidth", problems, { min: 0 });
+      validateOptionalString(value.cursor.fill, "presentation.cursor.fill", problems);
+      validateOptionalString(value.cursor.border, "presentation.cursor.border", problems);
+      validateOptionalString(value.cursor.shadow, "presentation.cursor.shadow", problems);
+    }
+  }
+
+  if (value.focusRing !== undefined) {
+    if (!isRecord(value.focusRing)) {
+      problems.push("presentation.focusRing must be an object.");
+    } else {
+      validateOptionalBoolean(value.focusRing.enabled, "presentation.focusRing.enabled", problems);
+      validateOptionalNumber(value.focusRing.width, "presentation.focusRing.width", problems, { min: 0 });
+      validateOptionalNumber(value.focusRing.padding, "presentation.focusRing.padding", problems, { min: 0 });
+      validateOptionalString(value.focusRing.color, "presentation.focusRing.color", problems);
+    }
+  }
+
+  if (value.clickRipple !== undefined) {
+    if (!isRecord(value.clickRipple)) {
+      problems.push("presentation.clickRipple must be an object.");
+    } else {
+      validateOptionalBoolean(value.clickRipple.enabled, "presentation.clickRipple.enabled", problems);
+      validateOptionalNumber(value.clickRipple.size, "presentation.clickRipple.size", problems, { min: 1 });
+      validateOptionalNumber(value.clickRipple.durationMs, "presentation.clickRipple.durationMs", problems, { min: 0 });
+      validateOptionalString(value.clickRipple.color, "presentation.clickRipple.color", problems);
+    }
+  }
+}
+
 function validateStep(step: unknown, index: number, problems: string[]) {
   const path = `steps[${index}]`;
   if (!isRecord(step)) {
@@ -179,6 +261,8 @@ export function parseScenario(input: unknown): DemoScenario {
       }
     }
   }
+
+  validatePresentation(input.presentation, problems);
 
   if (!Array.isArray(input.steps) || input.steps.length === 0) {
     problems.push("steps must contain at least one step.");
