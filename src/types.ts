@@ -10,6 +10,48 @@ export type Target = string | {
   exact?: boolean;
 };
 
+export type PresentationConfig = {
+  enabled?: boolean;
+  smartZoom?: {
+    enabled?: boolean;
+    scale?: number;
+    mobileScale?: number;
+    transitionMs?: number;
+    settleMs?: number;
+  };
+  cursor?: {
+    size?: number;
+    fill?: string;
+    border?: string;
+    borderWidth?: number;
+    shadow?: string;
+  };
+  focusRing?: {
+    enabled?: boolean;
+    color?: string;
+    width?: number;
+    padding?: number;
+  };
+  clickRipple?: {
+    enabled?: boolean;
+    color?: string;
+    size?: number;
+    durationMs?: number;
+  };
+};
+
+export type CameraFrame = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  centerX: number;
+  centerY: number;
+  scale: number;
+  viewportWidth: number;
+  viewportHeight: number;
+};
+
 type BaseStep = {
   label?: string;
   pauseAfterMs?: number;
@@ -52,6 +94,7 @@ export type DemoScenario = {
   viewport?: Viewport;
   defaultPauseMs?: number;
   variables?: Record<string, string>;
+  presentation?: PresentationConfig;
   steps: DemoStep[];
 };
 
