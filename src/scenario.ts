@@ -158,7 +158,11 @@ function validateStep(step: unknown, index: number, problems: string[]) {
     problems.push(`${path}.label must be a non-empty string when provided.`);
   }
 
-  if (step.narration !== undefined && !isNonEmptyString(step.narration)) {\n    problems.push(`${path}.narration must be a non-empty string when provided.`);\n  }\n\n  if (step.pauseAfterMs !== undefined && !isNonNegativeNumber(step.pauseAfterMs)) {
+  if (step.narration !== undefined && !isNonEmptyString(step.narration)) {
+    problems.push(`${path}.narration must be a non-empty string when provided.`);
+  }
+
+  if (step.pauseAfterMs !== undefined && !isNonNegativeNumber(step.pauseAfterMs)) {
     problems.push(`${path}.pauseAfterMs must be a non-negative number.`);
   }
 
