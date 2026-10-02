@@ -131,6 +131,27 @@ Secrets remain outside the scenario file.
 
 Assertions: `visible`, `hidden`, `textContains`, `valueEquals`.
 
+## AI Director
+
+Generate an executable scenario from a URL and a plain-language goal:
+
+```bash
+OPENAI_API_KEY=... npm run direct -- \
+  --url https://app.example.com \
+  --goal "Show the catalog, open an item and demonstrate the request flow"
+```
+
+AI Director:
+
+1. opens and inspects the application;
+2. collects visible interactive UI and stable targets;
+3. sends the goal plus UI snapshot to the OpenAI Responses API;
+4. requests a structured scenario;
+5. validates the generated scenario through Scenario Engine;
+6. writes both `demo-scenario.json` and a readable `demo-scenario.storyboard.md`.
+
+Set `OPENAI_DIRECTOR_MODEL` to override the default planning model.
+
 ## Final MP4 render
 
 After capture:
