@@ -1,0 +1,74 @@
+{
+  "name": "Demo Studio smoke test",
+  "baseUrl": "http://127.0.0.1:4173",
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "defaultPauseMs": 450,
+  "presentation": {
+    "smartZoom": {
+      "scale": 1.14,
+      "mobileScale": 1.04,
+      "transitionMs": 260,
+      "settleMs": 90
+    },
+    "focusRing": {
+      "enabled": true
+    },
+    "clickRipple": {
+      "enabled": true
+    }
+  },
+  "steps": [
+    {
+      "action": "goto",
+      "url": "/fixtures/smoke.html",
+      "label": "Open the application",
+      "narration": "Welcome to VIIVERSION Demo Studio."
+    },
+    {
+      "action": "waitFor",
+      "target": {
+        "by": "role",
+        "value": "heading",
+        "name": "Demo Studio",
+        "exact": true
+      },
+      "state": "visible"
+    },
+    {
+      "action": "click",
+      "target": {
+        "by": "role",
+        "value": "button",
+        "name": "Open catalog",
+        "exact": true
+      },
+      "label": "Open catalog",
+      "narration": "The browser focuses the active control and opens the catalog."
+    },
+    {
+      "action": "waitFor",
+      "target": {
+        "by": "testId",
+        "value": "catalog"
+      },
+      "state": "visible"
+    },
+    {
+      "action": "assert",
+      "target": {
+        "by": "testId",
+        "value": "catalog"
+      },
+      "assertion": "textContains",
+      "expected": "Premium Demo",
+      "label": "Verify result"
+    },
+    {
+      "action": "wait",
+      "ms": 700
+    }
+  ]
+}
