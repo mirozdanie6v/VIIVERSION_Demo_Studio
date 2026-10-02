@@ -1,0 +1,229 @@
+import type { DemoScenario, DemoStep, Target } from "./types.js";
+
+export class ScenarioValidationError extends Error {
+  constructor(public readonly problems: string[]) {
+    super(`Scenario validation failed:\n- ${problems.join("\n- ")}`);
+    this.name = "ScenarioValidationError";
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function isNonNegativeNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0;
+}
+
+function validateTarget(target: unknown, path: string, problems: string[]) {
+  if (isNonEmptyString(target)) return;
+
+  if (!isRecord(target)) {
+    problems.push(`${path} must be a selector string or a target object.`);
+    return;
+  }
+
+  const by = target.by;
+  if (!["css", "text", "role", "testId"].includes(String(by))) {
+    problems.push(`${path}.by must be one of css, text, role, testId.`);
+    return;
+  }
+
+  if (!isNonEmptyString(target.value)) {
+    problems.push(`${path}.value must be a non-empty string.`);
+  }
+
+  if (by === "role" && target.name !== undefined && !isNonEmptyString(target.name)) {
+    problems.push(`${path}.name must be a non-empty string when provided.`);
+  }
+
+  if (target.exact !== undefined && typeof target.exact !== "boolean") {
+    problems.push(`${path}.exact must be boolean when provided.`);
+  }
+}
+
+function validateStep(step: unknown, index: number, problems: string[]) {
+  const path = `steps[${index}]`;
+  if (!isRecord(step)) {
+    problems.push(`${path} must be an object.`);
+    return;
+  }
+
+  const action = step.action;
+  const supported = [
+    "goto",
+    "click",
+    "fill",
+    "hover",
+    "press",
+    "scroll",
+    "wait",
+    "waitFor",
+    "waitForNavigation",
+    "assert",
+  ];
+
+  if (!supported.includes(String(action))) {
+    problems.push(`${path}.action is unsupported: ${String(action)}.`);
+    return;
+  }
+
+  if (step.label !== undefined && !isNonEmptyString(step.label)) {
+    problems.push(`${path}.label must be a non-empty string when provided.`);
+  }
+
+  if (step.pauseAfterMs !== undefined && !isNonNegativeNumber(step.pauseAfterMs)) {
+    problems.push(`${path}.pauseAfterMs must be a non-negative number.`);
+  }
+
+  switch (action) {
+    case "goto":
+      if (!isNonEmptyString(step.url)) problems.push(`${path}.url is required.`);
+      break;
+    case "click":
+    case "hover":
+      validateTarget(step.target ?? step.selector, `${path}.target`, problems);
+      break;
+    case "fill":
+      validateTarget(step.target ?? step.selector, `${path}.target`, problems);
+      if (!isNonEmptyString(step.value) && step.value !== "") {
+        problems.push(`${path}.value must be a string.`);
+      }
+      break;
+    case "press":
+      if (step.target !== undefined || step.selector !== undefined) {
+        validateTarget(step.target ?? step.selector, `${path}.target`, problems);
+      }
+      if (!isNonEmptyString(step.key)) problems.push(`${path}.key is required.`);
+      break;
+    case "scroll":
+      if (!isNonNegativeNumber(Math.abs(Number(step.y))) || typeof step.y !== "number") {
+        problems.push(`${path}.y must be a number.`);
+      }
+      if (step.x !== undefined && typeof step.x !== "number") {
+        problems.push(`${path}.x must be a number when provided.`);
+      }
+      break;
+    case "wait":
+      if (!isNonNegativeNumber(step.ms)) problems.push(`${path}.ms must be a non-negative number.`);
+      break;
+    case "waitFor":
+      validateTarget(step.target, `${path}.target`, problems);
+      if (step.state !== undefined && !["visible", "hidden", "attached", "detached"].includes(String(step.state))) {
+        problems.push(`${path}.state must be visible, hidden, attached or detached.`);
+      }
+      if (step.timeoutMs !== undefined && !isNonNegativeNumber(step.timeoutMs)) {
+        problems.push(`${path}.timeoutMs must be a non-negative number.`);
+      }
+      break;
+    case "waitForNavigation":
+      if (step.waitUntil !== undefined && !["load", "domcontentloaded", "networkidle"].includes(String(step.waitUntil))) {
+        problems.push(`${path}.waitUntil must be load, domcontentloaded or networkidle.`);
+      }
+      if (step.timeoutMs !== undefined && !isNonNegativeNumber(step.timeoutMs)) {
+        problems.push(`${path}.timeoutMs must be a non-negative number.`);
+      }
+      break;
+    case "assert":
+      validateTarget(step.target, `${path}.target`, problems);
+      if (!["visible", "hidden", "textContains", "valueEquals"].includes(String(step.assertion))) {
+        problems.push(`${path}.assertion must be visible, hidden, textContains or valueEquals.`);
+      }
+      if (["textContains", "valueEquals"].includes(String(step.assertion)) && typeof step.expected !== "string") {
+        problems.push(`${path}.expected must be a string for ${String(step.assertion)}.`);
+      }
+      break;
+  }
+}
+
+export function parseScenario(input: unknown): DemoScenario {
+  const problems: string[] = [];
+
+  if (!isRecord(input)) {
+    throw new ScenarioValidationError(["Scenario root must be an object."]);
+  }
+
+  if (!isNonEmptyString(input.name)) problems.push("name must be a non-empty string.");
+
+  if (input.baseUrl !== undefined && !isNonEmptyString(input.baseUrl)) {
+    problems.push("baseUrl must be a non-empty string when provided.");
+  }
+
+  if (input.defaultPauseMs !== undefined && !isNonNegativeNumber(input.defaultPauseMs)) {
+    problems.push("defaultPauseMs must be a non-negative number.");
+  }
+
+  if (input.viewport !== undefined) {
+    if (!isRecord(input.viewport)) {
+      problems.push("viewport must be an object.");
+    } else {
+      if (!isNonNegativeNumber(input.viewport.width) || Number(input.viewport.width) <= 0) {
+        problems.push("viewport.width must be greater than 0.");
+      }
+      if (!isNonNegativeNumber(input.viewport.height) || Number(input.viewport.height) <= 0) {
+        problems.push("viewport.height must be greater than 0.");
+      }
+    }
+  }
+
+  if (input.variables !== undefined) {
+    if (!isRecord(input.variables)) {
+      problems.push("variables must be an object.");
+    } else {
+      for (const [key, value] of Object.entries(input.variables)) {
+        if (typeof value !== "string") problems.push(`variables.${key} must be a string.`);
+      }
+    }
+  }
+
+  if (!Array.isArray(input.steps) || input.steps.length === 0) {
+    problems.push("steps must contain at least one step.");
+  } else {
+    input.steps.forEach((step, index) => validateStep(step, index, problems));
+  }
+
+  if (problems.length > 0) throw new ScenarioValidationError(problems);
+  return input as unknown as DemoScenario;
+}
+
+export function interpolate(
+  value: string,
+  variables: Record<string, string> = {},
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  return value.replace(/\{\{(var|env)\.([A-Za-z_][A-Za-z0-9_]*)\}\}/g, (_match, source: string, key: string) => {
+    const resolved = source === "var" ? variables[key] : env[key];
+    if (resolved === undefined) {
+      throw new Error(`Missing ${source === "var" ? "scenario variable" : "environment variable"}: ${key}`);
+    }
+    return resolved;
+  });
+}
+
+export function resolveUrl(url: string, baseUrl?: string): string {
+  if (/^https?:\/\//i.test(url)) return url;
+  if (!baseUrl) throw new Error(`Relative URL "${url}" requires scenario.baseUrl.`);
+  return new URL(url, baseUrl).toString();
+}
+
+export function interpolateTarget(
+  target: Target,
+  variables: Record<string, string>,
+): Target {
+  if (typeof target === "string") return interpolate(target, variables);
+  return {
+    ...target,
+    value: interpolate(target.value, variables),
+    name: target.name ? interpolate(target.name, variables) : undefined,
+  };
+}
+
+export function normalizeLegacyTarget(step: DemoStep): Target | undefined {
+  if ("target" in step && step.target) return step.target;
+  if ("selector" in step && typeof step.selector === "string") return step.selector;
+  return undefined;
+}
