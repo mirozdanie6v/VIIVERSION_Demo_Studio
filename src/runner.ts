@@ -1,6 +1,7 @@
 import { chromium, type Page } from "playwright";
 import { mkdir, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { animateClick, focusTarget, resetPresentation } from "./presentation.js";
 import { describeTarget, resolveTarget } from "./targets.js";
 import {
   interpolate,
@@ -8,7 +9,7 @@ import {
   normalizeLegacyTarget,
   resolveUrl,
 } from "./scenario.js";
-import type { DemoScenario, DemoStep, RunResult, Target } from "./types.js";
+import type { CameraFrame, DemoScenario, DemoStep, RunResult, Target } from "./types.js";
 
 const DEFAULT_VIEWPORT = { width: 1440, height: 900 };
 
@@ -22,69 +23,6 @@ function requiredTarget(step: DemoStep, scenario: DemoScenario): Target {
   const raw = normalizeLegacyTarget(step);
   if (!raw) throw new Error(`Step "${step.action}" requires a target.`);
   return interpolateTarget(raw, scenario.variables ?? {});
-}
-
-async function ensurePointerOverlay(page: Page) {
-  await page.evaluate(() => {
-    if (document.getElementById("viiversion-demo-pointer")) return;
-
-    const style = document.createElement("style");
-    style.id = "viiversion-demo-style";
-    style.textContent = `
-      #viiversion-demo-pointer {
-        position: fixed;
-        width: 18px;
-        height: 18px;
-        border: 3px solid white;
-        border-radius: 999px;
-        background: rgba(0,0,0,.78);
-        box-shadow: 0 2px 14px rgba(0,0,0,.35);
-        transform: translate(-50%, -50%);
-        z-index: 2147483647;
-        pointer-events: none;
-        left: 50%;
-        top: 50%;
-        transition: left .34s cubic-bezier(.2,.8,.2,1), top .34s cubic-bezier(.2,.8,.2,1), transform .14s ease;
-      }
-      #viiversion-demo-pointer.viiversion-click {
-        transform: translate(-50%, -50%) scale(.68);
-      }
-    `;
-    document.documentElement.appendChild(style);
-
-    const pointer = document.createElement("div");
-    pointer.id = "viiversion-demo-pointer";
-    document.documentElement.appendChild(pointer);
-  });
-}
-
-async function movePointerTo(page: Page, target: Target) {
-  const locator = resolveTarget(page, target);
-  await locator.scrollIntoViewIfNeeded();
-  const box = await locator.boundingBox();
-  if (!box) throw new Error(`Element has no visible box: ${describeTarget(target)}`);
-
-  await ensurePointerOverlay(page);
-  await page.evaluate(
-    ({ x, y }) => {
-      const pointer = document.getElementById("viiversion-demo-pointer");
-      if (!pointer) return;
-      pointer.style.left = `${x}px`;
-      pointer.style.top = `${y}px`;
-    },
-    { x: box.x + box.width / 2, y: box.y + box.height / 2 },
-  );
-  await page.waitForTimeout(380);
-}
-
-async function animateClick(page: Page) {
-  await page.evaluate(() => {
-    document.getElementById("viiversion-demo-pointer")?.classList.add("viiversion-click");
-  });
-  await page.waitForTimeout(110);
-  await page.evaluate(() => {
-    document.getElementById("viiversion-demo-pointer")?.classList.remove("viiversion-click");
-  });
 }
 
 async function runAssertion(page: Page, step: Extract<DemoStep, { action: "assert" }>, scenario: DemoScenario) {
@@ -125,7 +63,11 @@ async function runAssertion(page: Page, step: Extract<DemoStep, { action: "asser
   }
 }
 
-async function runStep(page: Page, step: DemoStep, scenario: DemoScenario) {
+async function runStep(
+  page: Page,
+  step: DemoStep,
+  scenario: DemoScenario,
+): Promise<CameraFrame | undefined> {
   const variables = scenario.variables ?? {};
 
   switch (step.action) {
@@ -134,61 +76,62 @@ async function runStep(page: Page, step: DemoStep, scenario: DemoScenario) {
       const baseUrl = scenario.baseUrl ? interpolate(scenario.baseUrl, variables) : undefined;
       await page.goto(resolveUrl(rawUrl, baseUrl), { waitUntil: "domcontentloaded" });
       await page.waitForLoadState("networkidle").catch(() => undefined);
-      return;
+      return undefined;
     }
     case "click": {
       const target = requiredTarget(step, scenario);
-      await movePointerTo(page, target);
-      await animateClick(page);
+      const camera = await focusTarget(page, target, scenario.presentation);
+      await animateClick(page, scenario.presentation);
       await resolveTarget(page, target).click();
-      return;
+      return camera;
     }
     case "fill": {
       const target = requiredTarget(step, scenario);
-      await movePointerTo(page, target);
+      const camera = await focusTarget(page, target, scenario.presentation);
       await resolveTarget(page, target).fill(interpolate(step.value, variables));
-      return;
+      return camera;
     }
     case "hover": {
       const target = requiredTarget(step, scenario);
-      await movePointerTo(page, target);
+      const camera = await focusTarget(page, target, scenario.presentation);
       await resolveTarget(page, target).hover();
-      return;
+      return camera;
     }
     case "press": {
       const target = normalizeLegacyTarget(step);
       const key = interpolate(step.key, variables);
       if (target) {
         const resolved = interpolateTarget(target, variables);
-        await movePointerTo(page, resolved);
+        const camera = await focusTarget(page, resolved, scenario.presentation);
         await resolveTarget(page, resolved).press(key);
-      } else {
-        await page.keyboard.press(key);
+        return camera;
       }
-      return;
+
+      await page.keyboard.press(key);
+      return undefined;
     }
     case "scroll":
       await page.mouse.wheel(step.x ?? 0, step.y);
-      return;
+      return undefined;
     case "wait":
       await page.waitForTimeout(step.ms);
-      return;
+      return undefined;
     case "waitFor": {
       const target = interpolateTarget(step.target, variables);
       await resolveTarget(page, target).waitFor({
         state: step.state ?? "visible",
         timeout: step.timeoutMs ?? 10_000,
       });
-      return;
+      return undefined;
     }
     case "waitForNavigation":
       await page.waitForLoadState(step.waitUntil ?? "domcontentloaded", {
         timeout: step.timeoutMs ?? 15_000,
       });
-      return;
+      return undefined;
     case "assert":
       await runAssertion(page, step, scenario);
-      return;
+      return undefined;
   }
 }
 
@@ -218,6 +161,7 @@ export async function runScenario(
     startedAt: string;
     finishedAt: string;
     success: boolean;
+    camera?: CameraFrame;
     error?: string;
   }> = [];
 
@@ -229,11 +173,15 @@ export async function runScenario(
       const stepStartedAt = new Date().toISOString();
 
       try {
-        await runStep(page, step, scenario);
+        const camera = await runStep(page, step, scenario);
 
         const pause = step.pauseAfterMs ?? scenario.defaultPauseMs ?? 650;
         if (!["wait", "waitFor", "waitForNavigation"].includes(step.action) && pause > 0) {
           await page.waitForTimeout(pause);
+        }
+
+        if (camera) {
+          await resetPresentation(page, scenario.presentation);
         }
 
         timeline.push({
@@ -243,8 +191,11 @@ export async function runScenario(
           startedAt: stepStartedAt,
           finishedAt: new Date().toISOString(),
           success: true,
+          camera,
         });
       } catch (error) {
+        await resetPresentation(page, scenario.presentation).catch(() => undefined);
+
         timeline.push({
           index,
           label: step.label ?? `${step.action} #${index + 1}`,
