@@ -1,10 +1,11 @@
 {
   "name": "viiversion-demo-studio",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "private": true,
   "description": "Automatic presentation-video capture engine for web applications",
   "type": "module",
   "scripts": {
+    "direct": "tsx src/director-cli.ts",
     "capture": "tsx src/cli.ts",
     "render": "tsx src/render-cli.ts",
     "typecheck": "tsc --noEmit",
