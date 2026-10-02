@@ -1,0 +1,25 @@
+{
+  "name": "Example.com demo",
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "defaultPauseMs": 700,
+  "steps": [
+    {
+      "action": "goto",
+      "url": "https://example.com",
+      "label": "Open landing page"
+    },
+    {
+      "action": "wait",
+      "ms": 900
+    },
+    {
+      "action": "click",
+      "selector": "a",
+      "label": "Open documentation link",
+      "pauseAfterMs": 1200
+    }
+  ]
+}
