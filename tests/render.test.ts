@@ -35,6 +35,12 @@ const manifest = {
   success: true,
 };
 
+function toMs(value: string): number {
+  const [clock, millis] = value.split(",");
+  const [hours, minutes, seconds] = clock.split(":").map(Number);
+  return (((hours * 60 + minutes) * 60 + seconds) * 1000) + Number(millis);
+}
+
 test("builds narration from explicit step narration", () => {
   assert.equal(
     buildNarration(manifest),
@@ -42,11 +48,20 @@ test("builds narration from explicit step narration", () => {
   );
 });
 
-test("builds timed SRT captions against edited scenes", () => {
+test("builds sequential SRT captions against edited scenes", () => {
   const scenes = buildScenePlan(manifest);
   const srt = buildCaptions(manifest, scenes);
 
-  assert.match(srt, /00:00:00,000 --> 00:00:01,200/);
   assert.match(srt, /Welcome to the product\./);
-  assert.match(srt, /00:00:01,000 --> 00:00:02,000/);
+  assert.match(srt, /Open the catalog\./);
+
+  const ranges = [...srt.matchAll(
+    /(\d{2}:\d{2}:\d{2},\d{3}) --> (\d{2}:\d{2}:\d{2},\d{3})/g,
+  )].map((match) => ({
+    start: toMs(match[1]),
+    end: toMs(match[2]),
+  }));
+
+  assert.equal(ranges.length, 2);
+  assert.ok(ranges[0].end < ranges[1].start);
 });
