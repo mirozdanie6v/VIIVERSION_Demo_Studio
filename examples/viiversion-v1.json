@@ -9,6 +9,24 @@
   "variables": {
     "ctaText": "Learn more"
   },
+  "presentation": {
+    "smartZoom": {
+      "scale": 1.14,
+      "mobileScale": 1.04,
+      "transitionMs": 320
+    },
+    "cursor": {
+      "size": 18,
+      "fill": "rgba(0,0,0,.82)",
+      "border": "#ffffff"
+    },
+    "focusRing": {
+      "enabled": true
+    },
+    "clickRipple": {
+      "enabled": true
+    }
+  },
   "steps": [
     {
       "action": "goto",
