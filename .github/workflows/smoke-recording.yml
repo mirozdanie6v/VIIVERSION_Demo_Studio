@@ -28,8 +28,22 @@ jobs:
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
 
-      - name: Record example walkthrough
-        run: npm run capture -- --scenario examples/viiversion-v1.json
+      - name: Start local demo app
+        shell: bash
+        run: |
+          python3 -m http.server 4173 --bind 127.0.0.1 > /tmp/demo-studio-http.log 2>&1 &
+          echo $! > /tmp/demo-studio-http.pid
+          for i in {1..20}; do
+            if curl -fsS http://127.0.0.1:4173/fixtures/smoke.html >/dev/null; then
+              exit 0
+            fi
+            sleep 0.25
+          done
+          cat /tmp/demo-studio-http.log
+          exit 1
+
+      - name: Record local walkthrough
+        run: npm run capture -- --scenario examples/smoke.json
 
       - name: Resolve run directory
         id: run
