@@ -198,3 +198,36 @@ For narration, add `narration` to the relevant scenario steps. FFmpeg must be av
 - **Render Layer** — MP4, captions, voiceover, music and branding.
 - **AI Director** — natural-language goal → executable demo scenario.
 - **Plugin/API Layer** — ChatGPT and external integrations.
+
+
+## Runtime recovery
+
+Interactive targets use semantic recovery when a previously valid selector changes. The runner first tries the exact target, then safe fallbacks such as relaxed role/name matching, visible text, and common test-id attributes. Any recovery is recorded in `run.json`.
+
+## Scene-aware rendering
+
+The renderer derives meaningful scenes from the capture timeline, removes passive dead time, writes the edit plan to `scenes.json`, remaps subtitle timing to the edited timeline, and renders branded intro/outro cards.
+
+Useful render controls:
+
+```bash
+npm run render -- \
+  --run artifacts/<run-id> \
+  --preset 16:9 \
+  --title "Product walkthrough" \
+  --cta "Book a demo"
+```
+
+Use `--no-intro`, `--no-outro`, or `--no-captions` when a clean raw export is needed.
+
+## Service / plugin surface
+
+`npm run serve` starts the authenticated REST + MCP service.
+
+- REST jobs: `POST /v1/jobs`
+- job status: `GET /v1/jobs/{jobId}`
+- MP4 artifact: `GET /v1/jobs/{jobId}/artifact`
+- OpenAPI: `GET /openapi.json`
+- MCP Streamable HTTP: `/mcp`
+
+Production deployments should use the Docker image, a real `DEMO_STUDIO_API_KEY`, public Host/Origin allowlists, and `ALLOW_PRIVATE_TARGETS=false`.

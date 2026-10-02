@@ -76,8 +76,12 @@ export function buildCaptions(
   manifest: Manifest,
   scenes: EditScene[] = buildScenePlan(manifest),
 ): string {
-  const entries: string[] = [];
-  let counter = 1;
+  const cues: Array<{
+    text: string;
+    start: number;
+    end: number;
+    maxEnd: number;
+  }> = [];
 
   for (const item of manifest.timeline) {
     if (!item.success) continue;
@@ -88,17 +92,19 @@ export function buildCaptions(
     const sourceStart = secondsBetween(manifest.startedAt, item.startedAt);
     const sourceEnd = secondsBetween(manifest.startedAt, item.finishedAt);
 
-    let start = sourceStart;
-    let end = Math.max(sourceStart + 1.2, sourceEnd + 0.35);
+    let cueStart = sourceStart;
+    let cueEnd = Math.max(sourceStart + 1.2, sourceEnd + 0.35);
+    let maxEnd = Number.POSITIVE_INFINITY;
 
     if (scenes.length > 0) {
       const scene = sceneForStep(item.index, scenes);
       if (!scene) continue;
 
-      start =
+      cueStart =
         scene.outputStart +
         Math.max(0, sourceStart - scene.sourceStart);
-      end =
+      maxEnd = scene.outputEnd;
+      cueEnd =
         scene.outputStart +
         Math.min(
           scene.sourceEnd - scene.sourceStart,
@@ -109,15 +115,36 @@ export function buildCaptions(
         );
     }
 
+    cues.push({
+      text,
+      start: cueStart,
+      end: Math.min(maxEnd, Math.max(cueStart + 0.6, cueEnd)),
+      maxEnd,
+    });
+  }
+
+  const entries: string[] = [];
+  let previousEnd = -1;
+
+  cues.forEach((cue, index) => {
+    const gap = index === 0 ? 0 : 0.08;
+    const start = Math.max(cue.start, previousEnd + gap);
+    const end = Math.min(
+      cue.maxEnd,
+      Math.max(start + 0.45, cue.end),
+    );
+
+    if (!(end > start + 0.05)) return;
+
     entries.push(
       [
-        String(counter),
-        `${srtTime(start)} --> ${srtTime(Math.max(start + 0.6, end))}`,
-        text,
+        String(entries.length + 1),
+        `${srtTime(start)} --> ${srtTime(end)}`,
+        cue.text,
       ].join("\n"),
     );
-    counter += 1;
-  }
+    previousEnd = end;
+  });
 
   return entries.join("\n\n") + (entries.length ? "\n" : "");
 }
@@ -262,7 +289,7 @@ export async function renderRun(options: RenderOptions): Promise<string> {
 
   if (options.captions !== false && captions) {
     mainDecor.push(
-      `subtitles='${escapeFilterPath(captionsPath)}':force_style='FontName=DejaVu Sans,FontSize=18,PrimaryColour=&H00FFFFFF,OutlineColour=&H66000000,BorderStyle=1,Outline=2,Shadow=0,MarginV=58'`,
+      `subtitles='${escapeFilterPath(captionsPath)}':force_style='FontName=DejaVu Sans,FontSize=14,PrimaryColour=&H00FFFFFF,OutlineColour=&H66000000,BorderStyle=1,Outline=2,Shadow=0,MarginV=52'`,
     );
   }
 
