@@ -1,0 +1,48 @@
+{
+  "name": "VIIVERSION product walkthrough",
+  "baseUrl": "https://example.com",
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "defaultPauseMs": 650,
+  "variables": {
+    "ctaText": "Learn more"
+  },
+  "steps": [
+    {
+      "action": "goto",
+      "url": "/",
+      "label": "Open product"
+    },
+    {
+      "action": "waitFor",
+      "target": {
+        "by": "role",
+        "value": "heading"
+      },
+      "state": "visible"
+    },
+    {
+      "action": "click",
+      "target": {
+        "by": "text",
+        "value": "{{var.ctaText}}",
+        "exact": true
+      },
+      "label": "Open the next step"
+    },
+    {
+      "action": "waitForNavigation",
+      "waitUntil": "domcontentloaded"
+    },
+    {
+      "action": "assert",
+      "target": {
+        "by": "role",
+        "value": "heading"
+      },
+      "assertion": "visible"
+    }
+  ]
+}
