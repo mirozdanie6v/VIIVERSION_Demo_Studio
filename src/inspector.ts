@@ -80,14 +80,15 @@ export async function inspectApplication(
           }
 
           const tag = current.tagName.toLowerCase();
-          const parent = current.parentElement;
+          const parent: Element | null = current.parentElement;
           if (!parent) {
             segments.unshift(tag);
             break;
           }
 
-          const siblings = Array.from(parent.children).filter(
-            (sibling) => sibling.tagName === current?.tagName,
+          const currentTagName = current.tagName;
+          const siblings: Element[] = Array.from(parent.children).filter(
+            (sibling: Element) => sibling.tagName === currentTagName,
           );
           const index = siblings.indexOf(current) + 1;
           segments.unshift(siblings.length > 1 ? tag + ":nth-of-type(" + index + ")" : tag);
