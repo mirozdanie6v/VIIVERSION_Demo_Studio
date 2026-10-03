@@ -155,4 +155,6 @@ test("technical waits do not collapse setup into proof", () => {
   assert.equal(plan.scenes[0].narrativeRole, "setup");
   assert.equal(plan.scenes.at(-1)?.narrativeRole, "proof");
   assert.deepEqual(plan.scenes.at(-1)?.stepIndexes, [2, 3, 4, 5]);
+  assert.equal(plan.qualityGate.checks.sourceOverlapFree, true);
+  assert.ok(plan.scenes[1].sourceStart >= plan.scenes[0].sourceEnd);
 });
