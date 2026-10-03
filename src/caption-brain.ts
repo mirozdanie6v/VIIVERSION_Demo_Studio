@@ -129,7 +129,7 @@ export function buildCaptionPlan(
     if (!item.success) continue;
 
     const step = manifest.scenario.steps[item.index];
-    const raw = normalize(step?.narration ?? step?.label ?? "");
+    const raw = normalize(step?.narration ?? "");
     if (!raw) continue;
 
     const scene = sceneForStep(item.index, scenes);
