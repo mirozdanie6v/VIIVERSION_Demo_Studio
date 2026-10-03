@@ -58,7 +58,7 @@ export function reviewEditorPlan(plan: EditorBrainPlan): CriticResult {
       const semantic = plan.semantics[stepIndex];
       return semantic?.action === "wait" && semantic.importance >= 0.5;
     });
-    const maxDuration = contentHold ? 18 : 6.5;
+    const maxDuration = contentHold ? 30 : 6.5;
 
     if (duration > maxDuration) {
       sourceEnd = scene.sourceStart + maxDuration;
