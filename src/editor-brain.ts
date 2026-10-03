@@ -507,7 +507,12 @@ function qualityGate(
   );
   const durationsValid = scenes.every((scene) => {
     const duration = scene.sourceEnd - scene.sourceStart;
-    return duration >= 0.2 && duration <= 8.5;
+    const contentHold = scene.stepIndexes.some((stepIndex) => {
+      const semantic = semantics[stepIndex];
+      return semantic?.action === "wait" && semantic.importance >= 0.5;
+    });
+    const maxDuration = contentHold ? 18 : 8.5;
+    return duration >= 0.2 && duration <= maxDuration;
   });
 
   const sourceOverlapFree = scenes.every(
