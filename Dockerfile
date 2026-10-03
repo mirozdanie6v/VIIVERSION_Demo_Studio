@@ -1,4 +1,4 @@
-FROM node:22-bookworm-slim
+FROM mcr.microsoft.com/playwright:v1.63.0-noble
 
 WORKDIR /app
 
@@ -8,8 +8,7 @@ ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
 COPY package.json ./
 
-RUN npm install --include=dev \
-  && npx playwright install --with-deps chromium \
+RUN npm install --include=dev --no-fund --no-audit \
   && apt-get update \
   && apt-get install -y --no-install-recommends ffmpeg \
   && rm -rf /var/lib/apt/lists/*
