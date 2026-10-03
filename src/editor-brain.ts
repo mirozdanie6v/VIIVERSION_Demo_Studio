@@ -212,6 +212,13 @@ export function semanticStep(
     importance = Math.max(importance, 0.92);
   }
 
+  if (step.narration?.trim()) {
+    if (shotIntent !== "continuity_action") {
+      shotIntent = "continuity_speech";
+    }
+    importance = Math.max(importance, 0.6);
+  }
+
   const narrativeRole: NarrativeRole =
     sceneType === "establishing"
       ? "setup"
@@ -509,7 +516,8 @@ function qualityGate(
     const duration = scene.sourceEnd - scene.sourceStart;
     const contentHold = scene.stepIndexes.some((stepIndex) => {
       const semantic = semantics[stepIndex];
-      return semantic?.action === "wait" && semantic.importance >= 0.5;
+      return semantic?.shotIntent === "continuity_speech" ||
+        (semantic?.action === "wait" && semantic.importance >= 0.5);
     });
     const maxDuration = contentHold ? 30 : 8.5;
     // Candidate construction already discards unusable <=80ms fragments.
