@@ -19,6 +19,34 @@ export function createDemoStudioMcpHandler(service: DemoStudioService) {
     });
 
     server.registerTool(
+      "inspect_web_app",
+      {
+        title: "Inspect web application",
+        description:
+          "Inspect a public web application and return headings plus visible interactive elements with suggested stable targets.",
+        inputSchema: z.object({
+          url: z.string().url(),
+        }),
+      },
+      async ({ url }) => {
+        try {
+          const snapshot = await service.inspect(url);
+          return {
+            content: [{ type: "text", text: JSON.stringify(snapshot) }],
+          };
+        } catch (error) {
+          return {
+            content: [{
+              type: "text",
+              text: error instanceof Error ? error.message : String(error),
+            }],
+            isError: true,
+          };
+        }
+      },
+    );
+
+    server.registerTool(
       "create_demo_video",
       {
         title: "Create web app demo video",
