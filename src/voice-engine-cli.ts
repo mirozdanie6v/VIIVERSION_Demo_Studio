@@ -23,7 +23,7 @@ async function main() {
 
   if (!locale || !output || (!inlineText && !textFile)) {
     throw new Error(
-      "Usage: npm run voice -- --locale en-US --text \"Hello\" --out speech.mp3 [--provider auto|elevenlabs|openai|piper]",
+      "Usage: npm run voice -- --locale en-US --text \"Hello\" --out speech.mp3 [--provider auto|huggingface|elevenlabs|openai|piper]",
     );
   }
 

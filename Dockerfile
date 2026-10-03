@@ -7,6 +7,7 @@ ENV HOST=0.0.0.0
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
 COPY package.json ./
+COPY requirements-tts.txt ./
 
 RUN npm install --include=dev --no-fund --no-audit \
   && apt-get update \
@@ -15,6 +16,7 @@ RUN npm install --include=dev --no-fund --no-audit \
 
 COPY tsconfig.json ./
 COPY src ./src
+COPY scripts ./scripts
 
 RUN npm run build \
   && npm prune --omit=dev

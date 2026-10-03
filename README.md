@@ -289,7 +289,7 @@ Demo Studio now routes narration through a provider-agnostic Voice Engine:
 
 ```text
 locale + persona → Voice Director → pronunciation → TTS Router
-                → ElevenLabs / OpenAI / Piper fallback
+                → Hugging Face local / ElevenLabs / OpenAI / Piper fallback
                 → audio + timing metadata
 ```
 
@@ -315,3 +315,17 @@ npm run voice -- --locale ja-JP --text "..." --out /tmp/demo.mp3 --provider auto
 ```
 
 See `docs/VOICE_ENGINE.md` for provider setup, locale-specific voices, pronunciation rules and fallback behavior.
+
+### Free local voice generation
+
+Demo Studio can synthesize narration locally from open-weight Hugging Face models without a paid TTS API:
+
+```bash
+python3 -m pip install -r requirements-tts.txt
+
+HF_TTS_ENABLED=1 \
+HF_TTS_ENGINE=supertonic \
+npm run voice -- --locale vi-VN --text "Xin chào" --out /tmp/voice.mp3 --provider huggingface
+```
+
+Use `HF_TTS_ENGINE=chatterbox` plus `HF_TTS_REFERENCE_AUDIO=/path/reference.wav` when voice cloning and higher presentation quality matter more than CPU cost.

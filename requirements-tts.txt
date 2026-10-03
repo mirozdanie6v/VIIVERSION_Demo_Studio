@@ -1,0 +1,5 @@
+# Optional local/free TTS dependencies.
+# Install one engine or both:
+#   pip install -r requirements-tts.txt
+supertonic
+chatterbox-tts

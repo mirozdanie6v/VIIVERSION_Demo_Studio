@@ -1,4 +1,5 @@
 import { ElevenLabsVoiceProvider } from "./voice-provider-elevenlabs.js";
+import { HuggingFaceVoiceProvider } from "./voice-provider-huggingface.js";
 import { OpenAIVoiceProvider } from "./voice-provider-openai.js";
 import { PiperVoiceProvider } from "./voice-provider-piper.js";
 import type {
@@ -9,14 +10,26 @@ import type {
   VoiceResult,
 } from "./voice-engine-types.js";
 
-const DEFAULT_ORDER: VoiceProviderId[] = ["elevenlabs", "openai", "piper"];
+const KNOWN_PROVIDERS: VoiceProviderId[] = [
+  "huggingface",
+  "elevenlabs",
+  "openai",
+  "piper",
+];
+
+const DEFAULT_ORDER: VoiceProviderId[] = [
+  "huggingface",
+  "elevenlabs",
+  "openai",
+  "piper",
+];
 
 function providerOrder(env: NodeJS.ProcessEnv): VoiceProviderId[] {
   const requested = (env.VOICE_PROVIDER_ORDER ?? "")
     .split(",")
     .map((value) => value.trim().toLowerCase())
     .filter((value): value is VoiceProviderId =>
-      ["elevenlabs", "openai", "piper"].includes(value),
+      KNOWN_PROVIDERS.includes(value as VoiceProviderId),
     );
 
   const result = [...requested];
@@ -50,6 +63,7 @@ export class VoiceRouter {
     this.providers =
       options.providers ??
       [
+        new HuggingFaceVoiceProvider(),
         new ElevenLabsVoiceProvider(),
         new OpenAIVoiceProvider(),
         new PiperVoiceProvider(),
