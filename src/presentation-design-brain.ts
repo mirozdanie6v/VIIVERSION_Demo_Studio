@@ -167,6 +167,14 @@ export function buildOverlayPlan(
     .map((entry) => entry.camera)
     .filter((value): value is CameraFrame => Boolean(value));
   const preferred = contractPlacement(contract, preset);
+  const effectiveBandRatio = Math.max(
+    preset === "9:16" ? 0.11 : 0.08,
+    preferred.captionBandRatio * (1 - revision * 0.14),
+  );
+  const effectiveMarginRatio = Math.min(
+    0.12,
+    preferred.horizontalMarginRatio * (1 + revision * 0.08),
+  );
 
   const candidates: Array<{
     captionPlacement: "top" | "bottom";
@@ -197,8 +205,8 @@ export function buildOverlayPlan(
         cameras,
         candidate.captionPlacement,
         candidate.brandCorner,
-        preferred.captionBandRatio,
-        preferred.horizontalMarginRatio,
+        effectiveBandRatio,
+        effectiveMarginRatio,
       ),
     }))
     .sort(
@@ -215,8 +223,8 @@ export function buildOverlayPlan(
     preset,
     captionPlacement: best.captionPlacement,
     brandCorner: best.brandCorner,
-    captionBandRatio: preferred.captionBandRatio,
-    horizontalMarginRatio: preferred.horizontalMarginRatio,
+    captionBandRatio: effectiveBandRatio,
+    horizontalMarginRatio: effectiveMarginRatio,
     collisions: best.collisions,
     revision,
     source: contract ? "design-contract" : "fallback",
