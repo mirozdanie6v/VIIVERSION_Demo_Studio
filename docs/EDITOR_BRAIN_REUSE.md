@@ -89,3 +89,19 @@ The Russian premium pipeline defines reusable hard rules for product-demo editin
 - if voice exceeds its visual hold, extend/re-edit the visual segment rather than letting voice, subtitles and content drift apart.
 
 Reference implementation: docs/MAX_TOUR_RU_PREMIUM_VIDEO_SPEC.md, examples/max-tour-russian-premium.json, and src/narration-sync-cli.ts.
+
+
+## Attention Director
+
+Product-demo motion must follow human visual attention rather than decorative movement.
+
+Use the rules in `docs/ATTENTION_DIRECTOR.md`:
+- establish the complete UI before narrowing focus;
+- move toward the semantic block described by narration;
+- preserve all required text/images/controls inside the crop;
+- treat interaction geometry as evidence, not an automatic center;
+- release back to context before the next state;
+- keep subtitles in a separate, large, readable rail;
+- present mobile UI inside a designed smartphone frame.
+
+A static scene is not, by itself, a reason to zoom.
