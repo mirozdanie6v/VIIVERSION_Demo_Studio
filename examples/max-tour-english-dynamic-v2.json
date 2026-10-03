@@ -141,7 +141,21 @@
         "Кофта": "Light jacket",
         "Дождевик": "Raincoat",
         "Удобная обувь": "Comfortable shoes",
-        "Деньги на мелкие расходы и сувениры в донгах": "Cash in VND for small expenses and souvenirs"
+        "Деньги на мелкие расходы и сувениры в донгах": "Cash in VND for small expenses and souvenirs",
+        "Вьетнам,": "Vietnam,",
+        "который хочется": "made to be",
+        "прожить.": "experienced.",
+        "Более 150 маршрутов по стране — премиум-экскурсии, небольшие группы, индивидуальные программы, трансферы и авторские путешествия.": "More than 150 routes across Vietnam — premium tours, small groups, private programs, transfers and signature journeys.",
+        "Путешествие начинается ещё до встречи с гидом": "The journey starts before you meet the guide",
+        "Выберите маршрут, дату и состав группы, посмотрите программу и детали, оформите бронь и пройдите демонстрационный сценарий оплаты — всё в одном интерфейсе.": "Choose a route, date and group, review the itinerary and details, then book — all in one interface.",
+        "подходящих вариантов": "matching options",
+        "Куда поедем?": "Where shall we go?",
+        "Поиск": "Search",
+        "Место": "Destination",
+        "Стиль отдыха": "Travel style",
+        "Все места": "All destinations",
+        "Подробнее →": "Details →",
+        "ONLINE READY": "ONLINE READY"
       }
     }
   },
@@ -154,9 +168,8 @@
     {
       "action": "waitFor",
       "target": {
-        "by": "text",
-        "value": "Your best holiday",
-        "exact": false
+        "by": "css",
+        "value": "button:has-text(\"Choose a journey\"):visible, button:has-text(\"Choose a tour\"):visible, button:has-text(\"Выбрать путешествие\"):visible, button:has-text(\"Выбрать тур\"):visible"
       },
       "state": "visible",
       "timeoutMs": 20000
@@ -164,10 +177,8 @@
     {
       "action": "hover",
       "target": {
-        "by": "role",
-        "value": "button",
-        "name": "Choose a tour",
-        "exact": true
+        "by": "css",
+        "value": "button:has-text(\"Choose a journey\"):visible, button:has-text(\"Choose a tour\"):visible, button:has-text(\"Выбрать путешествие\"):visible, button:has-text(\"Выбрать тур\"):visible"
       },
       "pauseAfterMs": 4500,
       "label": "Focus first action"
@@ -175,19 +186,16 @@
     {
       "action": "click",
       "target": {
-        "by": "role",
-        "value": "button",
-        "name": "Choose a tour",
-        "exact": true
+        "by": "css",
+        "value": "button:has-text(\"Choose a journey\"):visible, button:has-text(\"Choose a tour\"):visible, button:has-text(\"Выбрать путешествие\"):visible, button:has-text(\"Выбрать тур\"):visible"
       },
       "label": "Open catalog"
     },
     {
       "action": "waitFor",
       "target": {
-        "by": "text",
-        "value": "17 found",
-        "exact": true
+        "by": "css",
+        "value": ".px-catalog-count, *:has-text(\"17 found\"), *:has-text(\"17 matching options\"), *:has-text(\"17 найдено\"), *:has-text(\"17 подходящих вариантов\")"
       },
       "state": "visible",
       "timeoutMs": 15000
@@ -195,9 +203,8 @@
     {
       "action": "hover",
       "target": {
-        "by": "text",
-        "value": "17 found",
-        "exact": true
+        "by": "css",
+        "value": ".px-catalog-count, *:has-text(\"17 found\"), *:has-text(\"17 matching options\"), *:has-text(\"17 найдено\"), *:has-text(\"17 подходящих вариантов\")"
       },
       "pauseAfterMs": 4200,
       "label": "Catalog value"
@@ -212,7 +219,7 @@
       "action": "hover",
       "target": {
         "by": "css",
-        "value": "h3:has-text(\"Dalat Premium\"):visible"
+        "value": "h2:has-text(\"Dalat Premium Tour\"):visible, h3:has-text(\"Dalat Premium Tour\"):visible, h2:has-text(\"Dalat Premium\"):visible, h3:has-text(\"Dalat Premium\"):visible, h2:has-text(\"Экскурсия в Далат «Премиум»\"):visible, h3:has-text(\"Экскурсия в Далат «Премиум»\"):visible"
       },
       "pauseAfterMs": 4200,
       "label": "Focus Dalat Premium"
@@ -221,7 +228,7 @@
       "action": "click",
       "target": {
         "by": "css",
-        "value": "h3:has-text(\"Dalat Premium\"):visible"
+        "value": "h2:has-text(\"Dalat Premium Tour\"):visible, h3:has-text(\"Dalat Premium Tour\"):visible, h2:has-text(\"Dalat Premium\"):visible, h3:has-text(\"Dalat Premium\"):visible, h2:has-text(\"Экскурсия в Далат «Премиум»\"):visible, h3:has-text(\"Экскурсия в Далат «Премиум»\"):visible"
       },
       "label": "Open Dalat Premium"
     },
@@ -245,7 +252,7 @@
       "action": "hover",
       "target": {
         "by": "css",
-        "value": "button:has-text(\"Private\"):visible"
+        "value": "button:has-text(\"Private\"):visible, button:has-text(\"Индивидуальный\"):visible, button:has-text(\"Индивидуально\"):visible"
       },
       "pauseAfterMs": 3000,
       "label": "Private option"
@@ -254,7 +261,7 @@
       "action": "click",
       "target": {
         "by": "css",
-        "value": "button:has-text(\"Private\"):visible"
+        "value": "button:has-text(\"Private\"):visible, button:has-text(\"Индивидуальный\"):visible, button:has-text(\"Индивидуально\"):visible"
       },
       "label": "Choose private"
     },
@@ -277,10 +284,8 @@
     {
       "action": "click",
       "target": {
-        "by": "role",
-        "value": "button",
-        "name": "AI Assistant",
-        "exact": true
+        "by": "css",
+        "value": "button:has-text(\"AI Assistant\"):visible, button:has-text(\"ИИ-Помощник\"):visible"
       },
       "label": "Open AI assistant"
     },
@@ -320,9 +325,8 @@
     {
       "action": "hover",
       "target": {
-        "by": "text",
-        "value": "AI Consultant",
-        "exact": false
+        "by": "css",
+        "value": "*:has-text(\"AI Consultant\"):visible, *:has-text(\"AI-консультант\"):visible"
       },
       "pauseAfterMs": 3200,
       "label": "AI proof"
@@ -330,10 +334,8 @@
     {
       "action": "hover",
       "target": {
-        "by": "role",
-        "value": "button",
-        "name": "AI Assistant",
-        "exact": true
+        "by": "css",
+        "value": "button:has-text(\"AI Assistant\"):visible, button:has-text(\"ИИ-Помощник\"):visible"
       },
       "pauseAfterMs": 2200,
       "label": "Closing beat"
