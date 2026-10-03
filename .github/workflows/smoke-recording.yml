@@ -3,6 +3,13 @@ name: Recording Smoke Test
 on:
   push:
     branches: [main]
+    paths:
+      - 'src/**'
+      - 'examples/smoke.json'
+      - 'fixtures/smoke.html'
+      - 'package.json'
+      - 'tsconfig.json'
+      - '.github/workflows/smoke-recording.yml'
   workflow_dispatch:
 
 concurrency:
