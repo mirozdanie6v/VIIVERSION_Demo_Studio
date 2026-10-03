@@ -32,6 +32,17 @@ Audio + provider metadata + timings when available
 Subtitle / edit synchronization
 ```
 
+## Default VIIVERSION presenter voices
+
+For Demo Video Presenter, the approved default voice pair is:
+
+1. **Niki v3** — primary presenter voice.
+2. **Leslie v3** — fallback/alternate presenter voice.
+
+Default casting direction: bright, warm, confident, natural human rhythm, medium energetic pace, short organic pauses. Avoid grave/dark delivery, trailer voice, radio-announcer cadence and synthetic monotone pacing.
+
+The pair is a presentation default, not a language lock. The router may choose a locale-native equivalent when a target language needs a different physical speaker to preserve native pronunciation and prosody.
+
 ## VIIVERSION Presenter persona
 
 The default persona is a cross-language editorial direction:
