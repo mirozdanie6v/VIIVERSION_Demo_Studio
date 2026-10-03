@@ -61,12 +61,16 @@ jobs:
             await page.waitForTimeout(1800);
             await dump('after Выбрать тур');
           }
-          const dalat = page.getByText('Далат «Премиум»', {exact:true}).first();
+          const dalat = page.locator('h3:visible').filter({hasText:'Далат «Премиум»'}).first();
           if (await dalat.count()) {
-            console.log('DALAT_PARENT', (await dalat.evaluate(el => el.parentElement?.outerHTML || el.outerHTML)).slice(0,5000));
+            console.log('DALAT_ANCESTORS', await dalat.evaluate(el => {
+              const out=[]; let n=el;
+              for(let i=0;i<5 && n;i++,n=n.parentElement) out.push({tag:n.tagName,cls:n.className,role:n.getAttribute('role'),html:i<2?n.outerHTML.slice(0,2200):undefined});
+              return JSON.stringify(out);
+            }));
             try {
               await dalat.click();
-              await page.waitForTimeout(2000);
+              await page.waitForTimeout(2200);
               await dump('after Далат Премиум');
             } catch (e) {
               console.log('DALAT_CLICK_ERROR', e.message);
