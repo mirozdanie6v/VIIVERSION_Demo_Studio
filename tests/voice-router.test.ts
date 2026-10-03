@@ -13,6 +13,7 @@ class FakeProvider implements VoiceProvider {
     readonly nativeTimings: boolean,
     private readonly configured: boolean,
     private readonly locales: string[],
+    private readonly fail = false,
   ) {}
 
   isConfigured(): boolean {
@@ -24,6 +25,7 @@ class FakeProvider implements VoiceProvider {
   }
 
   async synthesize(request: VoiceRequest): Promise<VoiceResult> {
+    if (this.fail) throw new Error(`${this.id} failed`);
     return {
       provider: this.id,
       locale: request.locale,
@@ -97,4 +99,18 @@ test("honors an explicit provider override", () => {
     router.inspect({ ...request, provider: "openai" }).selected,
     "openai",
   );
+});
+
+
+test("falls back at runtime when an auto-selected provider errors", async () => {
+  const router = new VoiceRouter({
+    providers: [
+      new FakeProvider("elevenlabs", true, true, ["*"], true),
+      new FakeProvider("openai", false, true, ["*"]),
+    ],
+    context: { env: {} },
+  });
+
+  const result = await router.synthesize(request);
+  assert.equal(result.provider, "openai");
 });
