@@ -65,7 +65,7 @@ export class ElevenLabsVoiceProvider implements VoiceProvider {
     const model =
       request.model ??
       resolveEnv(env, "ELEVENLABS_MODEL", directed.locale) ??
-      "eleven_multilingual_v2";
+      "eleven_v3";
 
     const response = await fetch(
       `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceId)}/with-timestamps?output_format=mp3_44100_128`,
@@ -76,8 +76,13 @@ export class ElevenLabsVoiceProvider implements VoiceProvider {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          text: directed.directedText,
+          text: model === "eleven_v3"
+            ? `[warm] [confident] [conversational] ${directed.directedText}`
+            : directed.directedText,
           model_id: model,
+          ...(model === "eleven_v3"
+            ? { language_code: directed.locale.split("-")[0].toLowerCase() }
+            : {}),
           voice_settings: {
             stability: Number(env.ELEVENLABS_STABILITY ?? "0.43"),
             similarity_boost: Number(env.ELEVENLABS_SIMILARITY_BOOST ?? "0.78"),
