@@ -176,6 +176,24 @@ function validatePresentation(value: unknown, problems: string[]) {
       validateOptionalString(value.clickRipple.color, "presentation.clickRipple.color", problems);
     }
   }
+
+  if (value.localeOverlay !== undefined) {
+    if (!isRecord(value.localeOverlay)) {
+      problems.push("presentation.localeOverlay must be an object.");
+    } else {
+      validateOptionalString(value.localeOverlay.language, "presentation.localeOverlay.language", problems);
+      if (!isRecord(value.localeOverlay.replacements)) {
+        problems.push("presentation.localeOverlay.replacements must be an object.");
+      } else {
+        for (const [source, translated] of Object.entries(value.localeOverlay.replacements)) {
+          if (!source.trim() || !isNonEmptyString(translated)) {
+            problems.push("presentation.localeOverlay replacements must use non-empty source/target strings.");
+            break;
+          }
+        }
+      }
+    }
+  }
 }
 
 function validateStep(step: unknown, index: number, problems: string[]) {
