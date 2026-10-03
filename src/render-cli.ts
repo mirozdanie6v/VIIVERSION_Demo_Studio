@@ -52,6 +52,8 @@ async function main() {
     preset,
     captions: !has("--no-captions"),
     captionsFilePath: arg("--captions-file"),
+    designContractPath: arg("--design-contract"),
+    uxPreflightPath: arg("--ux-preflight"),
     voiceoverPath,
     musicPath: arg("--music"),
     musicVolume: arg("--music-volume")

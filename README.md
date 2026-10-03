@@ -258,3 +258,26 @@ npm run render -- --run artifacts/<run-id> --music track.mp3 --music-bpm 120
 ```
 
 See `docs/EDITOR_BRAIN_REUSE.md` for the reuse map.
+
+
+## UX / Design Brain v0.12
+
+Demo Studio now reuses the VIIVERSION UX/UI quality stack from Mini App Factory and KP Universal Proposal Orchestrator.
+
+```
+URL → UX preflight → Design Profile → Design Contract
+    → Capture → Editor Brain → Presentation Design Brain
+    → Visual Critic → FFmpeg
+```
+
+Run a standalone audit:
+
+```bash
+npm run ux-audit -- --url https://example.com --out artifacts/ux-audit
+```
+
+The audit produces desktop/mobile screenshots, browser QA, an inferred design profile and an overlay design contract.
+
+During rendering, the Presentation Design Brain uses recorded active-element camera geometry to move captions and branding away from important UI. The independent Visual Critic returns PASS, REVISE or BLOCKED with a bounded revision loop.
+
+See `docs/UX_DESIGN_BRAIN_REUSE.md` for the verified reuse map.

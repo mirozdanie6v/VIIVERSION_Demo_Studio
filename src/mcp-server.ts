@@ -15,7 +15,7 @@ export function createDemoStudioMcpHandler(service: DemoStudioService) {
 
     const server = new McpServer({
       name: "viiversion-demo-studio",
-      version: "0.11.0",
+      version: "0.12.0",
     });
 
     server.registerTool(
@@ -39,6 +39,40 @@ export function createDemoStudioMcpHandler(service: DemoStudioService) {
           const snapshot = await service.inspect(url);
           return {
             content: [{ type: "text", text: JSON.stringify(snapshot) }],
+          };
+        } catch (error) {
+          return {
+            content: [{
+              type: "text",
+              text: error instanceof Error ? error.message : String(error),
+            }],
+            isError: true,
+          };
+        }
+      },
+    );
+
+    server.registerTool(
+      "audit_web_app_design",
+      {
+        title: "Audit web application UX and visual system",
+        description:
+          "Run the reusable VIIVERSION UX/Design Brain against a public web application. Returns desktop/mobile QA, inferred design profile and overlay design contract.",
+        inputSchema: z.object({
+          url: z.string().url(),
+        }),
+        annotations: {
+          readOnlyHint: true,
+          openWorldHint: true,
+          destructiveHint: false,
+          idempotentHint: true,
+        },
+      },
+      async ({ url }) => {
+        try {
+          const result = await service.auditDesign(url);
+          return {
+            content: [{ type: "text", text: JSON.stringify(result) }],
           };
         } catch (error) {
           return {

@@ -1,3 +1,5 @@
+import type { CameraFrame } from "./types.js";
+
 export type SceneTimelineEntry = {
   index: number;
   label: string;
@@ -5,6 +7,7 @@ export type SceneTimelineEntry = {
   startedAt: string;
   finishedAt: string;
   success: boolean;
+  camera?: CameraFrame;
 };
 
 export type SceneStep = {
