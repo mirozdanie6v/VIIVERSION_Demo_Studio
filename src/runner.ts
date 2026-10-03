@@ -72,6 +72,50 @@ type StepExecution = {
   };
 };
 
+async function applyLocaleOverlayNow(
+  page: Page,
+  scenario: DemoScenario,
+): Promise<void> {
+  const overlay = scenario.presentation?.localeOverlay;
+  if (!overlay) return;
+
+  await page.evaluate(({ language, replacements }) => {
+    document.documentElement.lang = language;
+    const pairs = Object.entries(replacements)
+      .filter(([source, translated]) => source && translated)
+      .sort((a, b) => b[0].length - a[0].length);
+
+    const translate = (value: string) => {
+      let next = value;
+      for (const [source, translated] of pairs) {
+        if (next.includes(source)) next = next.split(source).join(translated);
+      }
+      return next;
+    };
+
+    const walker = document.createTreeWalker(
+      document.documentElement,
+      NodeFilter.SHOW_TEXT,
+    );
+    const nodes: Node[] = [];
+    while (walker.nextNode()) nodes.push(walker.currentNode);
+    for (const node of nodes) {
+      const current = node.nodeValue ?? "";
+      const next = translate(current);
+      if (next !== current) node.nodeValue = next;
+    }
+
+    for (const element of Array.from(document.querySelectorAll("*"))) {
+      for (const attribute of ["placeholder", "aria-label", "title", "alt"]) {
+        const current = element.getAttribute(attribute);
+        if (!current) continue;
+        const next = translate(current);
+        if (next !== current) element.setAttribute(attribute, next);
+      }
+    }
+  }, overlay);
+}
+
 async function runStep(
   page: Page,
   step: DemoStep,
@@ -303,6 +347,7 @@ export async function runScenario(
       const stepStartedAt = new Date().toISOString();
 
       try {
+        await applyLocaleOverlayNow(page, scenario).catch(() => undefined);
         const execution = await runStep(page, step, scenario);
 
         const pause = step.pauseAfterMs ?? scenario.defaultPauseMs ?? 650;
@@ -313,6 +358,10 @@ export async function runScenario(
         if (execution.camera) {
           await resetPresentation(page, scenario.presentation);
         }
+
+        await applyLocaleOverlayNow(page, scenario).catch(() => undefined);
+        await page.waitForTimeout(40);
+        await applyLocaleOverlayNow(page, scenario).catch(() => undefined);
 
         timeline.push({
           index,
