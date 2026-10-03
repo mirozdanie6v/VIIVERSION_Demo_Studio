@@ -56,7 +56,8 @@ export function reviewEditorPlan(plan: EditorBrainPlan): CriticResult {
 
     const contentHold = scene.stepIndexes.some((stepIndex) => {
       const semantic = plan.semantics[stepIndex];
-      return semantic?.action === "wait" && semantic.importance >= 0.5;
+      return semantic?.shotIntent === "continuity_speech" ||
+        (semantic?.action === "wait" && semantic.importance >= 0.5);
     });
     const maxDuration = contentHold ? 30 : 6.5;
 
