@@ -21,6 +21,15 @@ export type CaptionPlan = {
   };
 };
 
+
+export function subtitleAlignmentForPlacement(
+  placement: "top" | "bottom",
+): number {
+  // libass uses legacy SSA alignment numbering for SRT force_style:
+  // 6 = top-center, 2 = bottom-center.
+  return placement === "top" ? 6 : 2;
+}
+
 function secondsBetween(startIso: string, valueIso: string): number {
   return Math.max(0, (Date.parse(valueIso) - Date.parse(startIso)) / 1000);
 }
@@ -90,7 +99,7 @@ function sourceToOutput(
 function safeZoneFor(preset: CaptionPreset): CaptionPlan["safeZone"] {
   if (preset === "9:16") {
     return {
-      alignment: 8,
+      alignment: subtitleAlignmentForPlacement("top"),
       fontSize: 28,
       marginV: 96,
       marginH: 84,
