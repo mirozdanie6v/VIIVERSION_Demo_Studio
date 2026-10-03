@@ -1,0 +1,219 @@
+{
+  "name": "MAX TOUR — Russian Premium Customer Journey",
+  "baseUrl": "https://max-tour.viiversion.com",
+  "viewport": {
+    "width": 430,
+    "height": 932
+  },
+  "defaultPauseMs": 650,
+  "presentation": {
+    "smartZoom": {
+      "scale": 1.18,
+      "mobileScale": 1.12,
+      "transitionMs": 420,
+      "settleMs": 180
+    },
+    "cursor": {
+      "size": 18,
+      "fill": "rgba(255,255,255,0.96)",
+      "border": "rgba(15,18,25,0.75)",
+      "borderWidth": 2,
+      "shadow": "0 5px 18px rgba(0,0,0,0.28)"
+    },
+    "focusRing": {
+      "enabled": true,
+      "color": "rgba(255,255,255,0.38)",
+      "width": 2,
+      "padding": 8
+    },
+    "clickRipple": {
+      "enabled": true,
+      "color": "rgba(255,255,255,0.72)",
+      "size": 58,
+      "durationMs": 420
+    }
+  },
+  "steps": [
+    {
+      "action": "goto",
+      "url": "/",
+      "label": "Открываем MAX TOUR"
+    },
+    {
+      "action": "waitFor",
+      "target": {
+        "by": "text",
+        "value": "Ваш лучший отдых",
+        "exact": false
+      },
+      "state": "visible",
+      "timeoutMs": 20000
+    },
+    {
+      "action": "hover",
+      "target": {
+        "by": "role",
+        "value": "button",
+        "name": "Выбрать тур",
+        "exact": true
+      },
+      "pauseAfterMs": 6200,
+      "narration": "MAX TOUR превращает выбор экскурсии во Вьетнаме в понятный мобильный путь. Клиент сразу видит, с чего начать, и одним нажатием переходит к подбору тура."
+    },
+    {
+      "action": "click",
+      "target": {
+        "by": "role",
+        "value": "button",
+        "name": "Выбрать тур",
+        "exact": true
+      },
+      "label": "Открываем каталог"
+    },
+    {
+      "action": "waitFor",
+      "target": {
+        "by": "text",
+        "value": "17 найдено",
+        "exact": true
+      },
+      "state": "visible",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "hover",
+      "target": {
+        "by": "text",
+        "value": "17 найдено",
+        "exact": true
+      },
+      "pauseAfterMs": 6000,
+      "narration": "В каталоге собраны доступные предложения, цены и основные параметры. Клиенту проще сравнить варианты и быстро понять, что подходит именно ему."
+    },
+    {
+      "action": "scroll",
+      "y": 420,
+      "label": "Просматриваем каталог",
+      "pauseAfterMs": 900
+    },
+    {
+      "action": "hover",
+      "target": {
+        "by": "css",
+        "value": "h3:has-text(\"Далат «Премиум»\"):visible"
+      },
+      "pauseAfterMs": 6200,
+      "narration": "Карточки работают как витрина: фотографии, направление и стоимость помогают принять решение без длинной переписки с менеджером."
+    },
+    {
+      "action": "click",
+      "target": {
+        "by": "css",
+        "value": "h3:has-text(\"Далат «Премиум»\"):visible"
+      },
+      "label": "Открываем Далат Премиум"
+    },
+    {
+      "action": "wait",
+      "ms": 5600,
+      "narration": "Открываем Далат Премиум. Здесь собрана информация, которая обычно разбросана по сообщениям: программа, фотографии, формат поездки и практические условия."
+    },
+    {
+      "action": "scroll",
+      "y": 500,
+      "label": "Показываем детали тура",
+      "pauseAfterMs": 900
+    },
+    {
+      "action": "wait",
+      "ms": 6200,
+      "narration": "Так приложение заранее отвечает на базовые вопросы, снимает сомнения и помогает клиенту перейти от интереса к конкретному решению."
+    },
+    {
+      "action": "hover",
+      "target": {
+        "by": "css",
+        "value": "button:has-text(\"Индивидуальный\"):visible"
+      },
+      "pauseAfterMs": 4600,
+      "narration": "Нужен индивидуальный формат — клиент выбирает его прямо здесь и сразу продолжает оформление."
+    },
+    {
+      "action": "click",
+      "target": {
+        "by": "css",
+        "value": "button:has-text(\"Индивидуальный\"):visible"
+      },
+      "label": "Выбираем индивидуальный тур"
+    },
+    {
+      "action": "wait",
+      "ms": 4800,
+      "narration": "Переход к бронированию остаётся логичным и последовательным: без переключения между сайтом, мессенджером и отдельными формами."
+    },
+    {
+      "action": "scroll",
+      "y": 420,
+      "label": "Показываем форму бронирования",
+      "pauseAfterMs": 900
+    },
+    {
+      "action": "wait",
+      "ms": 6500,
+      "narration": "Дата, количество участников, трансфер и данные клиента собираются в одном процессе. Менеджер получает более структурированную заявку, а турист всегда понимает следующий шаг."
+    },
+    {
+      "action": "click",
+      "target": {
+        "by": "role",
+        "value": "button",
+        "name": "ИИ-Помощник",
+        "exact": true
+      },
+      "label": "Открываем AI-консультанта"
+    },
+    {
+      "action": "waitFor",
+      "target": {
+        "by": "css",
+        "value": "input[placeholder*=\"Напишите сообщение\"]"
+      },
+      "state": "visible",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "fill",
+      "target": {
+        "by": "css",
+        "value": "input[placeholder*=\"Напишите сообщение\"]"
+      },
+      "value": "Ты AI-консультант? Что ты умеешь?",
+      "pauseAfterMs": 1700,
+      "narration": "А теперь покажем AI-консультанта в работе. Задаём ему обычный вопрос прямо внутри приложения."
+    },
+    {
+      "action": "press",
+      "target": {
+        "by": "css",
+        "value": "input[placeholder*=\"Напишите сообщение\"]"
+      },
+      "key": "Enter",
+      "label": "Отправляем вопрос"
+    },
+    {
+      "action": "wait",
+      "ms": 10500,
+      "narration": "Консультант отвечает в том же интерфейсе, помогает подобрать вариант, объясняет детали и ведёт клиента дальше по пути к бронированию. Это поддержка, которая доступна именно в тот момент, когда возникает вопрос."
+    },
+    {
+      "action": "wait",
+      "ms": 6500,
+      "narration": "Для MAX TOUR это более цельный клиентский опыт, меньше потерянных обращений и более подготовленные заявки для менеджеров."
+    },
+    {
+      "action": "wait",
+      "ms": 6500,
+      "narration": "Хотите такой же путь для своих клиентов? VIIVERSION адаптирует решение под ваши туры, процессы и каналы продаж. Напишите нам — покажем, как это будет работать для вашего бизнеса."
+    }
+  ]
+}
