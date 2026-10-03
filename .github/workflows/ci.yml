@@ -23,5 +23,8 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Check Cloudflare Worker syntax
+        run: node --check cloudflare/worker.js
+
       - name: Test
         run: npm test
