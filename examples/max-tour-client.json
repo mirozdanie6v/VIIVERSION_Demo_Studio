@@ -5,7 +5,7 @@
     "width": 430,
     "height": 932
   },
-  "defaultPauseMs": 900,
+  "defaultPauseMs": 750,
   "presentation": {
     "smartZoom": {
       "scale": 1.1,
@@ -25,7 +25,7 @@
       "action": "goto",
       "url": "/",
       "label": "MAX TOUR mobile experience",
-      "narration": "MAX TOUR — мобильный сервис для выбора и бронирования путешествий по Вьетнаму."
+      "narration": "MAX TOUR — мобильное приложение для путешествий по Вьетнаму."
     },
     {
       "action": "waitFor",
@@ -39,9 +39,9 @@
     },
     {
       "action": "wait",
-      "ms": 1300,
+      "ms": 1100,
       "label": "Show the home screen",
-      "narration": "На первом экране клиент сразу видит направления, популярные туры, Fast Track и доступ к AI-помощнику."
+      "narration": "Все направления и основные сервисы собраны на одном экране."
     },
     {
       "action": "click",
@@ -52,7 +52,7 @@
         "exact": true
       },
       "label": "Open catalog",
-      "narration": "Одним нажатием открывается каталог с фильтрами по городу, длительности, типу отдыха и бюджету."
+      "narration": "Каталог открывается одним нажатием."
     },
     {
       "action": "waitFor",
@@ -68,8 +68,8 @@
       "action": "scroll",
       "y": 420,
       "label": "Browse live catalog",
-      "narration": "Клиент сравнивает реальные программы, формат поездки и стоимость прямо в приложении.",
-      "pauseAfterMs": 1000
+      "narration": "Фильтры, цены и формат поездки видны сразу.",
+      "pauseAfterMs": 850
     },
     {
       "action": "click",
@@ -78,22 +78,37 @@
         "value": "h3:has-text(\"Далат «Премиум»\"):visible"
       },
       "label": "Open Dalat Premium",
-      "narration": "Открываем одну из популярных экскурсий — Далат Премиум."
+      "narration": "Открываем Далат Премиум."
     },
     {
       "action": "wait",
-      "ms": 1800
+      "ms": 1300
     },
     {
       "action": "scroll",
-      "y": 540,
+      "y": 500,
       "label": "Explore tour details",
-      "narration": "Карточка тура показывает маршрут, условия, фотографии и варианты поездки в одном месте.",
-      "pauseAfterMs": 1000
+      "narration": "В карточке — маршрут, тарифы, фотографии и правила поездки.",
+      "pauseAfterMs": 900
+    },
+    {
+      "action": "click",
+      "target": {
+        "by": "css",
+        "value": "button:has-text(\"Индивидуальный\"):visible"
+      },
+      "label": "Choose private tour",
+      "narration": "Клиент выбирает формат и переходит к оформлению."
+    },
+    {
+      "action": "wait",
+      "ms": 1400
     },
     {
       "action": "scroll",
-      "y": 620,
+      "y": 420,
+      "label": "Booking flow",
+      "narration": "Дальше — дата, участники, трансфер и данные для бронирования.",
       "pauseAfterMs": 900
     },
     {
@@ -105,11 +120,11 @@
         "exact": true
       },
       "label": "Open AI assistant",
-      "narration": "AI-помощник остаётся доступен внутри приложения и помогает клиенту подобрать подходящий вариант."
+      "narration": "AI-помощник помогает подобрать подходящий вариант."
     },
     {
       "action": "wait",
-      "ms": 1800
+      "ms": 1500
     }
   ]
 }
