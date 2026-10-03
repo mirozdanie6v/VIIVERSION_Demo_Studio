@@ -38,5 +38,11 @@
   },
   "observability": {
     "enabled": true
-  }
+  },
+  "r2_buckets": [
+    {
+      "binding": "DEMO_STUDIO_ARTIFACTS",
+      "bucket_name": "viiversion-demo-studio-artifacts"
+    }
+  ]
 }
