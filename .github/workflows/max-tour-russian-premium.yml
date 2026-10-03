@@ -1,0 +1,198 @@
+name: MAX TOUR Russian Premium Presentation
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'examples/max-tour-russian-premium.json'
+      - 'src/render.ts'
+      - 'src/render-cli.ts'
+      - 'src/caption-brain.ts'
+      - 'src/editor-brain.ts'
+      - 'src/editor-critic.ts'
+      - 'docs/MAX_TOUR_RU_PREMIUM_VIDEO_SPEC.md'
+      - '.github/workflows/max-tour-russian-premium.yml'
+
+concurrency:
+  group: max-tour-russian-premium
+  cancel-in-progress: true
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Install media tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg espeak-ng
+          python3 -m pip install --quiet numpy piper-tts
+
+      - name: Capture Russian MAX TOUR customer journey
+        env:
+          DEMO_STUDIO_ALLOWED_HOSTS: max-tour.viiversion.com
+          ALLOW_PRIVATE_TARGETS: "false"
+        run: npm run capture -- --scenario examples/max-tour-russian-premium.json
+
+      - name: Resolve run directory
+        id: run
+        shell: bash
+        run: echo "dir=$(find artifacts -mindepth 1 -maxdepth 1 -type d | sort | tail -n 1)" >> "$GITHUB_OUTPUT"
+
+      - name: Free disk after browser capture
+        shell: bash
+        run: |
+          rm -rf ~/.cache/ms-playwright || true
+          rm -rf ~/.npm/_cacache || true
+          sudo apt-get clean
+          sudo rm -rf /var/lib/apt/lists/* || true
+          sudo rm -rf /usr/local/lib/android || true
+          sudo rm -rf /usr/share/dotnet || true
+          df -h
+
+      - name: Build narration script
+        shell: bash
+        env:
+          RUN_DIR: ${{ steps.run.outputs.dir }}
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const scenario = JSON.parse(fs.readFileSync('examples/max-tour-russian-premium.json', 'utf8'));
+          const narration = scenario.steps
+            .map(step => (step.narration || '').trim())
+            .filter(Boolean)
+            .join(' ');
+          fs.writeFileSync(process.env.RUN_DIR + '/narration.txt', narration + '\n');
+          NODE
+
+      - name: Synthesize local Russian neural voice
+        shell: bash
+        run: |
+          run_dir="${{ steps.run.outputs.dir }}"
+          cat "${run_dir}/narration.txt" | piper             --model ru_RU-dmitri-medium             --output_file "${run_dir}/voiceover-raw.wav"
+          ffmpeg -y -i "${run_dir}/voiceover-raw.wav"             -af "highpass=f=70,lowpass=f=14500,acompressor=threshold=-18dB:ratio=2.2:attack=18:release=180,atempo=1.02,loudnorm=I=-16:TP=-1.5:LRA=8"             -c:a libmp3lame -b:a 192k "${run_dir}/voiceover.mp3"
+
+      - name: Generate procedural premium background music
+        shell: bash
+        env:
+          RUN_DIR: ${{ steps.run.outputs.dir }}
+        run: |
+          python3 - <<'PY'
+          import math, wave, os
+          import numpy as np
+
+          sr = 44100
+          beat = 60.0 / 96.0
+          chord_seconds = beat * 8
+          progression = [
+              (220.00, 261.63, 329.63),
+              (174.61, 220.00, 261.63),
+              (130.81, 164.81, 196.00),
+              (196.00, 246.94, 293.66),
+              (220.00, 261.63, 329.63),
+              (174.61, 220.00, 261.63),
+              (146.83, 174.61, 220.00),
+              (196.00, 246.94, 293.66),
+          ]
+          duration = chord_seconds * len(progression)
+          n = int(duration * sr)
+          t = np.arange(n, dtype=np.float64) / sr
+          left = np.zeros(n, dtype=np.float64)
+          right = np.zeros(n, dtype=np.float64)
+
+          for ci, chord in enumerate(progression):
+              start = int(ci * chord_seconds * sr)
+              end = min(n, int((ci + 1) * chord_seconds * sr))
+              tt = np.arange(end - start, dtype=np.float64) / sr
+              env = np.sin(np.pi * np.clip(tt / 1.4, 0, 1)) * np.sin(np.pi * np.clip((chord_seconds - tt) / 1.4, 0, 1))
+              env = np.clip(env, 0, 1)
+              pad_l = np.zeros_like(tt)
+              pad_r = np.zeros_like(tt)
+              for j, f in enumerate(chord):
+                  drift = 1.0 + 0.0015 * np.sin(2 * np.pi * (0.04 + j * 0.013) * tt)
+                  phase = 0.32 * j
+                  pad_l += np.sin(2 * np.pi * f * drift * tt + phase) * (0.50 / (j + 1))
+                  pad_l += np.sin(2 * np.pi * f * 2 * tt + phase) * (0.10 / (j + 1))
+                  pad_r += np.sin(2 * np.pi * f * drift * tt + phase + 0.11) * (0.50 / (j + 1))
+                  pad_r += np.sin(2 * np.pi * f * 2 * tt + phase + 0.09) * (0.10 / (j + 1))
+              left[start:end] += 0.070 * pad_l * env
+              right[start:end] += 0.070 * pad_r * env
+
+              for b in range(8):
+                  p0 = int((b * beat) * sr)
+                  p1 = min(len(tt), p0 + int(1.15 * beat * sr))
+                  if p0 >= len(tt):
+                      continue
+                  local = np.arange(p1 - p0, dtype=np.float64) / sr
+                  tone = chord[b % len(chord)] * (2 if b % 2 == 0 else 1)
+                  pluck_env = np.exp(-4.2 * local / beat)
+                  pluck = np.sin(2 * np.pi * tone * local) + 0.30 * np.sin(2 * np.pi * tone * 2 * local)
+                  left[start + p0:start + p1] += 0.027 * pluck * pluck_env
+                  right[start + p0:start + p1] += 0.025 * pluck * pluck_env
+
+          pulse = 0.006 * np.sin(2 * np.pi * 55 * t) * (0.55 + 0.45 * np.sin(2 * np.pi * (96/60/2) * t) ** 2)
+          left += pulse
+          right += pulse
+
+          rng = np.random.default_rng(42)
+          noise = rng.normal(0, 1, n)
+          kernel = np.ones(96) / 96
+          air = np.convolve(noise, kernel, mode='same') * 0.0022
+          left += air
+          right += np.roll(air, 137)
+
+          peak = max(np.max(np.abs(left)), np.max(np.abs(right)), 1e-9)
+          left = np.clip(left / peak * 0.60, -1, 1)
+          right = np.clip(right / peak * 0.60, -1, 1)
+          stereo = np.stack([left, right], axis=1)
+          pcm = (stereo * 32767).astype(np.int16)
+
+          out = os.environ['RUN_DIR'] + '/background.wav'
+          with wave.open(out, 'wb') as w:
+              w.setnchannels(2)
+              w.setsampwidth(2)
+              w.setframerate(sr)
+              w.writeframes(pcm.tobytes())
+          PY
+          run_dir="${{ steps.run.outputs.dir }}"
+          ffmpeg -y -i "${run_dir}/background.wav"             -af "highpass=f=65,lowpass=f=9000,acompressor=threshold=-20dB:ratio=1.7:attack=35:release=320,loudnorm=I=-26:TP=-6:LRA=7"             -c:a aac -b:a 192k "${run_dir}/background.m4a"
+
+      - name: Render Russian premium presentation
+        run: |
+          npm run render --             --run "${{ steps.run.outputs.dir }}"             --preset 9:16             --voiceover "${{ steps.run.outputs.dir }}/voiceover.mp3"             --music "${{ steps.run.outputs.dir }}/background.m4a"             --music-volume 0.10             --music-bpm 96             --brand "VIIVERSION"             --title "MAX TOUR · клиентский путь"             --intro-seconds 2.4             --outro-seconds 5.5             --cta "Хотите такой же путь для своих клиентов?"             --cta-secondary "Напишите нам — адаптируем решение под ваш бизнес."
+
+      - name: Verify final video
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_dir="${{ steps.run.outputs.dir }}"
+          test -s "${run_dir}/voiceover.mp3"
+          test -s "${run_dir}/background.m4a"
+          test -s "${run_dir}/captions.srt"
+          test -s "${run_dir}/final-9x16.mp4"
+          duration=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "${run_dir}/final-9x16.mp4")
+          awk -v d="$duration" 'BEGIN { exit !(d >= 85 && d <= 240) }'
+          echo "FINAL_DURATION=$duration"
+          ffmpeg -y -ss 0:01:25 -i "${run_dir}/final-9x16.mp4" -frames:v 1 "${run_dir}/qa-ai-frame.png" || true
+
+      - name: Upload final presentation
+        uses: actions/upload-artifact@v4
+        with:
+          name: max-tour-russian-premium-presentation
+          path: artifacts/
+          if-no-files-found: error
