@@ -1,4 +1,4 @@
-export type VoiceProviderId = "elevenlabs" | "openai" | "piper";
+export type VoiceProviderId = "elevenlabs" | "openai" | "huggingface" | "piper";
 
 export type VoicePersonaId = "viiversion-presenter" | "neutral";
 
