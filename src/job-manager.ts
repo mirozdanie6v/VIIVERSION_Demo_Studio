@@ -309,16 +309,17 @@ export class DemoJobManager {
         cta: job.request.cta,
       });
 
+      await persistArtifact(job.id, artifactPath);
+
       const completedAt = new Date().toISOString();
       await this.update(job, {
         status: "completed",
         progress: 100,
-        message: "Presentation video is ready.",
+        message: "Presentation video is ready and durably stored.",
         artifactPath,
         completedAt,
       });
 
-      await persistArtifact(job.id, artifactPath);
       await persistJobSnapshot(job.id, {
         ...this.publicJob(job),
         artifact_url:
