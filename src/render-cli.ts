@@ -64,9 +64,12 @@ async function main() {
       : undefined,
     brandLabel: arg("--brand") ?? "VIIVERSION",
     cta: arg("--cta"),
+    ctaSecondary: arg("--cta-secondary"),
     title: arg("--title"),
     intro: !has("--no-intro"),
     outro: !has("--no-outro"),
+    introSeconds: arg("--intro-seconds") ? Number(arg("--intro-seconds")) : undefined,
+    outroSeconds: arg("--outro-seconds") ? Number(arg("--outro-seconds")) : undefined,
   });
 
   console.log(output);
