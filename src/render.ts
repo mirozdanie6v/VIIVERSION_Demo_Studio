@@ -296,8 +296,11 @@ export async function renderRun(options: RenderOptions): Promise<string> {
   }
 
   if (options.captions !== false && captions) {
+    const isAss = options.captionsFilePath?.toLowerCase().endsWith(".ass");
     mainDecor.push(
-      `subtitles='${escapeFilterPath(captionsPath)}':force_style='FontName=DejaVu Sans,FontSize=${captionStyle.fontSize},PrimaryColour=&H00FFFFFF,BackColour=&H00000000,OutlineColour=&H00000000,BorderStyle=1,Outline=${captionStyle.outline},Shadow=0,Alignment=${captionStyle.alignment},MarginV=${captionStyle.marginV},MarginL=${captionStyle.marginH},MarginR=${captionStyle.marginH}'`,
+      isAss
+        ? `ass='${escapeFilterPath(captionsPath)}'`
+        : `subtitles='${escapeFilterPath(captionsPath)}':original_size=${width}x${height}:force_style='FontName=DejaVu Sans,FontSize=${captionStyle.fontSize},PrimaryColour=&H00FFFFFF,BackColour=&H00000000,OutlineColour=&H00000000,BorderStyle=1,Outline=${captionStyle.outline},Shadow=0,Alignment=${captionStyle.alignment},MarginV=${captionStyle.marginV},MarginL=${captionStyle.marginH},MarginR=${captionStyle.marginH}'`,
     );
   }
 
