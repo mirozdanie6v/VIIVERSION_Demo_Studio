@@ -2,11 +2,16 @@ import { spawn } from "node:child_process";
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import {
-  buildScenePlan,
-  editedDuration,
-  type EditScene,
-  type SceneManifest,
-  type SceneTimelineEntry,
+  buildCaptionPlan,
+  captionPlanToSrt,
+} from "./caption-brain.js";
+import { buildEditorBrainPlan } from "./editor-brain.js";
+import { reviewEditorPlan } from "./editor-critic.js";
+import { alignScenesToBeatGrid } from "./music-brain.js";
+import type {
+  EditScene,
+  SceneManifest,
+  SceneTimelineEntry,
 } from "./scenes.js";
 
 export type RenderPreset = "16:9" | "9:16" | "1:1";
@@ -19,6 +24,8 @@ export type RenderOptions = {
   voiceoverPath?: string;
   musicPath?: string;
   musicVolume?: number;
+  musicBpm?: number;
+  musicBeatOffsetSeconds?: number;
   brandLabel?: string;
   cta?: string;
   title?: string;
@@ -48,105 +55,11 @@ function secondsBetween(startIso: string, valueIso: string): number {
   return Math.max(0, (Date.parse(valueIso) - Date.parse(startIso)) / 1000);
 }
 
-function srtTime(seconds: number): string {
-  const ms = Math.max(0, Math.round(seconds * 1000));
-  const hours = Math.floor(ms / 3_600_000);
-  const minutes = Math.floor((ms % 3_600_000) / 60_000);
-  const secs = Math.floor((ms % 60_000) / 1000);
-  const millis = ms % 1000;
-  return [
-    String(hours).padStart(2, "0"),
-    String(minutes).padStart(2, "0"),
-    String(secs).padStart(2, "0"),
-  ].join(":") + "," + String(millis).padStart(3, "0");
-}
-
-function sanitizeCaption(text: string): string {
-  return text.replace(/\r?\n/g, " ").trim();
-}
-
-function sceneForStep(
-  index: number,
-  scenes: EditScene[],
-): EditScene | undefined {
-  return scenes.find((scene) => scene.stepIndexes.includes(index));
-}
-
 export function buildCaptions(
   manifest: Manifest,
-  scenes: EditScene[] = buildScenePlan(manifest),
+  scenes: EditScene[] = buildEditorBrainPlan(manifest).scenes,
 ): string {
-  const cues: Array<{
-    text: string;
-    start: number;
-    end: number;
-    maxEnd: number;
-  }> = [];
-
-  for (const item of manifest.timeline) {
-    if (!item.success) continue;
-    const step = manifest.scenario.steps[item.index];
-    const text = sanitizeCaption(step?.narration ?? step?.label ?? "");
-    if (!text) continue;
-
-    const sourceStart = secondsBetween(manifest.startedAt, item.startedAt);
-    const sourceEnd = secondsBetween(manifest.startedAt, item.finishedAt);
-
-    let cueStart = sourceStart;
-    let cueEnd = Math.max(sourceStart + 1.2, sourceEnd + 0.35);
-    let maxEnd = Number.POSITIVE_INFINITY;
-
-    if (scenes.length > 0) {
-      const scene = sceneForStep(item.index, scenes);
-      if (!scene) continue;
-
-      cueStart =
-        scene.outputStart +
-        Math.max(0, sourceStart - scene.sourceStart);
-      maxEnd = scene.outputEnd;
-      cueEnd =
-        scene.outputStart +
-        Math.min(
-          scene.sourceEnd - scene.sourceStart,
-          Math.max(
-            sourceStart - scene.sourceStart + 1.2,
-            sourceEnd - scene.sourceStart + 0.35,
-          ),
-        );
-    }
-
-    cues.push({
-      text,
-      start: cueStart,
-      end: Math.min(maxEnd, Math.max(cueStart + 0.6, cueEnd)),
-      maxEnd,
-    });
-  }
-
-  const entries: string[] = [];
-  let previousEnd = -1;
-
-  cues.forEach((cue, index) => {
-    const gap = index === 0 ? 0 : 0.08;
-    const start = Math.max(cue.start, previousEnd + gap);
-    const end = Math.min(
-      cue.maxEnd,
-      Math.max(start + 0.45, cue.end),
-    );
-
-    if (!(end > start + 0.05)) return;
-
-    entries.push(
-      [
-        String(entries.length + 1),
-        `${srtTime(start)} --> ${srtTime(end)}`,
-        cue.text,
-      ].join("\n"),
-    );
-    previousEnd = end;
-  });
-
-  return entries.join("\n\n") + (entries.length ? "\n" : "");
+  return captionPlanToSrt(buildCaptionPlan(manifest, scenes, "16:9"));
 }
 
 export function buildNarration(manifest: Manifest): string {
@@ -174,11 +87,17 @@ function number(value: number): string {
 
 async function runFfmpeg(executable: string, args: string[]): Promise<void> {
   await new Promise<void>((resolve, reject) => {
-    const child = spawn(executable, args, { stdio: ["ignore", "inherit", "inherit"] });
+    const child = spawn(executable, args, {
+      stdio: ["ignore", "inherit", "inherit"],
+    });
     child.once("error", reject);
     child.once("exit", (code) => {
       if (code === 0) resolve();
-      else reject(new Error(`ffmpeg exited with code ${code ?? "unknown"}.`));
+      else {
+        reject(
+          new Error(`ffmpeg exited with code ${code ?? "unknown"}.`),
+        );
+      }
     });
   });
 }
@@ -207,8 +126,12 @@ function buildMainVideoFilters(
     return filters;
   }
 
-  const splitLabels = scenes.map((_, index) => `[source${index}]`).join("");
-  filters.push(`[0:v]${base},split=${scenes.length}${splitLabels}`);
+  const splitLabels = scenes
+    .map((_, index) => `[source${index}]`)
+    .join("");
+  filters.push(
+    `[0:v]${base},split=${scenes.length}${splitLabels}`,
+  );
 
   scenes.forEach((scene, index) => {
     filters.push(
@@ -216,7 +139,9 @@ function buildMainVideoFilters(
     );
   });
 
-  const sceneInputs = scenes.map((_, index) => `[scene${index}]`).join("");
+  const sceneInputs = scenes
+    .map((_, index) => `[scene${index}]`)
+    .join("");
   filters.push(
     `${sceneInputs}concat=n=${scenes.length}:v=1:a=0[mainraw]`,
   );
@@ -227,7 +152,9 @@ function buildMainVideoFilters(
 export async function renderRun(options: RenderOptions): Promise<string> {
   const runDir = path.resolve(options.runDir);
   const manifestPath = path.join(runDir, "run.json");
-  const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as Manifest;
+  const manifest = JSON.parse(
+    await readFile(manifestPath, "utf8"),
+  ) as Manifest;
 
   if (!manifest.success) {
     throw new Error("Cannot render an unsuccessful capture run.");
@@ -240,29 +167,82 @@ export async function renderRun(options: RenderOptions): Promise<string> {
   const preset = options.preset ?? "16:9";
   const { width, height } = PRESETS[preset];
   const outputPath = path.resolve(
-    options.outputPath ?? path.join(runDir, `final-${preset.replace(":", "x")}.mp4`),
+    options.outputPath ??
+      path.join(runDir, `final-${preset.replace(":", "x")}.mp4`),
   );
 
-  const scenes = buildScenePlan(manifest);
+  const editorBrain = buildEditorBrainPlan(manifest);
+  if (!editorBrain.qualityGate.passed) {
+    throw new Error(
+      "Editor Brain quality gate failed: " +
+        JSON.stringify(editorBrain.qualityGate.checks),
+    );
+  }
+
+  const critic = reviewEditorPlan(editorBrain);
+  if (!critic.passed) {
+    throw new Error(
+      "Editor Critic rejected the edit plan: " +
+        critic.findings.map((finding) => finding.code).join(", "),
+    );
+  }
+
+  const musicBrain = alignScenesToBeatGrid(critic.revisedScenes, {
+    bpm: options.musicBpm,
+    beatOffsetSeconds: options.musicBeatOffsetSeconds,
+  });
+  const scenes = musicBrain.scenes;
+
+  await Promise.all([
+    writeFile(
+      path.join(runDir, "editor_brain.json"),
+      JSON.stringify(editorBrain, null, 2) + "\n",
+      "utf8",
+    ),
+    writeFile(
+      path.join(runDir, "editor_critic.json"),
+      JSON.stringify(critic, null, 2) + "\n",
+      "utf8",
+    ),
+    writeFile(
+      path.join(runDir, "music_brain.json"),
+      JSON.stringify(musicBrain, null, 2) + "\n",
+      "utf8",
+    ),
+    writeFile(
+      path.join(runDir, "scenes.json"),
+      JSON.stringify(
+        {
+          sourceDurationSeconds: secondsBetween(
+            manifest.startedAt,
+            manifest.finishedAt ??
+              manifest.timeline.at(-1)?.finishedAt ??
+              manifest.startedAt,
+          ),
+          editedDurationSeconds:
+            scenes.at(-1)?.outputEnd ?? 0,
+          editorBrainVersion: editorBrain.version,
+          criticVersion: critic.version,
+          musicBrainVersion: musicBrain.version,
+          scenes,
+        },
+        null,
+        2,
+      ) + "\n",
+      "utf8",
+    ),
+  ]);
+
+  const captionPlan = buildCaptionPlan(manifest, scenes, preset);
+  const captionsPath = path.join(runDir, "captions.srt");
+  const captions = captionPlanToSrt(captionPlan);
+
   await writeFile(
-    path.join(runDir, "scenes.json"),
-    JSON.stringify(
-      {
-        sourceDurationSeconds: secondsBetween(
-          manifest.startedAt,
-          manifest.finishedAt ?? manifest.timeline.at(-1)?.finishedAt ?? manifest.startedAt,
-        ),
-        editedDurationSeconds: editedDuration(manifest, scenes),
-        scenes,
-      },
-      null,
-      2,
-    ) + "\n",
+    path.join(runDir, "captions.json"),
+    JSON.stringify(captionPlan, null, 2) + "\n",
     "utf8",
   );
 
-  const captionsPath = path.join(runDir, "captions.srt");
-  const captions = buildCaptions(manifest, scenes);
   if (options.captions !== false && captions) {
     await writeFile(captionsPath, captions, "utf8");
   }
@@ -281,22 +261,21 @@ export async function renderRun(options: RenderOptions): Promise<string> {
   if (options.musicPath) {
     musicIndex = inputCount;
     inputCount += 1;
-    args.push("-stream_loop", "-1", "-i", path.resolve(options.musicPath));
+    args.push(
+      "-stream_loop",
+      "-1",
+      "-i",
+      path.resolve(options.musicPath),
+    );
   }
 
   const filterParts = buildMainVideoFilters(width, height, scenes);
   const mainDecor: string[] = [];
-
-  const captionStyle =
-    preset === "9:16"
-      ? { fontSize: 6, marginV: 24, marginH: 20, outline: 1 }
-      : preset === "1:1"
-        ? { fontSize: 8, marginV: 30, marginH: 22, outline: 1 }
-        : { fontSize: 10, marginV: 34, marginH: 24, outline: 1 };
+  const captionStyle = captionPlan.safeZone;
 
   if (options.captions !== false && captions) {
     mainDecor.push(
-      `subtitles='${escapeFilterPath(captionsPath)}':force_style='FontName=DejaVu Sans,FontSize=${captionStyle.fontSize},PrimaryColour=&H00FFFFFF,OutlineColour=&H99000000,BorderStyle=1,Outline=${captionStyle.outline},Shadow=0,Alignment=2,MarginV=${captionStyle.marginV},MarginL=${captionStyle.marginH},MarginR=${captionStyle.marginH}'`,
+      `subtitles='${escapeFilterPath(captionsPath)}':force_style='FontName=DejaVu Sans,FontSize=${captionStyle.fontSize},PrimaryColour=&H00FFFFFF,OutlineColour=&H99000000,BorderStyle=1,Outline=${captionStyle.outline},Shadow=0,Alignment=${captionStyle.alignment},MarginV=${captionStyle.marginV},MarginL=${captionStyle.marginH},MarginR=${captionStyle.marginH}'`,
     );
   }
 
@@ -324,18 +303,25 @@ export async function renderRun(options: RenderOptions): Promise<string> {
 
   const introEnabled = options.intro !== false;
   const outroEnabled = options.outro !== false;
-  const introSeconds = introEnabled ? Math.max(0.4, options.introSeconds ?? 1.15) : 0;
-  const outroSeconds = outroEnabled ? Math.max(0.6, options.outroSeconds ?? 1.55) : 0;
-  const title = options.title ?? manifest.scenario.name ?? "Product demonstration";
+  const introSeconds = introEnabled
+    ? Math.max(0.4, options.introSeconds ?? 1.15)
+    : 0;
+  const outroSeconds = outroEnabled
+    ? Math.max(0.6, options.outroSeconds ?? 1.55)
+    : 0;
+  const title =
+    options.title ??
+    manifest.scenario.name ??
+    "Product demonstration";
 
   const finalVideoInputs: string[] = [];
 
   if (introEnabled) {
     filterParts.push(
       `color=c=0x090B10:s=${width}x${height}:r=30:d=${number(introSeconds)},` +
-      `drawtext=font='DejaVu Sans':text='${escapeDrawText(brandLabel)}':fontcolor=white:fontsize=46:x=(w-tw)/2:y=(h-th)/2-34,` +
-      `drawtext=font='DejaVu Sans':text='${escapeDrawText(title)}':fontcolor=white@0.72:fontsize=24:x=(w-tw)/2:y=(h-th)/2+32,` +
-      "format=yuv420p,settb=AVTB[intro]",
+        `drawtext=font='DejaVu Sans':text='${escapeDrawText(brandLabel)}':fontcolor=white:fontsize=46:x=(w-tw)/2:y=(h-th)/2-34,` +
+        `drawtext=font='DejaVu Sans':text='${escapeDrawText(title)}':fontcolor=white@0.72:fontsize=24:x=(w-tw)/2:y=(h-th)/2+32,` +
+        "format=yuv420p,settb=AVTB[intro]",
     );
     finalVideoInputs.push("[intro]");
   }
@@ -343,12 +329,13 @@ export async function renderRun(options: RenderOptions): Promise<string> {
   finalVideoInputs.push("[main]");
 
   if (outroEnabled) {
-    const outroText = options.cta ?? "Powered by VIIVERSION Demo Studio";
+    const outroText =
+      options.cta ?? "Powered by VIIVERSION Demo Studio";
     filterParts.push(
       `color=c=0x090B10:s=${width}x${height}:r=30:d=${number(outroSeconds)},` +
-      `drawtext=font='DejaVu Sans':text='${escapeDrawText(brandLabel)}':fontcolor=white:fontsize=44:x=(w-tw)/2:y=(h-th)/2-26,` +
-      `drawtext=font='DejaVu Sans':text='${escapeDrawText(outroText)}':fontcolor=white@0.8:fontsize=24:x=(w-tw)/2:y=(h-th)/2+34,` +
-      "format=yuv420p,settb=AVTB[outro]",
+        `drawtext=font='DejaVu Sans':text='${escapeDrawText(brandLabel)}':fontcolor=white:fontsize=44:x=(w-tw)/2:y=(h-th)/2-26,` +
+        `drawtext=font='DejaVu Sans':text='${escapeDrawText(outroText)}':fontcolor=white@0.8:fontsize=24:x=(w-tw)/2:y=(h-th)/2+34,` +
+        "format=yuv420p,settb=AVTB[outro]",
     );
     finalVideoInputs.push("[outro]");
   }
@@ -376,28 +363,47 @@ export async function renderRun(options: RenderOptions): Promise<string> {
       `[${voiceIndex}:a]adelay=${voiceDelayMs}|${voiceDelayMs},apad[aout]`,
     );
   } else if (musicIndex !== undefined) {
-    filterParts.push(`[${musicIndex}:a]volume=${options.musicVolume ?? 0.16}[aout]`);
+    filterParts.push(
+      `[${musicIndex}:a]volume=${options.musicVolume ?? 0.16}[aout]`,
+    );
   }
 
   args.push("-filter_complex", filterParts.join(";"));
   args.push("-map", "[vout]");
 
   if (voiceIndex !== undefined || musicIndex !== undefined) {
-    args.push("-map", "[aout]", "-shortest", "-c:a", "aac", "-b:a", "192k");
+    args.push(
+      "-map",
+      "[aout]",
+      "-shortest",
+      "-c:a",
+      "aac",
+      "-b:a",
+      "192k",
+    );
   } else {
     args.push("-map", "0:a?");
   }
 
   args.push(
-    "-c:v", "libx264",
-    "-preset", "medium",
-    "-crf", "18",
-    "-pix_fmt", "yuv420p",
-    "-movflags", "+faststart",
-    "-r", "30",
+    "-c:v",
+    "libx264",
+    "-preset",
+    "medium",
+    "-crf",
+    "18",
+    "-pix_fmt",
+    "yuv420p",
+    "-movflags",
+    "+faststart",
+    "-r",
+    "30",
     outputPath,
   );
 
-  await runFfmpeg(options.ffmpegPath ?? process.env.FFMPEG_PATH ?? "ffmpeg", args);
+  await runFfmpeg(
+    options.ffmpegPath ?? process.env.FFMPEG_PATH ?? "ffmpeg",
+    args,
+  );
   return outputPath;
 }
