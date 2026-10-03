@@ -1,6 +1,6 @@
 {
   "name": "viiversion-demo-studio",
-  "version": "0.11.0",
+  "version": "0.12.0",
   "private": true,
   "description": "AI-directed presentation-video generation for web applications",
   "type": "module",
@@ -11,6 +11,7 @@
     "direct": "tsx src/director-cli.ts",
     "capture": "tsx src/cli.ts",
     "render": "tsx src/render-cli.ts",
+    "ux-audit": "tsx src/ux-design-cli.ts",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test tests/*.test.ts",
     "deploy:cloudflare": "wrangler deploy"
