@@ -137,10 +137,11 @@ export class HuggingFaceVoiceProvider implements VoiceProvider {
     const python = env.HF_TTS_PYTHON ?? "python3";
     const script = env.HF_TTS_SCRIPT ?? path.resolve(process.cwd(), "scripts", "hf_tts.py");
     const language = languageOf(directed.locale);
+    const configuredVoiceId = request.voiceId ?? env.HF_TTS_VOICE;
+    const runtimeVoiceId =
+      configuredVoiceId ?? (engine === "chatterbox" ? "default" : "M1");
     const voiceId =
-      request.voiceId ??
-      env.HF_TTS_VOICE ??
-      (engine === "supertonic" ? "M1" : "default");
+      configuredVoiceId ?? (engine === "auto" ? "auto" : runtimeVoiceId);
     const wavPath = request.outputPath.toLowerCase().endsWith(".wav")
       ? request.outputPath
       : request.outputPath + ".wav";
@@ -156,7 +157,7 @@ export class HuggingFaceVoiceProvider implements VoiceProvider {
       "--output",
       wavPath,
       "--voice",
-      voiceId,
+      runtimeVoiceId,
       "--device",
       env.HF_TTS_DEVICE ?? "auto",
     ];
