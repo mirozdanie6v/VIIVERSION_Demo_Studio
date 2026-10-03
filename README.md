@@ -281,3 +281,37 @@ The audit produces desktop/mobile screenshots, browser QA, an inferred design pr
 During rendering, the Presentation Design Brain uses recorded active-element camera geometry to move captions and branding away from important UI. The independent Visual Critic returns PASS, REVISE or BLOCKED with a bounded revision loop.
 
 See `docs/UX_DESIGN_BRAIN_REUSE.md` for the verified reuse map.
+
+
+## Multilingual Voice Engine
+
+Demo Studio now routes narration through a provider-agnostic Voice Engine:
+
+```text
+locale + persona → Voice Director → pronunciation → TTS Router
+                → ElevenLabs / OpenAI / Piper fallback
+                → audio + timing metadata
+```
+
+The default `viiversion-presenter` persona is stable across languages while the actual native voice may vary by locale.
+
+Scenario example:
+
+```json
+{
+  "voice": {
+    "locale": "ja-JP",
+    "provider": "auto",
+    "persona": "viiversion-presenter",
+    "requireNativeTimings": true
+  }
+}
+```
+
+Standalone routing/synthesis:
+
+```bash
+npm run voice -- --locale ja-JP --text "..." --out /tmp/demo.mp3 --provider auto
+```
+
+See `docs/VOICE_ENGINE.md` for provider setup, locale-specific voices, pronunciation rules and fallback behavior.
