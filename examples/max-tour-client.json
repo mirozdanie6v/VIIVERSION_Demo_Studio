@@ -28,26 +28,16 @@
       "narration": "MAX TOUR — мобильное приложение, где клиент проходит весь путь от выбора экскурсии до бронирования."
     },
     {
-      "action": "waitFor",
-      "target": {
-        "by": "role",
-        "value": "button",
-        "name": "Выбрать путешествие",
-        "exact": true
-      },
-      "state": "visible",
-      "timeoutMs": 20000
+      "action": "wait",
+      "ms": 1800,
+      "label": "Show MAX TOUR home",
+      "narration": "Главный экран сразу показывает продукт как полноценный мобильный сервис для туриста."
     },
     {
-      "action": "click",
-      "target": {
-        "by": "role",
-        "value": "button",
-        "name": "Выбрать путешествие",
-        "exact": true
-      },
+      "action": "goto",
+      "url": "/catalog",
       "label": "Open tour catalog",
-      "narration": "Из главного экрана клиент сразу открывает каталог актуальных маршрутов."
+      "narration": "Из главного экрана клиент переходит в каталог актуальных маршрутов."
     },
     {
       "action": "waitFor",
