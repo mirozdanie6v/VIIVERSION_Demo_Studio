@@ -36,6 +36,24 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ffmpeg
 
+      - name: Inspect live MAX TOUR UI
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import { chromium } from 'playwright';
+          const browser = await chromium.launch({headless:true});
+          const page = await browser.newPage({viewport:{width:430,height:932}});
+          page.on('console', msg => console.log('BROWSER', msg.type(), msg.text()));
+          page.on('pageerror', err => console.log('PAGEERROR', err.message));
+          for (const path of ['/', '/catalog']) {
+            await page.goto('https://max-tour.viiversion.com' + path, {waitUntil:'domcontentloaded', timeout:30000});
+            await page.waitForTimeout(4000);
+            console.log('--- LIVE UI ' + path + ' ---');
+            console.log((await page.locator('body').innerText()).slice(0,12000));
+          }
+          await browser.close();
+          NODE
+
       - name: Capture MAX TOUR walkthrough
         env:
           DEMO_STUDIO_ALLOWED_HOSTS: max-tour.viiversion.com
