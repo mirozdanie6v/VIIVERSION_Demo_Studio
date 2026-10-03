@@ -350,6 +350,23 @@ export async function renderRun(options: RenderOptions): Promise<string> {
     ),
   };
 
+  await writeFile(
+    path.join(runDir, "captions.json"),
+    JSON.stringify(
+      {
+        ...captionPlan,
+        resolvedPlacement: captionPlacement,
+        resolvedStyle: captionStyle,
+        timingSource: options.captionsFilePath
+          ? "voice-segment-duration"
+          : "browser-timeline",
+      },
+      null,
+      2,
+    ) + "\n",
+    "utf8",
+  );
+
   if (preset === "9:16") {
     const bandHeight = Math.round(
       height * visualCritic.plan.captionBandRatio,
