@@ -72,6 +72,56 @@ function validateOptionalString(value: unknown, path: string, problems: string[]
   }
 }
 
+function validateVoice(value: unknown, problems: string[]) {
+  if (value === undefined) return;
+  if (!isRecord(value)) {
+    problems.push("voice must be an object.");
+    return;
+  }
+
+  if (!isNonEmptyString(value.locale)) {
+    problems.push("voice.locale must be a non-empty BCP-47 locale string.");
+  }
+
+  if (
+    value.provider !== undefined &&
+    !["auto", "elevenlabs", "openai", "piper"].includes(String(value.provider))
+  ) {
+    problems.push("voice.provider must be auto, elevenlabs, openai or piper.");
+  }
+
+  if (
+    value.persona !== undefined &&
+    !["viiversion-presenter", "neutral"].includes(String(value.persona))
+  ) {
+    problems.push("voice.persona must be viiversion-presenter or neutral.");
+  }
+
+  validateOptionalString(value.voiceId, "voice.voiceId", problems);
+  validateOptionalString(value.model, "voice.model", problems);
+  validateOptionalString(value.instructions, "voice.instructions", problems);
+  validateOptionalBoolean(
+    value.requireNativeTimings,
+    "voice.requireNativeTimings",
+    problems,
+  );
+
+  if (value.pronunciation !== undefined) {
+    if (!isRecord(value.pronunciation)) {
+      problems.push("voice.pronunciation must be an object.");
+    } else {
+      for (const [key, replacement] of Object.entries(value.pronunciation)) {
+        if (!key.trim() || !isNonEmptyString(replacement)) {
+          problems.push(
+            "voice.pronunciation keys and replacements must be non-empty strings.",
+          );
+          break;
+        }
+      }
+    }
+  }
+}
+
 function validatePresentation(value: unknown, problems: string[]) {
   if (value === undefined) return;
   if (!isRecord(value)) {
@@ -160,6 +210,10 @@ function validateStep(step: unknown, index: number, problems: string[]) {
 
   if (step.narration !== undefined && !isNonEmptyString(step.narration)) {
     problems.push(`${path}.narration must be a non-empty string when provided.`);
+  }
+
+  if (step.voiceText !== undefined && !isNonEmptyString(step.voiceText)) {
+    problems.push(`${path}.voiceText must be a non-empty string when provided.`);
   }
 
   if (step.pauseAfterMs !== undefined && !isNonNegativeNumber(step.pauseAfterMs)) {
@@ -267,6 +321,7 @@ export function parseScenario(input: unknown): DemoScenario {
   }
 
   validatePresentation(input.presentation, problems);
+  validateVoice(input.voice, problems);
 
   if (!Array.isArray(input.steps) || input.steps.length === 0) {
     problems.push("steps must contain at least one step.");
