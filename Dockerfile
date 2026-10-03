@@ -7,7 +7,7 @@ ENV HOST=0.0.0.0
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
 COPY package.json ./
-COPY requirements-tts.txt ./
+COPY requirements-tts.txt requirements-tts-chatterbox.txt ./
 
 RUN npm install --include=dev --no-fund --no-audit \
   && apt-get update \
