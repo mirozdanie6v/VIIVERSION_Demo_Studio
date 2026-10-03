@@ -72,3 +72,17 @@ Earlier VIIVERSION work also defined:
 Those historical source packages are not present in the currently connected GitHub repositories. v0.11 reuses their documented architectural ideas where they match the current product, while direct code reuse is limited to the verified EventVideoHumanEditor repository above.
 
 Premiere automation remains outside the Demo Studio production render path. Demo Studio continues to render through FFmpeg so the MCP/cloud product stays self-contained.
+
+
+## MAX TOUR premium-demo rules
+
+The MAX TOUR Russian Premium Video v2 adds reusable product-demo rules to the Editor Brain pipeline:
+
+- reserve a subtitle-safe presentation zone instead of burning captions over customer UI;
+- use target-focused smart zoom/scroll beats to avoid long static holds;
+- require a visible functional proof beat for AI features (question → response);
+- treat branded intro and CTA outro as part of the narrative structure;
+- keep narration captions separate from technical step labels;
+- allow runtime to follow explanatory clarity instead of forcing a two-minute ceiling.
+
+Reference implementation: `docs/MAX_TOUR_RU_PREMIUM_VIDEO_SPEC.md` and `examples/max-tour-russian-premium.json`.
