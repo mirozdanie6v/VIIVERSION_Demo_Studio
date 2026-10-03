@@ -51,6 +51,17 @@ jobs:
         shell: bash
         run: echo "dir=$(find artifacts -mindepth 1 -maxdepth 1 -type d | sort | tail -n 1)" >> "$GITHUB_OUTPUT"
 
+      - name: Free disk after browser capture
+        shell: bash
+        run: |
+          rm -rf ~/.cache/ms-playwright || true
+          rm -rf ~/.npm/_cacache || true
+          sudo apt-get clean
+          sudo rm -rf /var/lib/apt/lists/* || true
+          sudo rm -rf /usr/local/lib/android || true
+          sudo rm -rf /usr/share/dotnet || true
+          df -h
+
       - name: Generate subtle background music
         shell: bash
         run: |
