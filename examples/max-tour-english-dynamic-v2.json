@@ -216,21 +216,14 @@
       "pauseAfterMs": 500
     },
     {
-      "action": "hover",
-      "target": {
-        "by": "css",
-        "value": ".px-site-tour-grid .px-site-tour-card:first-child, .px-tour-grid .px-tour-card:first-child"
-      },
-      "pauseAfterMs": 4200,
-      "label": "Focus first recommended tour"
+      "action": "wait",
+      "ms": 2200,
+      "label": "Browse available tours"
     },
     {
-      "action": "click",
-      "target": {
-        "by": "css",
-        "value": ".px-site-tour-grid .px-site-tour-card:first-child, .px-tour-grid .px-tour-card:first-child"
-      },
-      "label": "Open recommended tour"
+      "action": "goto",
+      "url": "/tour/dalat-premium",
+      "label": "Open Dalat Premium"
     },
     {
       "action": "wait",
@@ -249,21 +242,14 @@
       "label": "Tour proof"
     },
     {
-      "action": "hover",
-      "target": {
-        "by": "css",
-        "value": "button:has-text(\"Private\"):visible, button:has-text(\"Индивидуальный\"):visible, button:has-text(\"Индивидуально\"):visible"
-      },
-      "pauseAfterMs": 3000,
-      "label": "Private option"
+      "action": "wait",
+      "ms": 1800,
+      "label": "Focus private format"
     },
     {
-      "action": "click",
-      "target": {
-        "by": "css",
-        "value": "button:has-text(\"Private\"):visible, button:has-text(\"Индивидуальный\"):visible, button:has-text(\"Индивидуально\"):visible"
-      },
-      "label": "Choose private"
+      "action": "goto",
+      "url": "/booking?tourId=dalat-premium",
+      "label": "Open structured booking flow"
     },
     {
       "action": "wait",
