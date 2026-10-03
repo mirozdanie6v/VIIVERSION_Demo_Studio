@@ -287,16 +287,26 @@ export async function renderRun(options: RenderOptions): Promise<string> {
   const filterParts = buildMainVideoFilters(width, height, scenes);
   const mainDecor: string[] = [];
 
+  const captionStyle =
+    preset === "9:16"
+      ? { fontSize: 6, marginV: 24, marginH: 20, outline: 1 }
+      : preset === "1:1"
+        ? { fontSize: 8, marginV: 30, marginH: 22, outline: 1 }
+        : { fontSize: 10, marginV: 34, marginH: 24, outline: 1 };
+
   if (options.captions !== false && captions) {
     mainDecor.push(
-      `subtitles='${escapeFilterPath(captionsPath)}':force_style='FontName=DejaVu Sans,FontSize=14,PrimaryColour=&H00FFFFFF,OutlineColour=&H66000000,BorderStyle=1,Outline=2,Shadow=0,MarginV=52'`,
+      `subtitles='${escapeFilterPath(captionsPath)}':force_style='FontName=DejaVu Sans,FontSize=${captionStyle.fontSize},PrimaryColour=&H00FFFFFF,OutlineColour=&H99000000,BorderStyle=1,Outline=${captionStyle.outline},Shadow=0,Alignment=2,MarginV=${captionStyle.marginV},MarginL=${captionStyle.marginH},MarginR=${captionStyle.marginH}'`,
     );
   }
 
   const brandLabel = options.brandLabel ?? "VIIVERSION";
   if (brandLabel) {
+    const brandSize = preset === "9:16" ? 22 : 28;
+    const brandX = preset === "9:16" ? 22 : 42;
+    const brandY = preset === "9:16" ? 22 : 34;
     mainDecor.push(
-      `drawtext=font='DejaVu Sans':text='${escapeDrawText(brandLabel)}':fontcolor=white@0.88:fontsize=28:x=w-tw-42:y=34`,
+      `drawtext=font='DejaVu Sans':text='${escapeDrawText(brandLabel)}':fontcolor=white@0.92:fontsize=${brandSize}:x=w-tw-${brandX}:y=${brandY}:box=1:boxcolor=black@0.28:boxborderw=7`,
     );
   }
 
