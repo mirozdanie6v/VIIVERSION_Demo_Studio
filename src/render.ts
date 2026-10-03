@@ -21,6 +21,7 @@ export type RenderOptions = {
   outputPath?: string;
   preset?: RenderPreset;
   captions?: boolean;
+  captionsFilePath?: string;
   voiceoverPath?: string;
   musicPath?: string;
   musicVolume?: number;
@@ -240,11 +241,20 @@ export async function renderRun(options: RenderOptions): Promise<string> {
 
   const captionPlan = buildCaptionPlan(manifest, scenes, preset);
   const captionsPath = path.join(runDir, "captions.srt");
-  const captions = captionPlanToSrt(captionPlan);
+  const captions = options.captionsFilePath
+    ? await readFile(path.resolve(options.captionsFilePath), "utf8")
+    : captionPlanToSrt(captionPlan);
 
   await writeFile(
     path.join(runDir, "captions.json"),
-    JSON.stringify(captionPlan, null, 2) + "\n",
+    JSON.stringify(
+      {
+        ...captionPlan,
+        timingSource: options.captionsFilePath ? "voice-segment-duration" : "browser-timeline",
+      },
+      null,
+      2,
+    ) + "\n",
     "utf8",
   );
 
@@ -278,9 +288,16 @@ export async function renderRun(options: RenderOptions): Promise<string> {
   const mainDecor: string[] = [];
   const captionStyle = captionPlan.safeZone;
 
+  if (preset === "9:16") {
+    mainDecor.push(
+      "drawbox=x=0:y=72:w=1080:h=238:color=0x0B111C@0.98:t=fill",
+      "drawbox=x=0:y=309:w=1080:h=1:color=white@0.10:t=fill",
+    );
+  }
+
   if (options.captions !== false && captions) {
     mainDecor.push(
-      `subtitles='${escapeFilterPath(captionsPath)}':force_style='FontName=DejaVu Sans,FontSize=${captionStyle.fontSize},PrimaryColour=&H00FFFFFF,BackColour=&H74000000,OutlineColour=&H00000000,BorderStyle=3,Outline=${captionStyle.outline},Shadow=0,Alignment=${captionStyle.alignment},MarginV=${captionStyle.marginV},MarginL=${captionStyle.marginH},MarginR=${captionStyle.marginH}'`,
+      `subtitles='${escapeFilterPath(captionsPath)}':force_style='FontName=DejaVu Sans,FontSize=${captionStyle.fontSize},PrimaryColour=&H00FFFFFF,BackColour=&H00000000,OutlineColour=&H00000000,BorderStyle=1,Outline=${captionStyle.outline},Shadow=0,Alignment=${captionStyle.alignment},MarginV=${captionStyle.marginV},MarginL=${captionStyle.marginH},MarginR=${captionStyle.marginH}'`,
     );
   }
 
