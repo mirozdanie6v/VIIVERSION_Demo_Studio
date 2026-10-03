@@ -48,6 +48,8 @@ export function reviewEditorPlan(plan: EditorBrainPlan): CriticResult {
     });
   }
 
+  const sourceDuration = plan.qualityGate.metrics.sourceDurationSeconds;
+
   scenes = scenes.map((scene, index) => {
     let sourceEnd = scene.sourceEnd;
     const duration = sourceEnd - scene.sourceStart;
@@ -64,7 +66,7 @@ export function reviewEditorPlan(plan: EditorBrainPlan): CriticResult {
     }
 
     if (duration < 0.35) {
-      sourceEnd = scene.sourceStart + 0.35;
+      sourceEnd = Math.min(sourceDuration, scene.sourceStart + 0.35);
       findings.push({
         severity: "warning",
         code: "scene_too_short",
@@ -78,7 +80,7 @@ export function reviewEditorPlan(plan: EditorBrainPlan): CriticResult {
       scene.narrativeRole === "proof" &&
       sourceEnd - scene.sourceStart < 0.85
     ) {
-      sourceEnd = scene.sourceStart + 0.85;
+      sourceEnd = Math.min(sourceDuration, scene.sourceStart + 0.85);
       findings.push({
         severity: "info",
         code: "weak_proof_hold",
