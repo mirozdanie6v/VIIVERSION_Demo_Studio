@@ -16,7 +16,7 @@ async function main() {
   const runArg = arg("--run");
   if (!runArg) {
     throw new Error(
-      "Usage: npm run render -- --run artifacts/<run-id> [--preset 16:9|9:16|1:1] [--tts] [--music file.mp3]",
+      "Usage: npm run render -- --run artifacts/<run-id> [--preset 16:9|9:16|1:1] [--tts] [--music file.mp3] [--music-bpm 120]",
     );
   }
 
@@ -55,6 +55,12 @@ async function main() {
     musicPath: arg("--music"),
     musicVolume: arg("--music-volume")
       ? Number(arg("--music-volume"))
+      : undefined,
+    musicBpm: arg("--music-bpm")
+      ? Number(arg("--music-bpm"))
+      : undefined,
+    musicBeatOffsetSeconds: arg("--music-beat-offset")
+      ? Number(arg("--music-beat-offset"))
       : undefined,
     brandLabel: arg("--brand") ?? "VIIVERSION",
     cta: arg("--cta"),
