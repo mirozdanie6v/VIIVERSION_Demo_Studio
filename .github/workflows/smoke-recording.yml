@@ -87,7 +87,7 @@ jobs:
           jq -e '.version == "editor-brain-v1" and .qualityGate.passed == true and .qualityGate.checks.sourceOverlapFree == true and (.scenes | length) >= 2' "${run_dir}/editor_brain.json" >/dev/null
           jq -e '.version == "editor-critic-v1" and .passed == true' "${run_dir}/editor_critic.json" >/dev/null
           jq -e '.version == "music-brain-v1"' "${run_dir}/music_brain.json" >/dev/null
-          jq -e '.version == "caption-brain-v1" and (.cues | length) > 0' "${run_dir}/captions.json" >/dev/null
+          jq -e '.version == "caption-brain-v1" and (.cues | length) > 0 and .resolvedPlacement == "top" and .resolvedStyle.alignment == 6' "${run_dir}/captions.json" >/dev/null
           jq -e '.editorBrainVersion == "editor-brain-v1" and (.scenes | length) > 0' "${run_dir}/scenes.json" >/dev/null
           test -s "${run_dir}/ux_preflight.json"
           test -s "${run_dir}/design_profile.json"

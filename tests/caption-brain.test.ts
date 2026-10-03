@@ -4,6 +4,7 @@ import {
   buildCaptionPlan,
   captionPlanToSrt,
   splitCaptionText,
+  subtitleAlignmentForPlacement,
 } from "../src/caption-brain.js";
 
 test("splits long narration into readable semantic chunks", () => {
@@ -60,4 +61,42 @@ test("keeps cues sequential and uses a larger vertical safe zone", () => {
   }
 
   assert.match(captionPlanToSrt(plan), /Open the selected tour/);
+});
+
+
+test("maps Design Brain top/bottom placement to libass coordinates", () => {
+  assert.equal(subtitleAlignmentForPlacement("top"), 6);
+  assert.equal(subtitleAlignmentForPlacement("bottom"), 2);
+
+  const manifest = {
+    scenario: {
+      name: "Vertical",
+      steps: [{
+        action: "click",
+        narration: "Readable caption.",
+      }],
+    },
+    timeline: [{
+      index: 0,
+      label: "click",
+      action: "click",
+      startedAt: "2026-10-03T00:00:00.100Z",
+      finishedAt: "2026-10-03T00:00:00.900Z",
+      success: true,
+    }],
+    startedAt: "2026-10-03T00:00:00.000Z",
+    finishedAt: "2026-10-03T00:00:01.200Z",
+  };
+  const scenes = [{
+    sourceStart: 0,
+    sourceEnd: 1.2,
+    outputStart: 0,
+    outputEnd: 1.2,
+    stepIndexes: [0],
+  }];
+
+  assert.equal(
+    buildCaptionPlan(manifest, scenes, "9:16").safeZone.alignment,
+    6,
+  );
 });

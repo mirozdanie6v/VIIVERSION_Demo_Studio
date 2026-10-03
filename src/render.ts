@@ -4,6 +4,7 @@ import path from "node:path";
 import {
   buildCaptionPlan,
   captionPlanToSrt,
+  subtitleAlignmentForPlacement,
 } from "./caption-brain.js";
 import { buildEditorBrainPlan } from "./editor-brain.js";
 import { reviewEditorPlan } from "./editor-critic.js";
@@ -339,7 +340,7 @@ export async function renderRun(options: RenderOptions): Promise<string> {
   const captionPlacement = visualCritic.plan.captionPlacement;
   const captionStyle = {
     ...captionPlan.safeZone,
-    alignment: captionPlacement === "top" ? 8 : 2,
+    alignment: subtitleAlignmentForPlacement(captionPlacement),
     marginV:
       preset === "9:16"
         ? 96
@@ -348,6 +349,23 @@ export async function renderRun(options: RenderOptions): Promise<string> {
       width * visualCritic.plan.horizontalMarginRatio,
     ),
   };
+
+  await writeFile(
+    path.join(runDir, "captions.json"),
+    JSON.stringify(
+      {
+        ...captionPlan,
+        resolvedPlacement: captionPlacement,
+        resolvedStyle: captionStyle,
+        timingSource: options.captionsFilePath
+          ? "voice-segment-duration"
+          : "browser-timeline",
+      },
+      null,
+      2,
+    ) + "\n",
+    "utf8",
+  );
 
   if (preset === "9:16") {
     const bandHeight = Math.round(
