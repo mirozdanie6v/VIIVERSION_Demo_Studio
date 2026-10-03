@@ -5,11 +5,29 @@ const CONTAINER_PORT = 8080;
 const INACTIVITY_TIMEOUT_MS = 60 * 60 * 1000;
 const ACTIVE_IMAGE_KEY = "active-container-image";
 const INTERNAL_TOKEN_KEY = "internal-storage-token";
+const GENERATION_DAILY_LIMIT = 10;
+const INSPECTION_DAILY_LIMIT = 30;
 
 function bearerToken(request) {
   const header = request.headers.get("authorization") ?? "";
   const match = header.match(/^Bearer\s+(.+)$/i);
   return match?.[1]?.trim();
+}
+
+
+async function quotaIdentity(request) {
+  const token = bearerToken(request);
+  if (!token) return "anonymous-global";
+
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(token),
+  );
+
+  return Array.from(new Uint8Array(digest))
+    .slice(0, 12)
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
 }
 
 export class DemoStudioContainer extends DurableObject {
@@ -22,6 +40,126 @@ export class DemoStudioContainer extends DurableObject {
         ctx.container.setInactivityTimeout(INACTIVITY_TIMEOUT_MS),
       );
     }
+  }
+
+  async consumeDailyQuota(request, kind, limit) {
+    const identity = await quotaIdentity(request);
+    const day = new Date().toISOString().slice(0, 10);
+    const key = "quota:" + day + ":" + kind + ":" + identity;
+
+    return this.ctx.storage.transaction(async (txn) => {
+      const used = Number((await txn.get(key)) ?? 0);
+
+      if (used >= limit) {
+        return { allowed: false, used, limit, remaining: 0 };
+      }
+
+      const next = used + 1;
+      await txn.put(key, next);
+
+      return {
+        allowed: true,
+        used: next,
+        limit,
+        remaining: Math.max(0, limit - next),
+      };
+    });
+  }
+
+  quotaErrorResponse(payload, kind, quota) {
+    const message =
+      "Daily " + kind + " quota exceeded. Try again after 00:00 UTC.";
+
+    if (payload?.jsonrpc === "2.0") {
+      return new Response(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: payload.id ?? null,
+          error: {
+            code: -32029,
+            message,
+            data: quota,
+          },
+        }),
+        {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json; charset=utf-8",
+            "Cache-Control": "no-store",
+          },
+        },
+      );
+    }
+
+    return new Response(
+      JSON.stringify({ error: message, quota }),
+      {
+        status: 429,
+        headers: {
+          "Content-Type": "application/json; charset=utf-8",
+          "Cache-Control": "no-store",
+        },
+      },
+    );
+  }
+
+  async enforceEdgeQuota(request, url) {
+    if (request.method !== "POST") return undefined;
+
+    if (url.pathname === "/v1/jobs") {
+      const quota = await this.consumeDailyQuota(
+        request,
+        "generation",
+        GENERATION_DAILY_LIMIT,
+      );
+      return quota.allowed
+        ? undefined
+        : this.quotaErrorResponse(undefined, "generation", quota);
+    }
+
+    if (url.pathname !== "/mcp") return undefined;
+
+    let payload;
+    try {
+      payload = await request.clone().json();
+    } catch {
+      return undefined;
+    }
+
+    if (
+      payload?.method !== "tools/call" ||
+      typeof payload?.params?.name !== "string"
+    ) {
+      return undefined;
+    }
+
+    const tool = payload.params.name;
+    if (
+      tool === "create_demo_video" ||
+      tool === "create_demo_video_from_scenario"
+    ) {
+      const quota = await this.consumeDailyQuota(
+        request,
+        "generation",
+        GENERATION_DAILY_LIMIT,
+      );
+      return quota.allowed
+        ? undefined
+        : this.quotaErrorResponse(payload, "generation", quota);
+    }
+
+    if (tool === "inspect_web_app") {
+      const quota = await this.consumeDailyQuota(
+        request,
+        "inspection",
+        INSPECTION_DAILY_LIMIT,
+      );
+      return quota.allowed
+        ? undefined
+        : this.quotaErrorResponse(payload, "inspection", quota);
+    }
+
+    return undefined;
   }
 
   async getInternalToken() {
@@ -155,6 +293,9 @@ export class DemoStudioContainer extends DurableObject {
 
     const persisted = await this.handlePersistedRead(request, url);
     if (persisted) return persisted;
+
+    const quotaResponse = await this.enforceEdgeQuota(request, url);
+    if (quotaResponse) return quotaResponse;
 
     this.starting ??= this.startAndWaitForPort().finally(() => {
       this.starting = undefined;
