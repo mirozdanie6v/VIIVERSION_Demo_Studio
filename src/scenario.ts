@@ -85,9 +85,9 @@ function validateVoice(value: unknown, problems: string[]) {
 
   if (
     value.provider !== undefined &&
-    !["auto", "elevenlabs", "openai", "piper"].includes(String(value.provider))
+    !["auto", "huggingface", "elevenlabs", "openai", "piper"].includes(String(value.provider))
   ) {
-    problems.push("voice.provider must be auto, elevenlabs, openai or piper.");
+    problems.push("voice.provider must be auto, huggingface, elevenlabs, openai or piper.");
   }
 
   if (
