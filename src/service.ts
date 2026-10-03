@@ -5,7 +5,7 @@ import {
 } from "./job-manager.js";
 import { inspectApplication, type ApplicationSnapshot } from "./inspector.js";
 import { DailyQuota } from "./quota.js";
-import { parseScenario } from "./scenario.js";
+import { assertNoEnvironmentReferences, parseScenario } from "./scenario.js";
 import type { DemoScenario } from "./types.js";
 
 export class DemoStudioService {
@@ -55,6 +55,7 @@ export class DemoStudioService {
     job: PublicDemoJob;
     quota: { used: number; limit: number; remaining: number };
   }> {
+    assertNoEnvironmentReferences(input.scenario);
     const scenario = parseScenario(input.scenario);
 
     const normalized: DemoScenario = {
