@@ -8,6 +8,7 @@ downloads model assets into the normal Hugging Face cache.
 from __future__ import annotations
 
 import argparse
+import importlib.util
 from pathlib import Path
 import sys
 import traceback
@@ -15,7 +16,7 @@ import traceback
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--engine", choices=("supertonic", "chatterbox"), default="supertonic")
+    parser.add_argument("--engine", choices=("auto", "supertonic", "chatterbox"), default="auto")
     parser.add_argument("--locale", required=True)
     parser.add_argument("--language", required=True)
     parser.add_argument("--output", required=True)
@@ -24,6 +25,28 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--reference-audio")
     parser.add_argument("--device", default="auto")
     return parser.parse_args()
+
+
+CHATTERBOX_LANGUAGES = {
+    "ar", "da", "de", "el", "en", "es", "fi", "fr", "he", "hi", "it", "ja",
+    "ko", "ms", "nl", "no", "pl", "pt", "ru", "sv", "sw", "tr", "zh",
+}
+
+
+def module_available(name: str) -> bool:
+    return importlib.util.find_spec(name) is not None
+
+
+def resolve_engine(requested: str, language: str) -> str:
+    if requested != "auto":
+        return requested
+
+    # Approved VIIVERSION free presenter voice: Chatterbox V3.
+    # Use it whenever installed and the locale is supported; otherwise keep
+    # the lightweight Supertonic path as a zero-API-cost fallback.
+    if language in CHATTERBOX_LANGUAGES and module_available("chatterbox"):
+        return "chatterbox"
+    return "supertonic"
 
 
 def device_name(requested: str) -> str:
@@ -110,7 +133,8 @@ def main() -> int:
     output = Path(args.output)
     output.parent.mkdir(parents=True, exist_ok=True)
 
-    if args.engine == "chatterbox":
+    engine = resolve_engine(args.engine, args.language)
+    if engine == "chatterbox":
         synthesize_chatterbox(args, text)
     else:
         synthesize_supertonic(args, text)

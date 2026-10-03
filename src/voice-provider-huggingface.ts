@@ -8,7 +8,7 @@ import type {
 } from "./voice-engine-types.js";
 import { directVoiceRequest } from "./voice-director.js";
 
-type HuggingFaceEngine = "supertonic" | "chatterbox";
+type HuggingFaceEngine = "auto" | "supertonic" | "chatterbox";
 
 const SUPERTONIC_LANGUAGES = new Set([
   "ar", "bg", "cs", "da", "de", "el", "en", "es", "et", "fi", "fr", "hi",
@@ -30,9 +30,10 @@ function truthy(value: string | undefined): boolean {
 }
 
 function engineFrom(env: NodeJS.ProcessEnv): HuggingFaceEngine {
-  const value = (env.HF_TTS_ENGINE ?? "supertonic").trim().toLowerCase();
+  const value = (env.HF_TTS_ENGINE ?? "auto").trim().toLowerCase();
   if (value === "chatterbox") return "chatterbox";
-  return "supertonic";
+  if (value === "supertonic") return "supertonic";
+  return "auto";
 }
 
 function referenceKeys(locale: string): string[] {
@@ -117,9 +118,13 @@ export class HuggingFaceVoiceProvider implements VoiceProvider {
   ): boolean {
     const env = context.env ?? process.env;
     const language = languageOf(locale);
-    return engineFrom(env) === "chatterbox"
-      ? CHATTERBOX_LANGUAGES.has(language)
-      : SUPERTONIC_LANGUAGES.has(language);
+    const engine = engineFrom(env);
+    if (engine === "chatterbox") return CHATTERBOX_LANGUAGES.has(language);
+    if (engine === "supertonic") return SUPERTONIC_LANGUAGES.has(language);
+    return (
+      CHATTERBOX_LANGUAGES.has(language) ||
+      SUPERTONIC_LANGUAGES.has(language)
+    );
   }
 
   async synthesize(
@@ -132,10 +137,11 @@ export class HuggingFaceVoiceProvider implements VoiceProvider {
     const python = env.HF_TTS_PYTHON ?? "python3";
     const script = env.HF_TTS_SCRIPT ?? path.resolve(process.cwd(), "scripts", "hf_tts.py");
     const language = languageOf(directed.locale);
+    const configuredVoiceId = request.voiceId ?? env.HF_TTS_VOICE;
+    const runtimeVoiceId =
+      configuredVoiceId ?? (engine === "chatterbox" ? "default" : "M1");
     const voiceId =
-      request.voiceId ??
-      env.HF_TTS_VOICE ??
-      (engine === "supertonic" ? "M1" : "default");
+      configuredVoiceId ?? (engine === "auto" ? "auto" : runtimeVoiceId);
     const wavPath = request.outputPath.toLowerCase().endsWith(".wav")
       ? request.outputPath
       : request.outputPath + ".wav";
@@ -151,7 +157,7 @@ export class HuggingFaceVoiceProvider implements VoiceProvider {
       "--output",
       wavPath,
       "--voice",
-      voiceId,
+      runtimeVoiceId,
       "--device",
       env.HF_TTS_DEVICE ?? "auto",
     ];
@@ -177,7 +183,9 @@ export class HuggingFaceVoiceProvider implements VoiceProvider {
         request.model ??
         (engine === "chatterbox"
           ? "ResembleAI/chatterbox-multilingual-v3"
-          : "Supertone/supertonic-3"),
+          : engine === "supertonic"
+            ? "Supertone/supertonic-3"
+            : "auto:chatterbox-v3>supertonic-3"),
       voiceId,
       audioPath: request.outputPath,
       timings: [],

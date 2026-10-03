@@ -160,13 +160,16 @@ Enable local TTS:
 
 ```bash
 HF_TTS_ENABLED=1
-HF_TTS_ENGINE=supertonic
+HF_TTS_ENGINE=auto
 ```
+
+The approved VIIVERSION free presenter voice is **Chatterbox Multilingual V3**. In `auto` mode it is selected first when installed and when the locale is supported. **Supertonic 3** remains the lightweight zero-API-cost fallback for workers without Chatterbox and for locales such as Vietnamese that Chatterbox does not cover.
 
 Available engines:
 
-- `supertonic` — default local engine, CPU-friendly, 31 languages including English, Russian and Vietnamese.
-- `chatterbox` — optional heavier multilingual voice-cloning path for supported languages including English, Russian and Chinese. It requires the separate Chatterbox requirements file.
+- `auto` — preferred mode: Chatterbox V3 first, Supertonic 3 fallback.
+- `chatterbox` — approved primary free presenter voice for supported languages such as English, Russian and Chinese.
+- `supertonic` — CPU-friendly fallback, including Vietnamese and other supported locales.
 
 Use Chatterbox:
 

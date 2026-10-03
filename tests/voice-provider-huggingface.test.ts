@@ -41,3 +41,13 @@ test("Chatterbox local engine supports Russian and Chinese", () => {
   assert.equal(provider.supportsLocale("zh-CN", baseRequest, context), true);
   assert.equal(provider.supportsLocale("vi-VN", baseRequest, context), false);
 });
+
+
+test("automatic local engine exposes the union needed for Chatterbox-first fallback", () => {
+  const provider = new HuggingFaceVoiceProvider();
+  const context = { env: { HF_TTS_ENABLED: "1" } };
+
+  assert.equal(provider.supportsLocale("ru-RU", baseRequest, context), true);
+  assert.equal(provider.supportsLocale("zh-CN", baseRequest, context), true);
+  assert.equal(provider.supportsLocale("vi-VN", baseRequest, context), true);
+});

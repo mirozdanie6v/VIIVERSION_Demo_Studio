@@ -26,5 +26,8 @@ jobs:
       - name: Check Cloudflare Worker syntax
         run: node --check cloudflare/worker.js
 
+      - name: Check local TTS bridge syntax
+        run: python3 -m py_compile scripts/hf_tts.py
+
       - name: Test
         run: npm test
