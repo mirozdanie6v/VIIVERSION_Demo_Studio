@@ -9,7 +9,7 @@ import type {
 
 class FakeProvider implements VoiceProvider {
   constructor(
-    readonly id: "elevenlabs" | "openai" | "piper",
+    readonly id: "elevenlabs" | "openai" | "huggingface" | "piper",
     readonly nativeTimings: boolean,
     private readonly configured: boolean,
     private readonly locales: string[],
@@ -113,4 +113,18 @@ test("falls back at runtime when an auto-selected provider errors", async () => 
 
   const result = await router.synthesize(request);
   assert.equal(result.provider, "openai");
+});
+
+
+test("prefers enabled local Hugging Face TTS before paid providers", () => {
+  const router = new VoiceRouter({
+    providers: [
+      new FakeProvider("huggingface", false, true, ["vi-VN"]),
+      new FakeProvider("elevenlabs", true, true, ["*"]),
+      new FakeProvider("openai", false, true, ["*"]),
+    ],
+    context: { env: {} },
+  });
+
+  assert.equal(router.inspect(request).selected, "huggingface");
 });
