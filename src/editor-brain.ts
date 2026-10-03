@@ -512,7 +512,10 @@ function qualityGate(
       return semantic?.action === "wait" && semantic.importance >= 0.5;
     });
     const maxDuration = contentHold ? 30 : 8.5;
-    return duration >= 0.2 && duration <= maxDuration;
+    // Candidate construction already discards unusable <=80ms fragments.
+    // Allow short valid cuts through this gate so Editor Critic can extend
+    // them to its 350ms readability floor before render.
+    return duration > 0.08 && duration <= maxDuration;
   });
 
   const sourceOverlapFree = scenes.every(
