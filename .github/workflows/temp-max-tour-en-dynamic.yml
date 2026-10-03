@@ -1,0 +1,95 @@
+name: MAX TOUR English Dynamic Render
+
+on:
+  push:
+    branches:
+      - 'render/max-tour-en-dynamic-20261004'
+    paths:
+      - '.github/workflows/temp-max-tour-en-dynamic.yml'
+
+concurrency:
+  group: max-tour-en-dynamic
+  cancel-in-progress: true
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      V_HOOK: "https://dnznrvs05pmza.cloudfront.net/text_to_speech/634c8b48-6d64-451a-b873-51c31335f420/MAX_TOUR_EN_Niki_v3_hook.mp3?_jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJrZXlIYXNoIjoiMmZiZTU5OWE0MDA4NDA0YiIsImJ1Y2tldCI6InJ1bndheS10YXNrLWFydGlmYWN0cyIsInN0YWdlIjoicHJvZCIsImV4cCI6MTc5MTE0NzkzMH0.fcd5uVxf-TDhcn0lBeFw84R3ORteN9KZ5B9o48BJQBE"
+      V_CATALOG: "https://dnznrvs05pmza.cloudfront.net/text_to_speech/ca94b44b-2cbe-4d91-be3d-1a6f5d75be03/MAX_TOUR_EN_Niki_v3_catalog.mp3?_jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJrZXlIYXNoIjoiMTgzYjJjNGNhMmMyYjgwZCIsImJ1Y2tldCI6InJ1bndheS10YXNrLWFydGlmYWN0cyIsInN0YWdlIjoicHJvZCIsImV4cCI6MTc5MTE3NzU0OH0.o0LTzGFhkiydbnGnw4ouvETT1TspDNU_LZn3vo8jjT0"
+      V_TOUR: "https://dnznrvs05pmza.cloudfront.net/text_to_speech/cdfacf73-62a5-4c90-a6c0-e4f6e7bd9cea/MAX_TOUR_EN_Niki_v3_tour.mp3?_jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJrZXlIYXNoIjoiOWM5Y2RiMzJhYjZkMjg4YSIsImJ1Y2tldCI6InJ1bndheS10YXNrLWFydGlmYWN0cyIsInN0YWdlIjoicHJvZCIsImV4cCI6MTc5MTE3MzQyNn0.VIBIY34nKRqlLkxeGt52OLzs4EEhGatN21FEZtfIWnE"
+      V_CHOICE: "https://dnznrvs05pmza.cloudfront.net/text_to_speech/e35dc988-ddaa-4895-9ed4-8c5449303780/MAX_TOUR_EN_Niki_v3_choice.mp3?_jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJrZXlIYXNoIjoiNzRkZmQyNjQyYjhlMzQ3NiIsImJ1Y2tldCI6InJ1bndheS10YXNrLWFydGlmYWN0cyIsInN0YWdlIjoicHJvZCIsImV4cCI6MTc5MTIyMjI0NH0.h-FtCaiQtWBRzdbWthHXTxZKtD564wpsJms_CKndruA"
+      V_BOOKING: "https://dnznrvs05pmza.cloudfront.net/text_to_speech/0d33e482-ea93-4b01-8d4a-57896f788e52/MAX_TOUR_EN_Niki_v3_booking.mp3?_jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJrZXlIYXNoIjoiNTRhZWU2YzE1MzI0ODM0ZCIsImJ1Y2tldCI6InJ1bndheS10YXNrLWFydGlmYWN0cyIsInN0YWdlIjoicHJvZCIsImV4cCI6MTc5MTE0NTI4MX0.9Z7CR7EE0C5bGQXsMNz4K_l78buqZSK0K3TuwYd_KI0"
+      V_AI: "https://dnznrvs05pmza.cloudfront.net/text_to_speech/95e992b3-bb45-45c6-a7b7-46d99f8ebf9c/MAX_TOUR_EN_Niki_v3_ai.mp3?_jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJrZXlIYXNoIjoiMDViOWFiNTFhMzM0YWNmMCIsImJ1Y2tldCI6InJ1bndheS10YXNrLWFydGlmYWN0cyIsInN0YWdlIjoicHJvZCIsImV4cCI6MTc5MTIyMjA5N30.Hi5hxmTgN1SBDuRq-RQiG9P-QyE7Q1c-_WpfIcKzCKI"
+      V_VALUE: "https://dnznrvs05pmza.cloudfront.net/text_to_speech/b6ce5e14-35e0-464a-9c7c-4a814609c123/MAX_TOUR_EN_Niki_v3_value.mp3?_jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJrZXlIYXNoIjoiMmNkNmI5MzRmY2U4ZjU0ZCIsImJ1Y2tldCI6InJ1bndheS10YXNrLWFydGlmYWN0cyIsInN0YWdlIjoicHJvZCIsImV4cCI6MTc5MTE0MzIyMH0.FDdQn0VbXIRRBoD1LtUzACJemIoUZS3wiw9aRTmf4J8"
+      V_CTA: "https://dnznrvs05pmza.cloudfront.net/text_to_speech/d1069f12-e41c-4386-8e81-40eaba8596cf/MAX_TOUR_EN_Niki_v3_cta.mp3?_jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJrZXlIYXNoIjoiZjMyZDk1NTQ4M2MxYzU2YiIsImJ1Y2tldCI6InJ1bndheS10YXNrLWFydGlmYWN0cyIsInN0YWdlIjoicHJvZCIsImV4cCI6MTc5MTIwMTIzNn0.MKp6-jgXotIbkR4MgsA5lNHsQ3YF8CDy5H7wb6tJ4yk"
+      MUSIC: "https://dnznrvs05pmza.cloudfront.net/lyria3-pro/d86e276a-22d0-434b-a563-01dbad21e522/MAX_TOUR_English_Dynamic_Demo_Music.mp3?_jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJrZXlIYXNoIjoiYTU5MjlmNDA1MGQ1MGYyMSIsImJ1Y2tldCI6InJ1bndheS10YXNrLWFydGlmYWN0cyIsInN0YWdlIjoicHJvZCIsImV4cCI6MTc5MTE2MTY2NH0.kpDxqdKYYmjqTY2Nl62Mep8qhCkYRe-G5JZfh14j79E"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install app dependencies
+        run: npm install
+
+      - name: Install browser and media tools
+        run: |
+          npx playwright install --with-deps chromium
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg fonts-dejavu-core
+          python3 -m pip install --quiet pillow
+
+      - name: Capture MAX TOUR source journey
+        env:
+          DEMO_STUDIO_ALLOWED_HOSTS: max-tour.viiversion.com
+          ALLOW_PRIVATE_TARGETS: "false"
+        run: npm run capture -- --scenario examples/max-tour-russian-premium.json
+
+      - name: Resolve run directory
+        id: run
+        shell: bash
+        run: echo "dir=$(find artifacts -mindepth 1 -maxdepth 1 -type d | sort | tail -n 1)" >> "$GITHUB_OUTPUT"
+
+      - name: Download Niki narration and music
+        shell: bash
+        run: |
+          set -euo pipefail
+          d="artifacts/english-voices"
+          mkdir -p "$d"
+          curl -L --fail --retry 3 "$V_HOOK" -o "$d/hook.mp3"
+          curl -L --fail --retry 3 "$V_CATALOG" -o "$d/catalog.mp3"
+          curl -L --fail --retry 3 "$V_TOUR" -o "$d/tour.mp3"
+          curl -L --fail --retry 3 "$V_CHOICE" -o "$d/choice.mp3"
+          curl -L --fail --retry 3 "$V_BOOKING" -o "$d/booking.mp3"
+          curl -L --fail --retry 3 "$V_AI" -o "$d/ai.mp3"
+          curl -L --fail --retry 3 "$V_VALUE" -o "$d/value.mp3"
+          curl -L --fail --retry 3 "$V_CTA" -o "$d/cta.mp3"
+          curl -L --fail --retry 3 "$MUSIC" -o "artifacts/english-music.mp3"
+          for f in "$d"/*.mp3 artifacts/english-music.mp3; do
+            ffprobe -v error -show_entries format=duration -of csv=p=0 "$f"
+          done
+
+      - name: Render fast English sales demo
+        shell: bash
+        run: |
+          python3 scripts/render_max_tour_en_dynamic.py             --run "${{ steps.run.outputs.dir }}"             --voices artifacts/english-voices             --music artifacts/english-music.mp3             --out artifacts/max-tour-english-dynamic
+
+      - name: Verify output
+        shell: bash
+        run: |
+          set -euo pipefail
+          f="artifacts/max-tour-english-dynamic/MAX_TOUR_English_Dynamic_FINAL.mp4"
+          test -s "$f"
+          ffprobe -v error -show_entries stream=codec_type,width,height -show_entries format=duration -of json "$f"
+          duration=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$f")
+          awk -v d="$duration" 'BEGIN { exit !(d >= 80 && d <= 105) }'
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: max-tour-english-dynamic-final
+          path: artifacts/max-tour-english-dynamic/
+          if-no-files-found: error
