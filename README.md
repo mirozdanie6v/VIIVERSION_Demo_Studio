@@ -328,4 +328,4 @@ HF_TTS_ENGINE=supertonic \
 npm run voice -- --locale vi-VN --text "Xin chào" --out /tmp/voice.mp3 --provider huggingface
 ```
 
-Use `HF_TTS_ENGINE=chatterbox` plus `HF_TTS_REFERENCE_AUDIO=/path/reference.wav` when voice cloning and higher presentation quality matter more than CPU cost.
+For the heavier voice-cloning path, install `requirements-tts-chatterbox.txt`, then use `HF_TTS_ENGINE=chatterbox` plus `HF_TTS_REFERENCE_AUDIO=/path/reference.wav`.
