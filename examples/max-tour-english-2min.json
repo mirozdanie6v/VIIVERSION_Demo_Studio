@@ -1,0 +1,158 @@
+{
+  "name": "MAX TOUR — Customer Journey",
+  "baseUrl": "https://max-tour.viiversion.com",
+  "viewport": {
+    "width": 430,
+    "height": 932
+  },
+  "defaultPauseMs": 650,
+  "presentation": {
+    "smartZoom": {
+      "scale": 1.1,
+      "mobileScale": 1.035,
+      "transitionMs": 300,
+      "settleMs": 120
+    },
+    "focusRing": {
+      "enabled": true
+    },
+    "clickRipple": {
+      "enabled": true
+    }
+  },
+  "steps": [
+    {
+      "action": "goto",
+      "url": "/",
+      "label": "Open MAX TOUR"
+    },
+    {
+      "action": "waitFor",
+      "target": {
+        "by": "text",
+        "value": "Ваш лучший отдых",
+        "exact": false
+      },
+      "state": "visible",
+      "timeoutMs": 20000
+    },
+    {
+      "action": "wait",
+      "ms": 12500,
+      "label": "A simple start",
+      "narration": "This is the MAX TOUR customer experience. From the very first screen, the traveller immediately understands where to begin, what the service offers, and how to move forward without friction."
+    },
+    {
+      "action": "click",
+      "target": {
+        "by": "role",
+        "value": "button",
+        "name": "Выбрать тур",
+        "exact": true
+      },
+      "label": "Open the tour catalog"
+    },
+    {
+      "action": "waitFor",
+      "target": {
+        "by": "text",
+        "value": "17 найдено",
+        "exact": true
+      },
+      "state": "visible",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "wait",
+      "ms": 13500,
+      "label": "Browse options",
+      "narration": "One tap opens the live tour catalogue. The customer sees available experiences, prices, formats, and the essential information needed to compare options quickly and confidently."
+    },
+    {
+      "action": "scroll",
+      "y": 420,
+      "label": "Browse the live catalogue",
+      "pauseAfterMs": 700
+    },
+    {
+      "action": "wait",
+      "ms": 12000,
+      "label": "Discover the right tour",
+      "narration": "The interface keeps discovery visual and easy. Instead of searching through messages or long pages, the traveller can simply browse, understand the offer, and choose the experience that feels right."
+    },
+    {
+      "action": "click",
+      "target": {
+        "by": "css",
+        "value": "h3:has-text(\"Далат «Премиум»\"):visible"
+      },
+      "label": "Open Dalat Premium"
+    },
+    {
+      "action": "wait",
+      "ms": 14500,
+      "label": "Tour details",
+      "narration": "Now we open Dalat Premium. The customer moves from inspiration to decision with all the important details in one place: the route, the format, the visual presentation, and the practical conditions of the trip."
+    },
+    {
+      "action": "scroll",
+      "y": 500,
+      "label": "Explore the tour details",
+      "pauseAfterMs": 700
+    },
+    {
+      "action": "wait",
+      "ms": 13500,
+      "label": "Build confidence",
+      "narration": "This is where the application starts doing the work of a strong sales manager. It answers the basic questions before they become objections and helps the traveller feel confident about the purchase."
+    },
+    {
+      "action": "click",
+      "target": {
+        "by": "css",
+        "value": "button:has-text(\"Индивидуальный\"):visible"
+      },
+      "label": "Choose a private tour"
+    },
+    {
+      "action": "wait",
+      "ms": 13500,
+      "label": "Personalize the trip",
+      "narration": "The customer can choose a private format and continue directly into the booking flow. The journey stays clear: select the option, confirm the trip details, and move naturally toward the reservation."
+    },
+    {
+      "action": "scroll",
+      "y": 420,
+      "label": "Continue the booking journey",
+      "pauseAfterMs": 700
+    },
+    {
+      "action": "wait",
+      "ms": 14500,
+      "label": "Booking flow",
+      "narration": "Dates, travellers, transfer preferences, and booking information are brought into one guided path. Every next step is visible, so the customer always knows what to do next and the manager receives a much cleaner request."
+    },
+    {
+      "action": "click",
+      "target": {
+        "by": "role",
+        "value": "button",
+        "name": "ИИ-Помощник",
+        "exact": true
+      },
+      "label": "Open the AI assistant"
+    },
+    {
+      "action": "wait",
+      "ms": 15500,
+      "label": "AI support",
+      "narration": "And when the traveller still has a question, the AI assistant is available inside the same experience. It can guide the choice, explain options, and keep the customer moving instead of losing them between channels."
+    },
+    {
+      "action": "wait",
+      "ms": 9000,
+      "label": "Customer journey complete",
+      "narration": "For MAX TOUR, this means a smoother customer journey, a stronger premium impression, and more structured enquiries. For the traveller, it feels simple, modern, and ready to book."
+    }
+  ]
+}

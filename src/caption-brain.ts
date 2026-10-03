@@ -91,10 +91,10 @@ function safeZoneFor(preset: CaptionPreset): CaptionPlan["safeZone"] {
   if (preset === "9:16") {
     return {
       alignment: 2,
-      fontSize: 7,
-      marginV: 94,
-      marginH: 54,
-      outline: 1,
+      fontSize: 20,
+      marginV: 120,
+      marginH: 62,
+      outline: 0,
     };
   }
 

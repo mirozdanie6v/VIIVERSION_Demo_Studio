@@ -275,7 +275,7 @@ export async function renderRun(options: RenderOptions): Promise<string> {
 
   if (options.captions !== false && captions) {
     mainDecor.push(
-      `subtitles='${escapeFilterPath(captionsPath)}':force_style='FontName=DejaVu Sans,FontSize=${captionStyle.fontSize},PrimaryColour=&H00FFFFFF,OutlineColour=&H99000000,BorderStyle=1,Outline=${captionStyle.outline},Shadow=0,Alignment=${captionStyle.alignment},MarginV=${captionStyle.marginV},MarginL=${captionStyle.marginH},MarginR=${captionStyle.marginH}'`,
+      `subtitles='${escapeFilterPath(captionsPath)}':force_style='FontName=DejaVu Sans,FontSize=${captionStyle.fontSize},PrimaryColour=&H00FFFFFF,BackColour=&H74000000,OutlineColour=&H00000000,BorderStyle=3,Outline=${captionStyle.outline},Shadow=0,Alignment=${captionStyle.alignment},MarginV=${captionStyle.marginV},MarginL=${captionStyle.marginH},MarginR=${captionStyle.marginH}'`,
     );
   }
 

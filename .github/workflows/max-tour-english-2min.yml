@@ -1,0 +1,82 @@
+name: MAX TOUR English 2-Minute Presentation
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'examples/max-tour-english-2min.json'
+      - 'src/caption-brain.ts'
+      - 'src/render.ts'
+      - '.github/workflows/max-tour-english-2min.yml'
+
+concurrency:
+  group: max-tour-english-2min
+  cancel-in-progress: true
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Install FFmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Capture MAX TOUR customer journey
+        env:
+          DEMO_STUDIO_ALLOWED_HOSTS: max-tour.viiversion.com
+          ALLOW_PRIVATE_TARGETS: "false"
+        run: npm run capture -- --scenario examples/max-tour-english-2min.json
+
+      - name: Resolve run directory
+        id: run
+        shell: bash
+        run: echo "dir=$(find artifacts -mindepth 1 -maxdepth 1 -type d | sort | tail -n 1)" >> "$GITHUB_OUTPUT"
+
+      - name: Generate subtle background music
+        shell: bash
+        run: |
+          run_dir="${{ steps.run.outputs.dir }}"
+          ffmpeg -y             -f lavfi -i "sine=frequency=110:sample_rate=44100:duration=132"             -f lavfi -i "sine=frequency=164.81:sample_rate=44100:duration=132"             -f lavfi -i "sine=frequency=220:sample_rate=44100:duration=132"             -filter_complex "[0:a]volume=0.09,tremolo=f=0.12:d=0.25[a0];[1:a]volume=0.045[a1];[2:a]volume=0.025[a2];[a0][a1][a2]amix=inputs=3:normalize=0,lowpass=f=1200,highpass=f=70,afade=t=in:st=0:d=3,afade=t=out:st=126:d=5[m]"             -map "[m]" -c:a aac -b:a 192k "${run_dir}/background.m4a"
+
+      - name: Render English sales presentation
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          npm run render --             --run "${{ steps.run.outputs.dir }}"             --preset 9:16             --tts             --voice marin             --voice-instructions "Energetic, warm and persuasive travel-sales presenter. Polished international English. Emotionally engaging, confident, premium and human. Smile in the voice. Use clear emphasis on convenience, confidence and conversion. Natural pauses between benefits. Keep a controlled pace around 135 words per minute."             --music "${{ steps.run.outputs.dir }}/background.m4a"             --music-volume 0.08             --music-bpm 96             --brand "VIIVERSION"             --title "MAX TOUR · Customer Journey"             --cta "A smoother path from discovery to booking"
+
+      - name: Verify final video
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_dir="${{ steps.run.outputs.dir }}"
+          test -s "${run_dir}/voiceover.mp3"
+          test -s "${run_dir}/background.m4a"
+          test -s "${run_dir}/captions.srt"
+          test -s "${run_dir}/final-9x16.mp4"
+          duration=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "${run_dir}/final-9x16.mp4")
+          awk -v d="$duration" 'BEGIN { exit !(d >= 105 && d <= 135) }'
+          echo "FINAL_DURATION=$duration"
+
+      - name: Upload final presentation
+        uses: actions/upload-artifact@v4
+        with:
+          name: max-tour-english-2min-presentation
+          path: artifacts/
+          if-no-files-found: error
