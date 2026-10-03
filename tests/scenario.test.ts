@@ -58,3 +58,31 @@ test("rejects environment references in externally generated scenarios", () => {
     /Environment references are not allowed/,
   );
 });
+
+
+test("parses multilingual voice configuration", () => {
+  const scenario = parseScenario({
+    name: "Global demo",
+    voice: {
+      locale: "vi-VN",
+      provider: "auto",
+      persona: "viiversion-presenter",
+      requireNativeTimings: true,
+      pronunciation: {
+        "VIIVERSION": "vee version",
+      },
+    },
+    steps: [
+      {
+        action: "wait",
+        ms: 1000,
+        narration: "Welcome",
+        voiceText: "Welcome",
+      },
+    ],
+  });
+
+  assert.equal(scenario.voice?.locale, "vi-VN");
+  assert.equal(scenario.voice?.provider, "auto");
+  assert.equal(scenario.steps[0].voiceText, "Welcome");
+});
