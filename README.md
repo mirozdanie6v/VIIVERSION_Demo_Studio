@@ -324,8 +324,8 @@ Demo Studio can synthesize narration locally from open-weight Hugging Face model
 python3 -m pip install -r requirements-tts.txt
 
 HF_TTS_ENABLED=1 \
-HF_TTS_ENGINE=supertonic \
+HF_TTS_ENGINE=auto \
 npm run voice -- --locale vi-VN --text "Xin chào" --out /tmp/voice.mp3 --provider huggingface
 ```
 
-For the heavier voice-cloning path, install `requirements-tts-chatterbox.txt`, then use `HF_TTS_ENGINE=chatterbox` plus `HF_TTS_REFERENCE_AUDIO=/path/reference.wav`.
+The approved free presenter voice is **Chatterbox Multilingual V3**. Install `requirements-tts-chatterbox.txt` on presentation-quality workers; `auto` prefers Chatterbox for supported locales and falls back to Supertonic where needed.
