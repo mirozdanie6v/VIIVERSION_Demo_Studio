@@ -152,7 +152,7 @@ export function createDemoStudioMcpHandler(service: DemoStudioService) {
         }),
       },
       async ({ job_id }) => {
-        const job = service.getJob(job_id);
+        const job = await service.getJobDurable(job_id, identity);
 
         if (!job) {
           return {
