@@ -1,17 +1,12 @@
 name: MAX TOUR Client Video
 
 on:
+  workflow_dispatch:
   push:
     branches: [main]
     paths:
       - 'examples/max-tour-client.json'
-      - 'src/editor-brain.ts'
-      - 'src/editor-critic.ts'
-      - 'src/music-brain.ts'
-      - 'src/caption-brain.ts'
-      - 'src/render.ts'
       - '.github/workflows/max-tour-client-video.yml'
-  workflow_dispatch:
 
 concurrency:
   group: max-tour-client-video
