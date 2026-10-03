@@ -27,6 +27,12 @@ export function createDemoStudioMcpHandler(service: DemoStudioService) {
         inputSchema: z.object({
           url: z.string().url(),
         }),
+        annotations: {
+          readOnlyHint: true,
+          openWorldHint: true,
+          destructiveHint: false,
+          idempotentHint: true,
+        },
       },
       async ({ url }) => {
         try {
@@ -62,6 +68,12 @@ export function createDemoStudioMcpHandler(service: DemoStudioService) {
           brand: z.string().max(120).optional(),
           cta: z.string().max(180).optional(),
         }),
+        annotations: {
+          readOnlyHint: false,
+          openWorldHint: true,
+          destructiveHint: true,
+          idempotentHint: false,
+        },
       },
       async (input) => {
         try {
@@ -108,6 +120,12 @@ export function createDemoStudioMcpHandler(service: DemoStudioService) {
           brand: z.string().max(120).optional(),
           cta: z.string().max(180).optional(),
         }),
+        annotations: {
+          readOnlyHint: false,
+          openWorldHint: true,
+          destructiveHint: true,
+          idempotentHint: false,
+        },
       },
       async (input) => {
         try {
@@ -150,6 +168,12 @@ export function createDemoStudioMcpHandler(service: DemoStudioService) {
         inputSchema: z.object({
           job_id: z.string().uuid(),
         }),
+        annotations: {
+          readOnlyHint: true,
+          openWorldHint: false,
+          destructiveHint: false,
+          idempotentHint: true,
+        },
       },
       async ({ job_id }) => {
         const job = await service.getJobDurable(job_id, identity);
