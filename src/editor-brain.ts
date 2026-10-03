@@ -511,7 +511,7 @@ function qualityGate(
       const semantic = semantics[stepIndex];
       return semantic?.action === "wait" && semantic.importance >= 0.5;
     });
-    const maxDuration = contentHold ? 18 : 8.5;
+    const maxDuration = contentHold ? 30 : 8.5;
     return duration >= 0.2 && duration <= maxDuration;
   });
 
