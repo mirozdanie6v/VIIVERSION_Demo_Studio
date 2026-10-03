@@ -54,14 +54,20 @@ export function reviewEditorPlan(plan: EditorBrainPlan): CriticResult {
     let sourceEnd = scene.sourceEnd;
     const duration = sourceEnd - scene.sourceStart;
 
-    if (duration > 6.5) {
-      sourceEnd = scene.sourceStart + 6.5;
+    const contentHold = scene.stepIndexes.some((stepIndex) => {
+      const semantic = plan.semantics[stepIndex];
+      return semantic?.action === "wait" && semantic.importance >= 0.5;
+    });
+    const maxDuration = contentHold ? 18 : 6.5;
+
+    if (duration > maxDuration) {
+      sourceEnd = scene.sourceStart + maxDuration;
       findings.push({
         severity: "warning",
         code: "scene_too_long",
         sceneIndex: index,
         message: `Scene ${index + 1} is ${duration.toFixed(2)}s long.`,
-        revision: "Trim to a maximum 6.5s hold.",
+        revision: `Trim to a maximum ${maxDuration}s hold.`,
       });
     }
 
