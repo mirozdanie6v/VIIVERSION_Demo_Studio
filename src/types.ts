@@ -1,3 +1,5 @@
+import type { VoicePersonaId, VoiceProviderId } from "./voice-engine-types.js";
+
 export type Viewport = {
   width: number;
   height: number;
@@ -55,6 +57,7 @@ export type CameraFrame = {
 type BaseStep = {
   label?: string;
   narration?: string;
+  voiceText?: string;
   pauseAfterMs?: number;
 };
 
@@ -89,6 +92,17 @@ export type DemoStep =
       expected?: string;
     });
 
+export type ScenarioVoiceConfig = {
+  locale: string;
+  provider?: VoiceProviderId | "auto";
+  voiceId?: string;
+  model?: string;
+  persona?: VoicePersonaId;
+  instructions?: string;
+  pronunciation?: Record<string, string>;
+  requireNativeTimings?: boolean;
+};
+
 export type DemoScenario = {
   name: string;
   baseUrl?: string;
@@ -96,6 +110,7 @@ export type DemoScenario = {
   defaultPauseMs?: number;
   variables?: Record<string, string>;
   presentation?: PresentationConfig;
+  voice?: ScenarioVoiceConfig;
   steps: DemoStep[];
 };
 
