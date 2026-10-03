@@ -15,7 +15,7 @@ export function createDemoStudioMcpHandler(service: DemoStudioService) {
 
     const server = new McpServer({
       name: "viiversion-demo-studio",
-      version: "0.9.0",
+      version: "0.10.0",
     });
 
     server.registerTool(
@@ -152,7 +152,7 @@ export function createDemoStudioMcpHandler(service: DemoStudioService) {
         }),
       },
       async ({ job_id }) => {
-        const job = service.getJob(job_id);
+        const job = await service.getJobDurable(job_id, identity);
 
         if (!job) {
           return {

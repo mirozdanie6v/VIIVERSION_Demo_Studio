@@ -81,4 +81,39 @@ export class DemoStudioService {
   getJob(id: string): PublicDemoJob | undefined {
     return this.jobs.get(id);
   }
+
+  async getJobDurable(
+    id: string,
+    identity: string,
+  ): Promise<PublicDemoJob | undefined> {
+    const local = this.jobs.get(id);
+    if (local) return local;
+
+    const base = process.env.PUBLIC_BASE_URL?.replace(/\/$/, "");
+    if (!base) return undefined;
+
+    const headers: Record<string, string> = {};
+    if (identity !== "development") {
+      headers.Authorization = "Bearer " + identity;
+    }
+
+    try {
+      const response = await fetch(base + "/v1/jobs/" + id, {
+        headers,
+        signal: AbortSignal.timeout(5_000),
+      });
+
+      if (response.status === 404) return undefined;
+      if (!response.ok) {
+        throw new Error(
+          "Persistent job lookup returned HTTP " + response.status,
+        );
+      }
+
+      return (await response.json()) as PublicDemoJob;
+    } catch (error) {
+      console.error("[persistence] job lookup failed", error);
+      return undefined;
+    }
+  }
 }

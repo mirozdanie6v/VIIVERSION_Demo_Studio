@@ -4,6 +4,7 @@ import path from "node:path";
 import { buildStoryboard, planDemo } from "./director.js";
 import { recordUsageEvent } from "./metering.js";
 import { renderRun, type RenderPreset } from "./render.js";
+import { persistArtifact, persistJobSnapshot } from "./persistence.js";
 import { runScenario } from "./runner.js";
 import { assertSafeHttpUrl } from "./security.js";
 import type { DemoScenario } from "./types.js";
@@ -45,16 +46,37 @@ export type DemoJob = {
   error?: string;
 };
 
-export type PublicDemoJob = Omit<
-  DemoJob,
-  "scenarioPath" | "storyboardPath" | "runDir" | "artifactPath"
-> & {
+export type PublicDemoJob = {
+  id: string;
+  status: DemoJobStatus;
+  progress: number;
+  message: string;
+  createdAt: string;
+  updatedAt: string;
+  completedAt?: string;
+  error?: string;
   artifactReady: boolean;
 };
 
 function positiveInteger(value: string | undefined, fallback: number): number {
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+export function toPublicDemoJob(job: DemoJob): PublicDemoJob {
+  return {
+    id: job.id,
+    status: job.status,
+    progress: job.progress,
+    message: job.message,
+    createdAt: job.createdAt,
+    updatedAt: job.updatedAt,
+    completedAt: job.completedAt,
+    error: job.error,
+    artifactReady: Boolean(
+      job.artifactPath && job.status === "completed",
+    ),
+  };
 }
 
 function narrationFor(scenario: DemoScenario): string {
@@ -130,18 +152,7 @@ export class DemoJobManager {
   }
 
   private publicJob(job: DemoJob): PublicDemoJob {
-    const {
-      scenarioPath: _scenarioPath,
-      storyboardPath: _storyboardPath,
-      runDir: _runDir,
-      artifactPath,
-      ...publicFields
-    } = job;
-
-    return {
-      ...publicFields,
-      artifactReady: Boolean(artifactPath && job.status === "completed"),
-    };
+    return toPublicDemoJob(job);
   }
 
   private async update(
@@ -307,6 +318,13 @@ export class DemoJobManager {
         completedAt,
       });
 
+      await persistArtifact(job.id, artifactPath);
+      await persistJobSnapshot(job.id, {
+        ...this.publicJob(job),
+        artifact_url:
+          "/v1/jobs/" + job.id + "/artifact",
+      });
+
       void recordUsageEvent({
         jobId: job.id,
         outcome: "completed",
@@ -327,6 +345,12 @@ export class DemoJobManager {
         error: error instanceof Error ? error.message : String(error),
         completedAt,
       });
+
+      await persistJobSnapshot(job.id, this.publicJob(job)).catch(
+        (persistenceError) => {
+          console.error("[persistence]", persistenceError);
+        },
+      );
 
       void recordUsageEvent({
         jobId: job.id,
