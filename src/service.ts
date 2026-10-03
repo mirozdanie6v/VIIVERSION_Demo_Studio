@@ -7,6 +7,7 @@ import { inspectApplication, type ApplicationSnapshot } from "./inspector.js";
 import { DailyQuota } from "./quota.js";
 import { assertNoEnvironmentReferences, parseScenario } from "./scenario.js";
 import type { DemoScenario } from "./types.js";
+import { auditUxDesign } from "./ux-design-brain.js";
 
 export class DemoStudioService {
   readonly jobs: DemoJobManager;
@@ -19,6 +20,10 @@ export class DemoStudioService {
 
   async inspect(url: string): Promise<ApplicationSnapshot> {
     return inspectApplication(url);
+  }
+
+  async auditDesign(url: string) {
+    return auditUxDesign(url);
   }
 
   async createJob(
