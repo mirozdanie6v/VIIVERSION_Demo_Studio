@@ -176,7 +176,7 @@
       "action": "waitFor",
       "target": {
         "by": "css",
-        "value": "input[placeholder*=\"Напишите сообщение\"]"
+        "value": "[placeholder*=\"Напишите сообщение\"]"
       },
       "state": "visible",
       "timeoutMs": 15000
@@ -185,20 +185,20 @@
       "action": "fill",
       "target": {
         "by": "css",
-        "value": "input[placeholder*=\"Напишите сообщение\"]"
+        "value": "[placeholder*=\"Напишите сообщение\"]"
       },
       "value": "Ты AI-консультант? Что ты умеешь?",
       "pauseAfterMs": 1700,
       "narration": "А теперь покажем AI-консультанта в работе. Задаём ему обычный вопрос прямо внутри приложения."
     },
     {
-      "action": "press",
+      "action": "click",
       "target": {
         "by": "css",
-        "value": "input[placeholder*=\"Напишите сообщение\"]"
+        "value": "button:has-text(\"→\"):visible"
       },
-      "key": "Enter",
-      "label": "Отправляем вопрос"
+      "label": "Отправляем вопрос",
+      "pauseAfterMs": 650
     },
     {
       "action": "wait",
