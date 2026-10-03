@@ -44,7 +44,7 @@ async function main() {
     await createVoiceover(narration, voiceoverPath, {
       locale: arg("--locale") ?? scenarioVoice?.locale ?? "en-US",
       provider:
-        (arg("--voice-provider") as "auto" | "elevenlabs" | "openai" | "piper" | undefined) ??
+        (arg("--voice-provider") as "auto" | "huggingface" | "elevenlabs" | "openai" | "piper" | undefined) ??
         scenarioVoice?.provider ??
         "auto",
       voice: arg("--voice") ?? scenarioVoice?.voiceId,
