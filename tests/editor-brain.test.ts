@@ -77,8 +77,7 @@ test("keeps action and visible result in the same editorial unit", () => {
     scene.stepIndexes.includes(1),
   );
   assert.ok(resultScene);
-  assert.ok(resultScene?.stepIndexes.includes(1));
-  assert.ok(resultScene?.stepIndexes.includes(2));
-  assert.ok(resultScene?.stepIndexes.includes(3));
+  assert.deepEqual(resultScene?.stepIndexes, [1, 2, 3]);
   assert.equal(resultScene?.narrativeRole, "proof");
+  assert.equal(plan.scenes[0].narrativeRole, "setup");
 });
