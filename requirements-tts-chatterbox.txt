@@ -1,0 +1,1 @@
+# Optional premium local TTS engine with multilingual voice cloning.\n# Heavier PyTorch runtime; install only on workers that need it.\nchatterbox-tts\n
