@@ -176,9 +176,15 @@ export function semanticStep(
       break;
     case "waitFor":
     case "waitForNavigation":
-      sceneType = "result";
-      shotIntent = "reaction";
-      importance = 0.9;
+      if (text.trim()) {
+        sceneType = "result";
+        shotIntent = "reaction";
+        importance = 0.9;
+      } else {
+        sceneType = "transition";
+        shotIntent = "atmosphere";
+        importance = 0.08;
+      }
       continuity = "reaction_to_previous";
       break;
     case "assert":
