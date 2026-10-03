@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 import sys
+import traceback
 
 
 def parse_args() -> argparse.Namespace:
@@ -116,4 +117,5 @@ if __name__ == "__main__":
         raise SystemExit(main())
     except Exception as exc:
         print(f"hf_tts.py: {exc}", file=sys.stderr)
+        traceback.print_exc()
         raise SystemExit(1)
