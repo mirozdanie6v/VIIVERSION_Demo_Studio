@@ -43,7 +43,8 @@ async function main() {
     voiceId?: string;
     label: string;
   }> = [
-    { provider: "huggingface", label: "huggingface-local" },\n    { provider: "openai", voiceId: "marin", label: "openai-marin" },
+    { provider: "huggingface", label: "huggingface-local" },
+    { provider: "openai", voiceId: "marin", label: "openai-marin" },
     { provider: "openai", voiceId: "cedar", label: "openai-cedar" },
     { provider: "elevenlabs", label: "elevenlabs-v3" },
   ];
