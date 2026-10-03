@@ -9,6 +9,7 @@ import { runScenario } from "./runner.js";
 import { assertSafeHttpUrl } from "./security.js";
 import type { DemoScenario } from "./types.js";
 import { createVoiceover } from "./voiceover.js";
+import { auditUxDesign } from "./ux-design-brain.js";
 
 export type DemoJobRequest = {
   url: string;
@@ -24,6 +25,7 @@ export type DemoJobRequest = {
 
 export type DemoJobStatus =
   | "queued"
+  | "preflighting"
   | "directing"
   | "capturing"
   | "rendering"
@@ -212,6 +214,25 @@ export class DemoJobManager {
     const startedMs = Date.now();
 
     try {
+      await this.update(job, {
+        status: "preflighting",
+        progress: 6,
+        message: "UX/Design Brain is checking desktop, mobile and visual-system constraints.",
+      });
+
+      const uxDesign = await auditUxDesign(job.request.url, {
+        outputDir: jobDir,
+      });
+
+      if (uxDesign.preflight.status === "BLOCKED") {
+        throw new Error(
+          "UX/Design preflight blocked generation: " +
+            uxDesign.preflight.findings
+              .map((finding) => finding.message)
+              .join(" "),
+        );
+      }
+
       let scenario: DemoScenario;
       let storyboard: string;
       let snapshot: unknown;
@@ -307,6 +328,8 @@ export class DemoJobManager {
         voiceoverPath,
         brandLabel: job.request.brand ?? "VIIVERSION",
         cta: job.request.cta,
+        designContractPath: path.join(jobDir, "design_contract.json"),
+        uxPreflightPath: path.join(jobDir, "ux_preflight.json"),
       });
 
       await persistArtifact(job.id, artifactPath);
