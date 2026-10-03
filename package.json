@@ -1,6 +1,6 @@
 {
   "name": "viiversion-demo-studio",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "private": true,
   "description": "AI-directed presentation-video generation for web applications",
   "type": "module",
@@ -18,7 +18,7 @@
   "dependencies": {
     "@modelcontextprotocol/node": "^2.0.0",
     "@modelcontextprotocol/server": "^2.2.0",
-    "playwright": "^1.55.0",
+    "playwright": "1.63.0",
     "zod": "^4.6.5"
   },
   "devDependencies": {
