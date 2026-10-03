@@ -1,4 +1,4 @@
-import type { CameraFrame } from "./types.js";
+import type { CameraFrame, ScenarioVoiceConfig } from "./types.js";
 
 export type SceneTimelineEntry = {
   index: number;
@@ -14,11 +14,13 @@ export type SceneStep = {
   action: string;
   label?: string;
   narration?: string;
+  voiceText?: string;
 };
 
 export type SceneManifest = {
   scenario: {
     name?: string;
+    voice?: ScenarioVoiceConfig;
     steps: SceneStep[];
   };
   timeline: SceneTimelineEntry[];
