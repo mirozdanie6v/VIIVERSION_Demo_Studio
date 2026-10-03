@@ -25,60 +25,75 @@
       "action": "goto",
       "url": "/",
       "label": "MAX TOUR mobile experience",
-      "narration": "MAX TOUR — мобильное приложение, где клиент проходит весь путь от выбора экскурсии до бронирования."
+      "narration": "MAX TOUR — мобильный сервис для выбора и бронирования путешествий по Вьетнаму."
+    },
+    {
+      "action": "waitFor",
+      "target": {
+        "by": "text",
+        "value": "Ваш лучший отдых",
+        "exact": false
+      },
+      "state": "visible",
+      "timeoutMs": 20000
     },
     {
       "action": "wait",
-      "ms": 1800,
-      "label": "Show MAX TOUR home",
-      "narration": "Главный экран сразу показывает продукт как полноценный мобильный сервис для туриста."
+      "ms": 1300,
+      "label": "Show the home screen",
+      "narration": "На первом экране клиент сразу видит направления, популярные туры, Fast Track и доступ к AI-помощнику."
     },
     {
-      "action": "goto",
-      "url": "/catalog",
-      "label": "Open tour catalog",
-      "narration": "Из главного экрана клиент переходит в каталог актуальных маршрутов."
-    },
-    {
-      "action": "waitFor",
-      "target": {
-        "by": "role",
-        "value": "heading",
-        "name": "Куда поедем?",
-        "exact": true
-      },
-      "state": "visible",
-      "timeoutMs": 20000
-    },
-    {
-      "action": "scroll",
-      "y": 520,
-      "label": "Browse catalog",
-      "narration": "Каталог показывает направления, фотографии, стоимость и помогает быстро выбрать подходящий вариант.",
-      "pauseAfterMs": 1100
-    },
-    {
-      "action": "goto",
-      "url": "/tour/dalat-premium",
-      "label": "Open tour details",
-      "narration": "Карточка экскурсии объединяет программу, фотографии, условия, включённые услуги и цену."
-    },
-    {
-      "action": "waitFor",
+      "action": "click",
       "target": {
         "by": "role",
         "value": "button",
-        "name": "Выбрать формат",
+        "name": "Выбрать тур",
+        "exact": true
+      },
+      "label": "Open catalog",
+      "narration": "Одним нажатием открывается каталог с фильтрами по городу, длительности, типу отдыха и бюджету."
+    },
+    {
+      "action": "waitFor",
+      "target": {
+        "by": "text",
+        "value": "17 найдено",
         "exact": true
       },
       "state": "visible",
-      "timeoutMs": 20000
+      "timeoutMs": 15000
+    },
+    {
+      "action": "scroll",
+      "y": 420,
+      "label": "Browse live catalog",
+      "narration": "Клиент сравнивает реальные программы, формат поездки и стоимость прямо в приложении.",
+      "pauseAfterMs": 1000
+    },
+    {
+      "action": "click",
+      "target": {
+        "by": "css",
+        "value": "h3:has-text(\"Далат «Премиум»\"):visible"
+      },
+      "label": "Open Dalat Premium",
+      "narration": "Открываем одну из популярных экскурсий — Далат Премиум."
+    },
+    {
+      "action": "wait",
+      "ms": 1800
+    },
+    {
+      "action": "scroll",
+      "y": 540,
+      "label": "Explore tour details",
+      "narration": "Карточка тура показывает маршрут, условия, фотографии и варианты поездки в одном месте.",
+      "pauseAfterMs": 1000
     },
     {
       "action": "scroll",
       "y": 620,
-      "label": "Tour content",
-      "narration": "Клиент изучает маршрут внутри одного интерфейса и переходит к оформлению.",
       "pauseAfterMs": 900
     },
     {
@@ -86,113 +101,15 @@
       "target": {
         "by": "role",
         "value": "button",
-        "name": "Выбрать формат",
+        "name": "ИИ-Помощник",
         "exact": true
       },
-      "label": "Start booking",
-      "narration": "Бронирование начинается прямо из карточки тура."
-    },
-    {
-      "action": "waitFor",
-      "target": {
-        "by": "role",
-        "value": "heading",
-        "name": "Бронирование экскурсии",
-        "exact": true
-      },
-      "state": "visible",
-      "timeoutMs": 20000
-    },
-    {
-      "action": "click",
-      "target": {
-        "by": "role",
-        "value": "button",
-        "name": "Продолжить индивидуально",
-        "exact": true
-      },
-      "label": "Choose private format",
-      "narration": "Клиент выбирает формат, состав группы, дату, трансфер и вариант оплаты."
-    },
-    {
-      "action": "waitFor",
-      "target": {
-        "by": "role",
-        "value": "heading",
-        "name": "Кто едет?",
-        "exact": true
-      },
-      "state": "visible",
-      "timeoutMs": 15000
-    },
-    {
-      "action": "click",
-      "target": {
-        "by": "role",
-        "value": "button",
-        "name": "Выбрать дату",
-        "exact": true
-      },
-      "label": "Continue to date",
-      "narration": "Каждый следующий шаг остаётся понятным и мобильным."
-    },
-    {
-      "action": "waitFor",
-      "target": {
-        "by": "role",
-        "value": "heading",
-        "name": "Когда едем?",
-        "exact": true
-      },
-      "state": "visible",
-      "timeoutMs": 15000
+      "label": "Open AI assistant",
+      "narration": "AI-помощник остаётся доступен внутри приложения и помогает клиенту подобрать подходящий вариант."
     },
     {
       "action": "wait",
-      "ms": 1200
-    },
-    {
-      "action": "goto",
-      "url": "/manager",
-      "label": "Manager workspace",
-      "narration": "Для команды заявки продолжаются в рабочем интерфейсе менеджера: заказы, клиенты и подтверждения."
-    },
-    {
-      "action": "waitFor",
-      "target": {
-        "by": "role",
-        "value": "heading",
-        "name": "Заказы",
-        "exact": true
-      },
-      "state": "visible",
-      "timeoutMs": 20000
-    },
-    {
-      "action": "scroll",
-      "y": 420,
-      "pauseAfterMs": 1000
-    },
-    {
-      "action": "goto",
-      "url": "/owner",
-      "label": "Owner dashboard",
-      "narration": "Владелец видит показатели и работу команды в той же системе."
-    },
-    {
-      "action": "waitFor",
-      "target": {
-        "by": "role",
-        "value": "heading",
-        "name": "Панель владельца",
-        "exact": true
-      },
-      "state": "visible",
-      "timeoutMs": 20000
-    },
-    {
-      "action": "wait",
-      "ms": 1600
+      "ms": 1800
     }
   ]
 }
