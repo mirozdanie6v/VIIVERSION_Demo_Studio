@@ -144,10 +144,16 @@ The Voice Director passes natural-language performance direction through the TTS
 
 The local Hugging Face provider avoids per-character or per-request TTS API charges. It is opt-in so production containers do not unexpectedly download model weights.
 
-Install the optional Python engines:
+Install the default CPU-friendly engine:
 
 ```bash
 python3 -m pip install -r requirements-tts.txt
+```
+
+Install Chatterbox only on workers that need multilingual voice cloning or the heavier premium-local path:
+
+```bash
+python3 -m pip install -r requirements-tts-chatterbox.txt
 ```
 
 Enable local TTS:
@@ -160,7 +166,7 @@ HF_TTS_ENGINE=supertonic
 Available engines:
 
 - `supertonic` — default local engine, CPU-friendly, 31 languages including English, Russian and Vietnamese.
-- `chatterbox` — higher-quality multilingual voice-cloning path for supported languages including English, Russian and Chinese.
+- `chatterbox` — optional heavier multilingual voice-cloning path for supported languages including English, Russian and Chinese. It requires the separate Chatterbox requirements file.
 
 Use Chatterbox:
 
