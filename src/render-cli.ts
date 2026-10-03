@@ -51,6 +51,7 @@ async function main() {
     outputPath: arg("--output"),
     preset,
     captions: !has("--no-captions"),
+    captionsFilePath: arg("--captions-file"),
     voiceoverPath,
     musicPath: arg("--music"),
     musicVolume: arg("--music-volume")
