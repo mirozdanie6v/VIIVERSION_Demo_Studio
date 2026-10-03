@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 import sys
+import traceback
 
 
 def parse_args() -> argparse.Namespace:
@@ -61,6 +62,14 @@ def synthesize_supertonic(args: argparse.Namespace, text: str) -> None:
 def synthesize_chatterbox(args: argparse.Namespace, text: str) -> None:
     try:
         import torchaudio as ta
+        import perth
+
+        # Upstream chatterbox can expose PerthImplicitWatermarker as None in
+        # some environments. Fall back to the no-op watermarker so synthesis
+        # remains available instead of failing during model construction.
+        if not callable(getattr(perth, "PerthImplicitWatermarker", None)):
+            perth.PerthImplicitWatermarker = perth.DummyWatermarker
+
         from chatterbox.mtl_tts import ChatterboxMultilingualTTS
     except ImportError as exc:
         raise RuntimeError(
@@ -116,4 +125,5 @@ if __name__ == "__main__":
         raise SystemExit(main())
     except Exception as exc:
         print(f"hf_tts.py: {exc}", file=sys.stderr)
+        traceback.print_exc()
         raise SystemExit(1)
