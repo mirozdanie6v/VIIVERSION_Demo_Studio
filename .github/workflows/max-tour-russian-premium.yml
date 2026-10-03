@@ -6,6 +6,12 @@ on:
     branches: [main]
     paths:
       - 'examples/max-tour-russian-premium.json'
+      - 'src/render.ts'
+      - 'src/render-cli.ts'
+      - 'src/narration-sync-cli.ts'
+      - 'src/caption-brain.ts'
+      - 'src/editor-brain.ts'
+      - 'src/editor-critic.ts'
       - 'docs/MAX_TOUR_RU_PREMIUM_VIDEO_SPEC.md'
       - '.github/workflows/max-tour-russian-premium.yml'
 
@@ -228,22 +234,8 @@ jobs:
           awk -v d="$duration" 'BEGIN { exit !(d >= 85 && d <= 240) }'
           echo "FINAL_DURATION=$duration"
 
-          subtitle_time=$(python3 - <<'PY'
-import json, os
-p=os.path.join(os.environ["RUN_DIR"],"narration-sync.json")
-d=json.load(open(p))
-s=next(x for x in d["segments"] if x["stepIndex"]==2)
-print(round(s["start"]+min(2.5,s["duration"]/2),3))
-PY
-          )
-          ai_time=$(python3 - <<'PY'
-import json, os
-p=os.path.join(os.environ["RUN_DIR"],"narration-sync.json")
-d=json.load(open(p))
-s=next(x for x in d["segments"] if x["stepIndex"]==21)
-print(round(s["start"]+min(4.0,s["duration"]/2),3))
-PY
-          )
+          subtitle_time=$(python3 -c 'import json,os; d=json.load(open(os.path.join(os.environ["RUN_DIR"],"narration-sync.json"))); s=next(x for x in d["segments"] if x["stepIndex"]==2); print(round(s["start"]+min(2.5,s["duration"]/2),3))')
+          ai_time=$(python3 -c 'import json,os; d=json.load(open(os.path.join(os.environ["RUN_DIR"],"narration-sync.json"))); s=next(x for x in d["segments"] if x["stepIndex"]==21); print(round(s["start"]+min(4.0,s["duration"]/2),3))')
 
           ffmpeg -y -ss "$subtitle_time" -i "${run_dir}/final-9x16.mp4" -frames:v 1 "${run_dir}/qa-subtitle-zone.png"
           ffmpeg -y -ss "$ai_time" -i "${run_dir}/final-9x16.mp4" -frames:v 1 "${run_dir}/qa-ai-frame.png"
