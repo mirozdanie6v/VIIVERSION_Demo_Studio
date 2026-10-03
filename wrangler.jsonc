@@ -1,0 +1,42 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "viiversion-demo-studio",
+  "main": "cloudflare/worker.js",
+  "compatibility_date": "2026-10-03",
+  "workers_dev": true,
+  "routes": [
+    {
+      "pattern": "demostudio.viiversion.com",
+      "custom_domain": true
+    }
+  ],
+  "containers": [
+    {
+      "class_name": "DemoStudioContainer",
+      "scheduling_policy": "durable_object",
+      "images": {
+        "app": {
+          "dockerfile": "./Dockerfile",
+          "build_context": "."
+        }
+      }
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "DEMO_STUDIO",
+        "class_name": "DemoStudioContainer"
+      }
+    ]
+  },
+  "exports": {
+    "DemoStudioContainer": {
+      "type": "durable-object",
+      "storage": "sqlite"
+    }
+  },
+  "observability": {
+    "enabled": true
+  }
+}

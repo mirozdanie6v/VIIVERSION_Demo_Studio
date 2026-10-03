@@ -139,7 +139,7 @@ export async function planDemo(
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: options.model ?? process.env.OPENAI_DIRECTOR_MODEL ?? "gpt-6-luna",
+      model: options.model ?? process.env.OPENAI_DIRECTOR_MODEL ?? "gpt-5.6-luna",
       instructions:
         "You are the VIIVERSION Demo Studio AI Director. Convert a web application snapshot and presentation goal into a deterministic Playwright demo scenario.",
       input: prompt,
