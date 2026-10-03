@@ -76,13 +76,16 @@ Premiere automation remains outside the Demo Studio production render path. Demo
 
 ## MAX TOUR premium-demo rules
 
-The MAX TOUR Russian Premium Video v2 adds reusable product-demo rules to the Editor Brain pipeline:
+The Russian premium pipeline defines reusable hard rules for product-demo editing:
 
-- reserve a subtitle-safe presentation zone instead of burning captions over customer UI;
-- use target-focused smart zoom/scroll beats to avoid long static holds;
-- require a visible functional proof beat for AI features (question → response);
-- treat branded intro and CTA outro as part of the narrative structure;
-- keep narration captions separate from technical step labels;
-- allow runtime to follow explanatory clarity instead of forcing a two-minute ceiling.
+- subtitles belong to a dedicated presentation band outside customer-facing UI;
+- narration is synthesized per semantic step, never as one monolithic track when precise sync matters;
+- actual TTS segment duration is the timing source for both voice placement and subtitle cues;
+- pronunciation overrides live in TTS-only voiceText so display copy remains clean;
+- target-focused zoom/scroll beats replace long static holds;
+- AI features require visible functional proof (question → submitted state → response);
+- branded intro and CTA outro are part of the narrative structure;
+- runtime follows explanatory clarity instead of an arbitrary two-minute ceiling;
+- if voice exceeds its visual hold, extend/re-edit the visual segment rather than letting voice, subtitles and content drift apart.
 
-Reference implementation: `docs/MAX_TOUR_RU_PREMIUM_VIDEO_SPEC.md` and `examples/max-tour-russian-premium.json`.
+Reference implementation: docs/MAX_TOUR_RU_PREMIUM_VIDEO_SPEC.md, examples/max-tour-russian-premium.json, and src/narration-sync-cli.ts.
