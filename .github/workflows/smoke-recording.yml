@@ -65,8 +65,13 @@ jobs:
         shell: bash
         run: echo "dir=$(find artifacts -mindepth 1 -maxdepth 1 -type d | head -n 1)" >> "$GITHUB_OUTPUT"
 
+      - name: Run UX Design Brain preflight
+        env:
+          ALLOW_PRIVATE_TARGETS: "true"
+        run: npm run ux-audit -- --url http://127.0.0.1:4173/fixtures/smoke.html --out "${{ steps.run.outputs.dir }}"
+
       - name: Render final MP4
-        run: npm run render -- --run "${{ steps.run.outputs.dir }}" --preset 16:9 --brand VIIVERSION --cta "Built with VIIVERSION Demo Studio"
+        run: npm run render -- --run "${{ steps.run.outputs.dir }}" --preset 16:9 --brand VIIVERSION --cta "Built with VIIVERSION Demo Studio" --design-contract "${{ steps.run.outputs.dir }}/design_contract.json" --ux-preflight "${{ steps.run.outputs.dir }}/ux_preflight.json"
 
       - name: Verify editorial brain artifacts
         shell: bash
@@ -84,6 +89,18 @@ jobs:
           jq -e '.version == "music-brain-v1"' "${run_dir}/music_brain.json" >/dev/null
           jq -e '.version == "caption-brain-v1" and (.cues | length) > 0' "${run_dir}/captions.json" >/dev/null
           jq -e '.editorBrainVersion == "editor-brain-v1" and (.scenes | length) > 0' "${run_dir}/scenes.json" >/dev/null
+          test -s "${run_dir}/ux_preflight.json"
+          test -s "${run_dir}/design_profile.json"
+          test -s "${run_dir}/design_contract.json"
+          test -s "${run_dir}/ux_desktop.png"
+          test -s "${run_dir}/ux_mobile.png"
+          test -s "${run_dir}/overlay_plan.json"
+          test -s "${run_dir}/visual_critic.json"
+          jq -e '.version == "ux-preflight-v1" and .status == "PASS"' "${run_dir}/ux_preflight.json" >/dev/null
+          jq -e '.version == "design-profile-v1"' "${run_dir}/design_profile.json" >/dev/null
+          jq -e '.version == "design-contract-v1"' "${run_dir}/design_contract.json" >/dev/null
+          jq -e '.version == "overlay-plan-v1"' "${run_dir}/overlay_plan.json" >/dev/null
+          jq -e '.version == "visual-critic-v1" and .status == "PASS"' "${run_dir}/visual_critic.json" >/dev/null
 
       - name: Upload recording artifacts
         uses: actions/upload-artifact@v4
