@@ -105,3 +105,23 @@ Use the rules in `docs/ATTENTION_DIRECTOR.md`:
 - present mobile UI inside a designed smartphone frame.
 
 A static scene is not, by itself, a reason to zoom.
+
+
+## Framing and Pacing Directors
+
+The Editor Brain now treats framing and pacing as separate editorial decisions.
+
+See:
+- `docs/FRAMING_CROP_DIRECTOR.md`
+- `docs/PACING_RETENTION_DIRECTOR.md`
+
+Hard principles:
+- crop for semantic completeness, not for click-coordinate centering;
+- never cut required words, prices, button labels or supporting context;
+- use the smallest zoom that clearly changes attention;
+- a continuous narration block may contain several visual beats;
+- “preserve the spoken thought” means preserve the audio idea, **not** preserve one static framing for the entire sentence;
+- target meaningful visual change roughly every 1.5–3.5 seconds;
+- benefit/problem/solution language should recur throughout a sales-oriented demo;
+- eliminate browser wait time that does not add proof;
+- end with a direct conversion proposition rather than a passive logo hold.
