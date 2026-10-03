@@ -1,0 +1,100 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { VoiceRouter } from "../src/voice-router.js";
+import type {
+  VoiceProvider,
+  VoiceRequest,
+  VoiceResult,
+} from "../src/voice-engine-types.js";
+
+class FakeProvider implements VoiceProvider {
+  constructor(
+    readonly id: "elevenlabs" | "openai" | "piper",
+    readonly nativeTimings: boolean,
+    private readonly configured: boolean,
+    private readonly locales: string[],
+  ) {}
+
+  isConfigured(): boolean {
+    return this.configured;
+  }
+
+  supportsLocale(locale: string): boolean {
+    return this.locales.includes("*") || this.locales.includes(locale);
+  }
+
+  async synthesize(request: VoiceRequest): Promise<VoiceResult> {
+    return {
+      provider: this.id,
+      locale: request.locale,
+      model: "fake",
+      voiceId: "fake",
+      audioPath: request.outputPath,
+      timings: [],
+      hasNativeTimings: this.nativeTimings,
+      directedText: request.text,
+      instructions: "",
+    };
+  }
+}
+
+const request: VoiceRequest = {
+  text: "Hello",
+  locale: "vi-VN",
+  outputPath: "/tmp/voice.mp3",
+  provider: "auto",
+};
+
+test("prefers configured provider order for arbitrary locales", () => {
+  const router = new VoiceRouter({
+    providers: [
+      new FakeProvider("elevenlabs", true, true, ["*"]),
+      new FakeProvider("openai", false, true, ["*"]),
+      new FakeProvider("piper", false, true, ["vi-VN"]),
+    ],
+    context: { env: {} },
+  });
+
+  assert.equal(router.inspect(request).selected, "elevenlabs");
+});
+
+test("falls back when the preferred provider is unavailable", () => {
+  const router = new VoiceRouter({
+    providers: [
+      new FakeProvider("elevenlabs", true, false, ["*"]),
+      new FakeProvider("openai", false, true, ["*"]),
+      new FakeProvider("piper", false, true, ["vi-VN"]),
+    ],
+    context: { env: {} },
+  });
+
+  assert.equal(router.inspect(request).selected, "openai");
+});
+
+test("requires a native-timing provider when precise synchronization is requested", () => {
+  const router = new VoiceRouter({
+    providers: [
+      new FakeProvider("elevenlabs", true, true, ["*"]),
+      new FakeProvider("openai", false, true, ["*"]),
+    ],
+    context: { env: {} },
+  });
+
+  const decision = router.inspect({ ...request, requireNativeTimings: true });
+  assert.equal(decision.selected, "elevenlabs");
+});
+
+test("honors an explicit provider override", () => {
+  const router = new VoiceRouter({
+    providers: [
+      new FakeProvider("elevenlabs", true, true, ["*"]),
+      new FakeProvider("openai", false, true, ["*"]),
+    ],
+    context: { env: {} },
+  });
+
+  assert.equal(
+    router.inspect({ ...request, provider: "openai" }).selected,
+    "openai",
+  );
+});
