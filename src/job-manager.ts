@@ -1,16 +1,18 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { planDemo } from "./director.js";
+import { buildStoryboard, planDemo } from "./director.js";
 import { recordUsageEvent } from "./metering.js";
 import { renderRun, type RenderPreset } from "./render.js";
 import { runScenario } from "./runner.js";
 import { assertSafeHttpUrl } from "./security.js";
+import type { DemoScenario } from "./types.js";
 import { createVoiceover } from "./voiceover.js";
 
 export type DemoJobRequest = {
   url: string;
-  goal: string;
+  goal?: string;
+  scenario?: DemoScenario;
   preset?: RenderPreset;
   captions?: boolean;
   voiceover?: boolean;
@@ -55,7 +57,7 @@ function positiveInteger(value: string | undefined, fallback: number): number {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
 }
 
-function narrationFor(scenario: Awaited<ReturnType<typeof planDemo>>["scenario"]): string {
+function narrationFor(scenario: DemoScenario): string {
   return scenario.steps
     .map((step) => step.narration?.trim())
     .filter((value): value is string => Boolean(value))
@@ -84,6 +86,10 @@ export class DemoJobManager {
 
   async submit(request: DemoJobRequest): Promise<PublicDemoJob> {
     await assertSafeHttpUrl(request.url);
+
+    if (!request.scenario && !request.goal?.trim()) {
+      throw new Error("Either goal or scenario is required.");
+    }
 
     const now = new Date().toISOString();
     const job: DemoJob = {
@@ -195,35 +201,59 @@ export class DemoJobManager {
     const startedMs = Date.now();
 
     try {
-      await this.update(job, {
-        status: "directing",
-        progress: 10,
-        message: "AI Director is inspecting the application and building the storyboard.",
-      });
+      let scenario: DemoScenario;
+      let storyboard: string;
+      let snapshot: unknown;
 
-      const directed = await planDemo(job.request.url, job.request.goal);
+      if (job.request.scenario) {
+        scenario = job.request.scenario;
+        storyboard = buildStoryboard(scenario);
+        await this.update(job, {
+          status: "capturing",
+          progress: 28,
+          message: "Using the host-directed scenario and starting browser capture.",
+        });
+      } else {
+        await this.update(job, {
+          status: "directing",
+          progress: 10,
+          message: "AI Director is inspecting the application and building the storyboard.",
+        });
+
+        const directed = await planDemo(job.request.url, job.request.goal ?? "");
+        scenario = directed.scenario;
+        storyboard = directed.storyboard;
+        snapshot = directed.snapshot;
+      }
 
       const scenarioPath = path.join(jobDir, "scenario.json");
       const storyboardPath = path.join(jobDir, "storyboard.md");
-      await Promise.all([
-        writeFile(scenarioPath, JSON.stringify(directed.scenario, null, 2) + "\n", "utf8"),
-        writeFile(storyboardPath, directed.storyboard + "\n", "utf8"),
-        writeFile(
-          path.join(jobDir, "snapshot.json"),
-          JSON.stringify(directed.snapshot, null, 2) + "\n",
-          "utf8",
-        ),
-      ]);
+      const writes: Promise<unknown>[] = [
+        writeFile(scenarioPath, JSON.stringify(scenario, null, 2) + "\n", "utf8"),
+        writeFile(storyboardPath, storyboard + "\n", "utf8"),
+      ];
+
+      if (snapshot) {
+        writes.push(
+          writeFile(
+            path.join(jobDir, "snapshot.json"),
+            JSON.stringify(snapshot, null, 2) + "\n",
+            "utf8",
+          ),
+        );
+      }
+
+      await Promise.all(writes);
 
       await this.update(job, {
         status: "capturing",
         progress: 40,
-        message: "Browser is executing and recording the approved scenario.",
+        message: "Browser is executing and recording the scenario.",
         scenarioPath,
         storyboardPath,
       });
 
-      const capture = await runScenario(directed.scenario, {
+      const capture = await runScenario(scenario, {
         artifactsRoot: path.join(jobDir, "captures"),
       });
 
@@ -235,9 +265,9 @@ export class DemoJobManager {
 
       let voiceoverPath: string | undefined;
       if (job.request.voiceover) {
-        const narration = narrationFor(directed.scenario);
+        const narration = narrationFor(scenario);
         if (!narration) {
-          throw new Error("Voiceover requested, but the generated scenario contains no narration.");
+          throw new Error("Voiceover requested, but the scenario contains no narration.");
         }
 
         voiceoverPath = path.join(jobDir, "voiceover.mp3");
