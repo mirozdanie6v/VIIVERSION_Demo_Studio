@@ -8,7 +8,10 @@ export type CriticFinding = {
     | "scene_too_short"
     | "weak_proof_hold"
     | "weak_ending"
-    | "high_cut_density";
+    | "high_cut_density"
+    | "needs_visual_beats"
+    | "slow_average_pacing"
+    | "slow_median_pacing";
   sceneIndex?: number;
   message: string;
   revision?: string;
@@ -101,6 +104,57 @@ export function reviewEditorPlan(plan: EditorBrainPlan): CriticResult {
   });
 
   scenes = recomputeOutputTimes(scenes);
+
+  for (const [index, scene] of scenes.entries()) {
+    const duration = scene.outputEnd - scene.outputStart;
+    const hasSpeech = scene.stepIndexes.some(
+      (stepIndex) => plan.semantics[stepIndex]?.shotIntent === "continuity_speech",
+    );
+    if (hasSpeech && duration > 6) {
+      findings.push({
+        severity: "warning",
+        code: "needs_visual_beats",
+        sceneIndex: index,
+        message: `Narrated scene ${index + 1} holds one editorial framing for ${duration.toFixed(2)}s.`,
+        revision:
+          "Keep the voice continuous but split the picture into 2–5 semantic visual beats (establish → focus → action/proof).",
+      });
+    }
+  }
+
+  const durations = scenes
+    .map((scene) => scene.outputEnd - scene.outputStart)
+    .sort((a, b) => a - b);
+  const averageDuration =
+    durations.length > 0
+      ? durations.reduce((sum, value) => sum + value, 0) / durations.length
+      : 0;
+  const medianDuration =
+    durations.length === 0
+      ? 0
+      : durations.length % 2 === 1
+        ? durations[Math.floor(durations.length / 2)]
+        : (durations[durations.length / 2 - 1] + durations[durations.length / 2]) / 2;
+
+  if (averageDuration > 7) {
+    findings.push({
+      severity: "warning",
+      code: "slow_average_pacing",
+      message: `Average visual scene duration is ${averageDuration.toFixed(2)}s.`,
+      revision:
+        "Increase information density: target meaningful visual changes roughly every 1.5–3.5s.",
+    });
+  }
+
+  if (medianDuration > 6) {
+    findings.push({
+      severity: "warning",
+      code: "slow_median_pacing",
+      message: `Median visual scene duration is ${medianDuration.toFixed(2)}s.`,
+      revision:
+        "Break long narrated scenes into attention-led framing beats instead of extending a single shot.",
+    });
+  }
 
   const editedDuration = scenes.at(-1)?.outputEnd ?? 0;
   const cutDensity =
