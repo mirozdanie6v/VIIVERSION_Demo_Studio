@@ -196,6 +196,87 @@ export async function runScenario(
   });
   await attachNetworkGuard(context);
 
+  const localeOverlay = scenario.presentation?.localeOverlay;
+  if (localeOverlay) {
+    await context.addInitScript(
+      ({ language, replacements }) => {
+        const pairs = Object.entries(replacements)
+          .filter(([source, translated]) => source && translated)
+          .sort((a, b) => b[0].length - a[0].length);
+
+        const translateString = (value: string) => {
+          let next = value;
+          for (const [source, translated] of pairs) {
+            if (next.includes(source)) next = next.split(source).join(translated);
+          }
+          return next;
+        };
+
+        const translateNode = (root: Node) => {
+          if (root.nodeType === Node.TEXT_NODE) {
+            const current = root.nodeValue ?? "";
+            const next = translateString(current);
+            if (next !== current) root.nodeValue = next;
+            return;
+          }
+
+          if (!(root instanceof Element) && !(root instanceof Document)) return;
+
+          const container = root instanceof Document ? root.documentElement : root;
+          if (!container) return;
+
+          const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+          const textNodes: Node[] = [];
+          while (walker.nextNode()) textNodes.push(walker.currentNode);
+          for (const node of textNodes) {
+            const current = node.nodeValue ?? "";
+            const next = translateString(current);
+            if (next !== current) node.nodeValue = next;
+          }
+
+          const elements = [
+            ...(container instanceof Element ? [container] : []),
+            ...Array.from(container.querySelectorAll("*")),
+          ];
+          for (const element of elements) {
+            for (const attribute of ["placeholder", "aria-label", "title", "alt"]) {
+              const current = element.getAttribute(attribute);
+              if (!current) continue;
+              const next = translateString(current);
+              if (next !== current) element.setAttribute(attribute, next);
+            }
+          }
+        };
+
+        const install = () => {
+          document.documentElement.lang = language;
+          translateNode(document);
+          const observer = new MutationObserver((records) => {
+            for (const record of records) {
+              if (record.type === "characterData") {
+                translateNode(record.target);
+                continue;
+              }
+              for (const node of Array.from(record.addedNodes)) translateNode(node);
+            }
+          });
+          observer.observe(document.documentElement, {
+            subtree: true,
+            childList: true,
+            characterData: true,
+          });
+        };
+
+        if (document.readyState === "loading") {
+          document.addEventListener("DOMContentLoaded", install, { once: true });
+        } else {
+          install();
+        }
+      },
+      localeOverlay,
+    );
+  }
+
   const page = await context.newPage();
   const video = page.video();
 
