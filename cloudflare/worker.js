@@ -263,7 +263,10 @@ export class DemoStudioContainer extends DurableObject {
         : this.quotaErrorResponse(payload, "generation", quota);
     }
 
-    if (tool === "inspect_web_app") {
+    if (
+      tool === "inspect_web_app" ||
+      tool === "audit_web_app_design"
+    ) {
       const quota = await this.consumeDailyQuota(
         request,
         "inspection",
