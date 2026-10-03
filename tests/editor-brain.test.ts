@@ -81,3 +81,78 @@ test("keeps action and visible result in the same editorial unit", () => {
   assert.equal(resultScene?.narrativeRole, "proof");
   assert.equal(plan.scenes[0].narrativeRole, "setup");
 });
+
+
+test("technical waits do not collapse setup into proof", () => {
+  const plan = buildEditorBrainPlan({
+    scenario: {
+      name: "Smoke",
+      steps: [
+        { action: "goto", label: "Open application" },
+        { action: "waitFor" },
+        { action: "click", label: "Open catalog" },
+        { action: "waitFor" },
+        { action: "assert", label: "Verify result" },
+        { action: "wait" },
+      ],
+    },
+    timeline: [
+      {
+        index: 0,
+        label: "Open application",
+        action: "goto",
+        startedAt: "2026-10-03T00:00:00.000Z",
+        finishedAt: "2026-10-03T00:00:00.900Z",
+        success: true,
+      },
+      {
+        index: 1,
+        label: "waitFor #2",
+        action: "waitFor",
+        startedAt: "2026-10-03T00:00:00.900Z",
+        finishedAt: "2026-10-03T00:00:00.930Z",
+        success: true,
+      },
+      {
+        index: 2,
+        label: "Open catalog",
+        action: "click",
+        startedAt: "2026-10-03T00:00:00.930Z",
+        finishedAt: "2026-10-03T00:00:02.200Z",
+        success: true,
+      },
+      {
+        index: 3,
+        label: "waitFor #4",
+        action: "waitFor",
+        startedAt: "2026-10-03T00:00:02.200Z",
+        finishedAt: "2026-10-03T00:00:02.230Z",
+        success: true,
+      },
+      {
+        index: 4,
+        label: "Verify result",
+        action: "assert",
+        startedAt: "2026-10-03T00:00:02.230Z",
+        finishedAt: "2026-10-03T00:00:02.500Z",
+        success: true,
+      },
+      {
+        index: 5,
+        label: "wait #6",
+        action: "wait",
+        startedAt: "2026-10-03T00:00:02.500Z",
+        finishedAt: "2026-10-03T00:00:03.200Z",
+        success: true,
+      },
+    ],
+    startedAt: "2026-10-03T00:00:00.000Z",
+    finishedAt: "2026-10-03T00:00:03.200Z",
+  });
+
+  assert.equal(plan.qualityGate.passed, true);
+  assert.ok(plan.scenes.length >= 2);
+  assert.equal(plan.scenes[0].narrativeRole, "setup");
+  assert.equal(plan.scenes.at(-1)?.narrativeRole, "proof");
+  assert.deepEqual(plan.scenes.at(-1)?.stepIndexes, [2, 3, 4, 5]);
+});
