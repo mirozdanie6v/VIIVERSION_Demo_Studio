@@ -23,6 +23,7 @@ Voice Director
 Pronunciation layer
     ↓
 TTS Router
+    ├── Hugging Face local (Supertonic 3 / Chatterbox V3)
     ├── ElevenLabs
     ├── OpenAI
     └── Piper offline fallback
@@ -80,14 +81,15 @@ Each narrated step may optionally use `voiceText` for TTS-only pronunciation whi
 
 Default order:
 
-1. ElevenLabs
-2. OpenAI
-3. Piper
+1. Hugging Face local, when explicitly enabled
+2. ElevenLabs
+3. OpenAI
+4. Piper
 
 Override with:
 
 ```bash
-VOICE_PROVIDER_ORDER=openai,elevenlabs,piper
+VOICE_PROVIDER_ORDER=huggingface,openai,elevenlabs,piper
 ```
 
 With `provider: "auto"`, the router:
@@ -137,6 +139,64 @@ OPENAI_TTS_VOICE=marin
 ```
 
 The Voice Director passes natural-language performance direction through the TTS instructions field. The current OpenAI speech adapter does not return native character timing metadata, so it is not selected when `requireNativeTimings` is mandatory and a timing-capable provider is available.
+
+### Hugging Face local / free
+
+The local Hugging Face provider avoids per-character or per-request TTS API charges. It is opt-in so production containers do not unexpectedly download model weights.
+
+Install the optional Python engines:
+
+```bash
+python3 -m pip install -r requirements-tts.txt
+```
+
+Enable local TTS:
+
+```bash
+HF_TTS_ENABLED=1
+HF_TTS_ENGINE=supertonic
+```
+
+Available engines:
+
+- `supertonic` — default local engine, CPU-friendly, 31 languages including English, Russian and Vietnamese.
+- `chatterbox` — higher-quality multilingual voice-cloning path for supported languages including English, Russian and Chinese.
+
+Use Chatterbox:
+
+```bash
+HF_TTS_ENABLED=1
+HF_TTS_ENGINE=chatterbox
+HF_TTS_DEVICE=cuda
+HF_TTS_REFERENCE_AUDIO=/models/presenter-reference.wav
+```
+
+Reference audio can also be configured by language or locale:
+
+```bash
+HF_TTS_REFERENCE_AUDIO_RU=/models/presenter-ru.wav
+HF_TTS_REFERENCE_AUDIO_RU_RU=/models/presenter-ru-ru.wav
+```
+
+Other settings:
+
+```bash
+HF_TTS_PYTHON=python3
+HF_TTS_VOICE=M1
+HF_TTS_SCRIPT=/app/scripts/hf_tts.py
+```
+
+Explicit CLI use:
+
+```bash
+npm run voice -- \
+  --locale ru-RU \
+  --text "Добро пожаловать." \
+  --out /tmp/presenter.mp3 \
+  --provider huggingface
+```
+
+The first local synthesis downloads model assets into the normal Hugging Face cache. The provider returns audio without native character timings, so requests that strictly require provider-native timings continue to route to a timing-capable provider.
 
 ### Piper
 
