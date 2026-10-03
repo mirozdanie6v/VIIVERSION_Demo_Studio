@@ -2,6 +2,20 @@ export type VoiceProviderId = "elevenlabs" | "openai" | "piper";
 
 export type VoicePersonaId = "viiversion-presenter" | "neutral";
 
+export type PresenterVoiceDefaults = {
+  model: "eleven_v3";
+  primary: "Niki";
+  fallback: "Leslie";
+  speed: number;
+};
+
+export const VIIVERSION_PRESENTER_DEFAULTS: PresenterVoiceDefaults = {
+  model: "eleven_v3",
+  primary: "Niki",
+  fallback: "Leslie",
+  speed: 1.06,
+};
+
 export type VoiceTiming = {
   character: string;
   startSeconds: number;
