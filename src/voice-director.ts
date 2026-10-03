@@ -9,8 +9,8 @@ export type DirectedVoiceRequest = VoiceRequest & {
 const BASE_PERSONAS: Record<VoicePersonaId, string> = {
   "viiversion-presenter":
     "Sound like a skilled human presenter demonstrating a premium digital product to a client. " +
-    "Use natural conversational phrasing, confident but warm delivery, clear semantic emphasis, " +
-    "short human pauses, and varied intonation. Avoid trailer voice, radio-advertising cadence, " +
+    "Use bright, natural conversational phrasing, confident but warm delivery, clear semantic emphasis, " +
+    "short organic pauses, medium energetic pace, and varied intonation. Avoid grave/dark delivery, trailer voice, radio-advertising cadence, " +
     "overacting, whispering, monotone rhythm, synthetic sing-song prosody, and exaggerated pauses.",
   neutral:
     "Use clear, natural, neutral speech with human pacing and restrained expression.",
