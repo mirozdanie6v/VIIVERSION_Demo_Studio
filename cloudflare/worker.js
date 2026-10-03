@@ -3,6 +3,7 @@ import { DurableObject } from "cloudflare:workers";
 const PUBLIC_HOST = "demostudio.viiversion.com";
 const CONTAINER_PORT = 8080;
 const INACTIVITY_TIMEOUT_MS = 60 * 60 * 1000;
+const ACTIVE_IMAGE_KEY = "active-container-image";
 
 export class DemoStudioContainer extends DurableObject {
   constructor(ctx, env) {
@@ -33,11 +34,27 @@ export class DemoStudioContainer extends DurableObject {
     return this.ctx.container.getTcpPort(CONTAINER_PORT).fetch(forwarded);
   }
 
+  async ensureCurrentImage(container) {
+    const desiredImage = container.images.app;
+    const activeImage = await this.ctx.storage.get(ACTIVE_IMAGE_KEY);
+
+    if (container.running && activeImage !== desiredImage) {
+      await container.destroy(
+        "Replacing stale Demo Studio container image",
+      );
+      await this.ctx.storage.delete(ACTIVE_IMAGE_KEY);
+    }
+
+    return desiredImage;
+  }
+
   async startAndWaitForPort() {
     const container = this.ctx.container;
     if (!container) {
       throw new Error("Cloudflare Container binding is unavailable.");
     }
+
+    const desiredImage = await this.ensureCurrentImage(container);
 
     if (!container.running) {
       const env = {
@@ -69,7 +86,7 @@ export class DemoStudioContainer extends DurableObject {
       }
 
       container.start({
-        image: container.images.app,
+        image: desiredImage,
         instance: "standard-1",
         enableInternet: true,
         env,
@@ -88,7 +105,11 @@ export class DemoStudioContainer extends DurableObject {
         });
         await response.body?.cancel();
 
-        if (response.ok) return;
+        if (response.ok) {
+          await this.ctx.storage.put(ACTIVE_IMAGE_KEY, desiredImage);
+          return;
+        }
+
         lastError = new Error("Health check returned " + response.status);
       } catch (error) {
         lastError = error;
