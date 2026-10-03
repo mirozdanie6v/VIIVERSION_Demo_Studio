@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { readFile, writeFile } from "node:fs/promises";
+import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import type {
   VoiceProvider,
@@ -17,6 +17,20 @@ function modelKeys(locale: string): string[] {
 
 function resolveModel(env: NodeJS.ProcessEnv, locale: string): string | undefined {
   return modelKeys(locale).map((key) => env[key]).find(Boolean);
+}
+
+async function runCommand(
+  executable: string,
+  args: string[],
+): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const child = spawn(executable, args, { stdio: ["ignore", "ignore", "inherit"] });
+    child.once("error", reject);
+    child.once("exit", (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(`${executable} exited with code ${code ?? "unknown"}`));
+    });
+  });
 }
 
 async function runPiper(
@@ -71,7 +85,17 @@ export class PiperVoiceProvider implements VoiceProvider {
     await runPiper(executable, model, directed.directedText, wavPath);
 
     if (wavPath !== request.outputPath) {
-      await writeFile(request.outputPath, await readFile(wavPath));
+      const ffmpeg = env.FFMPEG_PATH ?? "ffmpeg";
+      await runCommand(ffmpeg, [
+        "-y",
+        "-i",
+        wavPath,
+        "-c:a",
+        "libmp3lame",
+        "-b:a",
+        "192k",
+        request.outputPath,
+      ]);
     }
 
     return {
