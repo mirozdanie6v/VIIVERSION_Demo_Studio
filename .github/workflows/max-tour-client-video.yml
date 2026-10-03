@@ -5,6 +5,11 @@ on:
     branches: [main]
     paths:
       - 'examples/max-tour-client.json'
+      - 'src/editor-brain.ts'
+      - 'src/editor-critic.ts'
+      - 'src/music-brain.ts'
+      - 'src/caption-brain.ts'
+      - 'src/render.ts'
       - '.github/workflows/max-tour-client-video.yml'
   workflow_dispatch:
 
@@ -93,6 +98,30 @@ jobs:
       - name: Render client MP4
         run: |
           npm run render --             --run "${{ steps.run.outputs.dir }}"             --preset 9:16             --brand "VIIVERSION"             --title "MAX TOUR · клиентский путь"             --cta "Так может выглядеть ваше приложение"
+
+      - name: Verify Editor Brain affected the client edit
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_dir="${{ steps.run.outputs.dir }}"
+          test -s "${run_dir}/editor_brain.json"
+          test -s "${run_dir}/editor_critic.json"
+          test -s "${run_dir}/music_brain.json"
+          test -s "${run_dir}/captions.json"
+          test -s "${run_dir}/scenes.json"
+          jq -e '
+            .version == "editor-brain-v1"
+            and .qualityGate.passed == true
+            and .qualityGate.checks.sourceOverlapFree == true
+            and (.scenes | length) >= 2
+            and (.qualityGate.metrics.editedDurationSeconds < .qualityGate.metrics.sourceDurationSeconds)
+          ' "${run_dir}/editor_brain.json" >/dev/null
+          jq -e '.version == "editor-critic-v1" and .passed == true' "${run_dir}/editor_critic.json" >/dev/null
+          jq -e '
+            .editorBrainVersion == "editor-brain-v1"
+            and (.scenes | length) >= 2
+            and (.editedDurationSeconds < .sourceDurationSeconds)
+          ' "${run_dir}/scenes.json" >/dev/null
 
       - name: Upload client video
         uses: actions/upload-artifact@v4
