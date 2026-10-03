@@ -8,6 +8,103 @@ const INTERNAL_TOKEN_KEY = "internal-storage-token";
 const GENERATION_DAILY_LIMIT = 10;
 const INSPECTION_DAILY_LIMIT = 30;
 
+function staticPage(title, body) {
+  const html = `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>${title} · VIIVERSION Demo Studio</title>
+  <style>
+    :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
+    body { margin: 0; background: #090b10; color: #f5f7fb; }
+    main { max-width: 820px; margin: 0 auto; padding: 72px 28px 96px; }
+    a { color: #b7c9ff; }
+    h1 { font-size: clamp(38px, 7vw, 72px); line-height: .98; margin: 18px 0 28px; }
+    h2 { margin-top: 38px; }
+    p, li { color: #c9ced8; line-height: 1.65; }
+    .eyebrow { letter-spacing: .16em; text-transform: uppercase; color: #8f98aa; font-size: 12px; }
+    .card { margin-top: 34px; padding: 22px 24px; border: 1px solid #282d38; border-radius: 18px; background: #11151d; }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="eyebrow">VIIVERSION · Demo Studio</div>
+    ${body}
+  </main>
+</body>
+</html>`;
+
+  return new Response(html, {
+    headers: {
+      "Content-Type": "text/html; charset=utf-8",
+      "Cache-Control": "public, max-age=300",
+      "X-Content-Type-Options": "nosniff",
+    },
+  });
+}
+
+function publicStaticResponse(request) {
+  if (request.method !== "GET" && request.method !== "HEAD") return undefined;
+  const url = new URL(request.url);
+
+  if (url.pathname === "/") {
+    return staticPage(
+      "Web app presentation videos",
+      `<h1>Turn web apps into polished demo videos.</h1>
+<p>VIIVERSION Demo Studio inspects a web interface, records an authorized walkthrough, and renders a presentation-ready MP4 with motion, captions, branding, and multiple aspect ratios.</p>
+<div class="card"><strong>MCP endpoint</strong><p><code>https://demostudio.viiversion.com/mcp</code></p></div>
+<p><a href="/privacy">Privacy</a> · <a href="/terms">Terms</a></p>`,
+    );
+  }
+
+  if (url.pathname === "/privacy") {
+    return staticPage(
+      "Privacy Policy",
+      `<h1>Privacy Policy</h1>
+<p>Effective October 3, 2026.</p>
+<h2>What Demo Studio processes</h2>
+<p>When you create a demonstration, the service processes the target URL, the demo scenario or goal, relevant interface information collected from the target application, and the browser recording needed to render the requested video.</p>
+<h2>Storage and retention</h2>
+<p>Working files are created inside the rendering environment while a job runs. Completed job metadata and the final MP4 may be stored in private Cloudflare R2 storage for up to 7 days so the result can be retrieved. The service automatically expires these stored artifacts after the retention period.</p>
+<h2>Credentials and sensitive data</h2>
+<p>Externally generated scenarios are blocked from referencing server environment variables. Users should avoid placing passwords, private keys, access tokens, payment data, or other sensitive information in demo scenarios. Only applications the user is authorized to access should be inspected or recorded.</p>
+<h2>Service providers</h2>
+<p>Cloudflare infrastructure is used to run the service and store temporary result artifacts. Optional server-generated AI narration or server-side AI planning may use configured AI providers when those features are enabled.</p>
+<h2>Use of data</h2>
+<p>VIIVERSION does not sell Demo Studio user data or use submitted demo content for advertising targeting.</p>
+<h2>Operational information</h2>
+<p>Operational logs may contain request metadata, status codes, performance information, and error messages needed to operate and secure the service.</p>
+<h2>Contact</h2>
+<p>Questions about this policy can be directed to VIIVERSION through <a href="https://viiversion.com">viiversion.com</a>.</p>`,
+    );
+  }
+
+  if (url.pathname === "/terms") {
+    return staticPage(
+      "Terms of Service",
+      `<h1>Terms of Service</h1>
+<p>Effective October 3, 2026.</p>
+<h2>Authorized use</h2>
+<p>You may use Demo Studio only with websites and applications you are authorized to inspect, access, and record. You are responsible for the actions included in a demo scenario and for complying with applicable law and third-party terms.</p>
+<h2>Consequential actions</h2>
+<p>Demo Studio is designed primarily for presentation and test workflows. Avoid real purchases, payments, bookings, destructive changes, account deletion, irreversible submissions, or other consequential actions unless you intentionally configured an authorized test environment for that purpose.</p>
+<h2>Service limits</h2>
+<p>The service may apply rate limits, daily generation limits, inspection limits, file-retention limits, and other safeguards to protect availability and control abusive or excessive use.</p>
+<h2>Generated outputs</h2>
+<p>Generated videos are provided as-is. You are responsible for reviewing the output before publishing or distributing it and for ensuring you have rights to the recorded interface, trademarks, images, text, and other material appearing in the video.</p>
+<h2>Retention</h2>
+<p>Generated artifacts are temporary and may be automatically deleted after 7 days. Keep your own copy of any output you need to retain.</p>
+<h2>Changes and availability</h2>
+<p>VIIVERSION may update the service, these terms, usage limits, or supported features as the product evolves.</p>
+<h2>Contact</h2>
+<p>Questions about these terms can be directed to VIIVERSION through <a href="https://viiversion.com">viiversion.com</a>.</p>`,
+    );
+  }
+
+  return undefined;
+}
+
 function bearerToken(request) {
   const header = request.headers.get("authorization") ?? "";
   const match = header.match(/^Bearer\s+(.+)$/i);
@@ -406,6 +503,8 @@ export class DemoStudioContainer extends DurableObject {
 
 export default {
   fetch(request, env) {
+    const staticResponse = publicStaticResponse(request);
+    if (staticResponse) return staticResponse;
     return env.DEMO_STUDIO.getByName("primary").fetch(request);
   },
 };
