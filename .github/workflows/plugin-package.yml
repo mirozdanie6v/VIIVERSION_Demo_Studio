@@ -1,0 +1,71 @@
+name: Plugin Package
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'plugin/**'
+      - '.github/workflows/plugin-package.yml'
+  pull_request:
+    paths:
+      - 'plugin/**'
+      - '.github/workflows/plugin-package.yml'
+  workflow_dispatch:
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate JSON manifests
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -e '.name == "viiversion-demo-studio"' plugin/plugin.json >/dev/null
+          jq -e '.version | test("^[0-9]+\\.[0-9]+\\.[0-9]+$")' plugin/plugin.json >/dev/null
+          jq -e '.mcpServers.demo_studio.type == "streamable-http"' plugin/mcp.json >/dev/null
+          jq -e '.mcpServers.demo_studio.url == "https://demostudio.viiversion.com/mcp"' plugin/mcp.json >/dev/null
+
+      - name: Validate skill
+        shell: bash
+        run: |
+          set -euo pipefail
+          skill=plugin/skills/create-demo-video/SKILL.md
+          test -f "${skill}"
+          head -n 1 "${skill}" | grep -Fx -- '---'
+          grep -Fx 'name: create-demo-video' "${skill}"
+          grep -F 'description:' "${skill}"
+
+      - name: Validate package layout
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f plugin/plugin.json
+          test -f plugin/mcp.json
+          test -d plugin/skills
+          test ! -e plugin/.env
+          if grep -RIE '(sk-[A-Za-z0-9_-]{16,}|BEGIN (RSA|OPENSSH|EC) PRIVATE KEY)' plugin; then
+            echo "Potential secret detected in plugin package"
+            exit 1
+          fi
+
+      - name: Build ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          (
+            cd plugin
+            zip -r ../dist/viiversion-demo-studio-plugin.zip               plugin.json               mcp.json               skills
+          )
+          unzip -l dist/viiversion-demo-studio-plugin.zip
+          unzip -p dist/viiversion-demo-studio-plugin.zip plugin.json | jq -e . >/dev/null
+
+      - name: Upload plugin ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: viiversion-demo-studio-plugin
+          path: dist/viiversion-demo-studio-plugin.zip
+          if-no-files-found: error

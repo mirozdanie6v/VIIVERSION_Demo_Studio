@@ -1,0 +1,39 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "viiversion-demo-studio",
+  "version": "0.10.0",
+  "description": "Create polished presentation videos from web applications.",
+  "author": {
+    "name": "VIIVERSION",
+    "url": "https://viiversion.com"
+  },
+  "homepage": "https://demostudio.viiversion.com",
+  "repository": "https://github.com/mirozdanie6v/VIIVERSION_Demo_Studio",
+  "keywords": [
+    "video",
+    "product-demo",
+    "web-app",
+    "presentation",
+    "browser-automation"
+  ],
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "VIIVERSION Demo Studio",
+        "shortDescription": "Turn web apps into demo videos",
+        "longDescription": "Inspect a public web application, plan a concise walkthrough, record browser interactions, and render a polished MP4 presentation with motion, captions, branding, and multiple aspect ratios. The plugin defaults to non-destructive demonstrations and should only interact with applications the user is authorized to access.",
+        "developerName": "VIIVERSION",
+        "category": "Developer Tools",
+        "capabilities": [
+          "Inspect web interfaces",
+          "Create browser walkthroughs",
+          "Render MP4 presentation videos"
+        ],
+        "websiteURL": "https://demostudio.viiversion.com",
+        "privacyPolicyURL": "https://demostudio.viiversion.com/privacy",
+        "termsOfServiceURL": "https://demostudio.viiversion.com/terms"
+      },
+      "onboardingSkill": "./skills/create-demo-video/SKILL.md"
+    }
+  }
+}

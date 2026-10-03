@@ -1,0 +1,9 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+  "mcpServers": {
+    "demo_studio": {
+      "type": "streamable-http",
+      "url": "https://demostudio.viiversion.com/mcp"
+    }
+  }
+}
