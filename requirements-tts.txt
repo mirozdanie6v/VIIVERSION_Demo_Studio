@@ -1,5 +1,2 @@
-# Optional local/free TTS dependencies.
-# Install one engine or both:
-#   pip install -r requirements-tts.txt
+# Default free/local TTS engine. CPU-friendly and suitable for ordinary render workers.
 supertonic
-chatterbox-tts
