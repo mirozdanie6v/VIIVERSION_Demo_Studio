@@ -213,9 +213,7 @@ export function semanticStep(
   }
 
   if (step.narration?.trim()) {
-    if (shotIntent !== "continuity_action") {
-      shotIntent = "continuity_speech";
-    }
+    shotIntent = "continuity_speech";
     importance = Math.max(importance, 0.6);
   }
 
