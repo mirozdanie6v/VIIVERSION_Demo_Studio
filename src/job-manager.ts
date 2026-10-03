@@ -64,6 +64,54 @@ function narrationFor(scenario: DemoScenario): string {
     .join(" ");
 }
 
+
+async function persistFinalArtifact(
+  jobId: string,
+  artifactPath: string,
+): Promise<boolean> {
+  const baseUrl = process.env.DEMO_STUDIO_ARTIFACT_UPLOAD_URL?.replace(/\/$/, "");
+  const token = process.env.DEMO_STUDIO_ARTIFACT_UPLOAD_TOKEN;
+
+  if (!baseUrl || !token) return false;
+
+  const body = await readFile(artifactPath);
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      const response = await fetch(baseUrl + "/" + jobId, {
+        method: "PUT",
+        headers: {
+          Authorization: "Bearer " + token,
+          "Content-Type": "video/mp4",
+          "Content-Length": String(body.byteLength),
+        },
+        body,
+        signal: AbortSignal.timeout(60_000),
+      });
+
+      if (response.ok) return true;
+
+      lastError = new Error(
+        "Artifact persistence failed (" +
+          response.status +
+          "): " +
+          (await response.text()),
+      );
+    } catch (error) {
+      lastError = error;
+    }
+
+    if (attempt < 3) {
+      await new Promise((resolve) => setTimeout(resolve, attempt * 750));
+    }
+  }
+
+  throw lastError instanceof Error
+    ? lastError
+    : new Error("Artifact persistence failed.");
+}
+
 export class DemoJobManager {
   private readonly jobs = new Map<string, DemoJob>();
   private readonly queue: string[] = [];
@@ -298,11 +346,14 @@ export class DemoJobManager {
         cta: job.request.cta,
       });
 
+      const persisted = await persistFinalArtifact(job.id, artifactPath);
       const completedAt = new Date().toISOString();
       await this.update(job, {
         status: "completed",
         progress: 100,
-        message: "Presentation video is ready.",
+        message: persisted
+          ? "Presentation video is ready and durably stored."
+          : "Presentation video is ready.",
         artifactPath,
         completedAt,
       });
