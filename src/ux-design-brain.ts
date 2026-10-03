@@ -137,6 +137,13 @@ async function inspectPage(
   const viewport = VIEWPORTS[kind];
   await page.setViewportSize(viewport);
 
+  // tsx/esbuild may preserve helper calls for named functions inside
+  // Playwright page.evaluate. Define the tiny helper in every document so
+  // browser-side evaluation remains self-contained after navigation.
+  await page.addInitScript(
+    "globalThis.__name = globalThis.__name || ((target) => target);",
+  );
+
   const consoleErrors: string[] = [];
   const failedRequests: string[] = [];
   const externalOrigins = new Set<string>();
