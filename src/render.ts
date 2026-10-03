@@ -8,6 +8,8 @@ import {
 import { buildEditorBrainPlan } from "./editor-brain.js";
 import { reviewEditorPlan } from "./editor-critic.js";
 import { alignScenesToBeatGrid } from "./music-brain.js";
+import { resolvePresentationDesign } from "./presentation-design-brain.js";
+import type { DesignContract, UxPreflight } from "./ux-design-brain.js";
 import type {
   EditScene,
   SceneManifest,
@@ -22,6 +24,8 @@ export type RenderOptions = {
   preset?: RenderPreset;
   captions?: boolean;
   captionsFilePath?: string;
+  designContractPath?: string;
+  uxPreflightPath?: string;
   voiceoverPath?: string;
   musicPath?: string;
   musicVolume?: number;
@@ -177,6 +181,52 @@ export async function renderRun(options: RenderOptions): Promise<string> {
       path.join(runDir, `final-${preset.replace(":", "x")}.mp4`),
   );
 
+  let designContract: DesignContract | undefined;
+  let uxPreflight: UxPreflight | undefined;
+
+  if (options.designContractPath) {
+    designContract = JSON.parse(
+      await readFile(path.resolve(options.designContractPath), "utf8"),
+    ) as DesignContract;
+  }
+  if (options.uxPreflightPath) {
+    uxPreflight = JSON.parse(
+      await readFile(path.resolve(options.uxPreflightPath), "utf8"),
+    ) as UxPreflight;
+  }
+
+  const visualCritic = resolvePresentationDesign(
+    manifest.timeline,
+    preset,
+    designContract,
+    {
+      preflightStatus: uxPreflight?.status,
+      revisionLimit: 2,
+    },
+  );
+
+  await Promise.all([
+    writeFile(
+      path.join(runDir, "overlay_plan.json"),
+      JSON.stringify(visualCritic.plan, null, 2) + "\n",
+      "utf8",
+    ),
+    writeFile(
+      path.join(runDir, "visual_critic.json"),
+      JSON.stringify(visualCritic, null, 2) + "\n",
+      "utf8",
+    ),
+  ]);
+
+  if (visualCritic.status === "BLOCKED") {
+    throw new Error(
+      "Visual Critic blocked render: " +
+        visualCritic.findings
+          .map((finding) => finding.message)
+          .join(" "),
+    );
+  }
+
   const editorBrain = buildEditorBrainPlan(manifest);
   if (!editorBrain.qualityGate.passed) {
     throw new Error(
@@ -286,12 +336,30 @@ export async function renderRun(options: RenderOptions): Promise<string> {
 
   const filterParts = buildMainVideoFilters(width, height, scenes);
   const mainDecor: string[] = [];
-  const captionStyle = captionPlan.safeZone;
+  const captionPlacement = visualCritic.plan.captionPlacement;
+  const captionStyle = {
+    ...captionPlan.safeZone,
+    alignment: captionPlacement === "top" ? 8 : 2,
+    marginV:
+      preset === "9:16"
+        ? 96
+        : Math.round(height * visualCritic.plan.captionBandRatio * 0.2),
+    marginH: Math.round(
+      width * visualCritic.plan.horizontalMarginRatio,
+    ),
+  };
 
   if (preset === "9:16") {
+    const bandHeight = Math.round(
+      height * visualCritic.plan.captionBandRatio,
+    );
+    const bandY =
+      captionPlacement === "top"
+        ? 72
+        : height - bandHeight - 72;
     mainDecor.push(
-      "drawbox=x=0:y=72:w=1080:h=238:color=0x0B111C@0.98:t=fill",
-      "drawbox=x=0:y=309:w=1080:h=1:color=white@0.10:t=fill",
+      `drawbox=x=0:y=${bandY}:w=${width}:h=${bandHeight}:color=0x0B111C@0.98:t=fill`,
+      `drawbox=x=0:y=${captionPlacement === "top" ? bandY + bandHeight : bandY - 1}:w=${width}:h=1:color=white@0.10:t=fill`,
     );
   }
 
@@ -304,12 +372,18 @@ export async function renderRun(options: RenderOptions): Promise<string> {
   const brandLabel = options.brandLabel ?? "VIIVERSION";
   if (brandLabel) {
     const brandSize = preset === "9:16" ? 20 : 28;
-    const brandX = preset === "9:16" ? 42 : 42;
-    const brandY = preset === "9:16" ? 28 : 34;
+    const brandMarginX = preset === "9:16" ? 42 : 42;
+    const brandMarginY = preset === "9:16" ? 28 : 34;
+    const corner = visualCritic.plan.brandCorner;
+    const brandX = corner.endsWith("left")
+      ? String(brandMarginX)
+      : `w-tw-${brandMarginX}`;
+    const brandY = corner.startsWith("top")
+      ? String(brandMarginY)
+      : `h-th-${brandMarginY}`;
+
     mainDecor.push(
-      preset === "9:16"
-        ? `drawtext=font='DejaVu Sans':text='${escapeDrawText(brandLabel)}':fontcolor=white@0.78:fontsize=${brandSize}:x=${brandX}:y=${brandY},drawbox=x=42:y=62:w=996:h=1:color=white@0.13:t=fill`
-        : `drawtext=font='DejaVu Sans':text='${escapeDrawText(brandLabel)}':fontcolor=white@0.92:fontsize=${brandSize}:x=w-tw-${brandX}:y=${brandY}:box=1:boxcolor=black@0.28:boxborderw=7`,
+      `drawtext=font='DejaVu Sans':text='${escapeDrawText(brandLabel)}':fontcolor=white@0.86:fontsize=${brandSize}:x=${brandX}:y=${brandY}:box=1:boxcolor=black@0.24:boxborderw=7`,
     );
   }
 
