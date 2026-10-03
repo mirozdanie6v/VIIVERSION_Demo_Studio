@@ -84,8 +84,10 @@ jobs:
         shell: bash
         run: |
           run_dir="${{ steps.run.outputs.dir }}"
-          cat "${run_dir}/narration.txt" | piper             --model ru_RU-dmitri-medium             --output_file "${run_dir}/voiceover-raw.wav"
-          ffmpeg -y -i "${run_dir}/voiceover-raw.wav"             -af "highpass=f=70,lowpass=f=14500,acompressor=threshold=-18dB:ratio=2.2:attack=18:release=180,atempo=1.02,loudnorm=I=-16:TP=-1.5:LRA=8"             -c:a libmp3lame -b:a 192k "${run_dir}/voiceover.mp3"
+          mkdir -p "${run_dir}/voices"
+          python3 -m piper.download_voices --download-dir "${run_dir}/voices" ru_RU-dmitri-medium
+          cat "${run_dir}/narration.txt" | piper --model "${run_dir}/voices/ru_RU-dmitri-medium.onnx" --output_file "${run_dir}/voiceover-raw.wav"
+          ffmpeg -y -i "${run_dir}/voiceover-raw.wav" -af "highpass=f=70,lowpass=f=14500,acompressor=threshold=-18dB:ratio=2.2:attack=18:release=180,atempo=1.02,loudnorm=I=-16:TP=-1.5:LRA=8" -c:a libmp3lame -b:a 192k "${run_dir}/voiceover.mp3"
 
       - name: Generate procedural premium background music
         shell: bash
