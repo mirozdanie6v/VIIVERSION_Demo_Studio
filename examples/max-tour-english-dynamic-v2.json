@@ -219,18 +219,18 @@
       "action": "hover",
       "target": {
         "by": "css",
-        "value": "h2:has-text(\"Dalat Premium Tour\"):visible, h3:has-text(\"Dalat Premium Tour\"):visible, h2:has-text(\"Dalat Premium\"):visible, h3:has-text(\"Dalat Premium\"):visible, h2:has-text(\"Экскурсия в Далат «Премиум»\"):visible, h3:has-text(\"Экскурсия в Далат «Премиум»\"):visible"
+        "value": ".px-site-tour-grid .px-site-tour-card:first-child, .px-tour-grid .px-tour-card:first-child"
       },
       "pauseAfterMs": 4200,
-      "label": "Focus Dalat Premium"
+      "label": "Focus first recommended tour"
     },
     {
       "action": "click",
       "target": {
         "by": "css",
-        "value": "h2:has-text(\"Dalat Premium Tour\"):visible, h3:has-text(\"Dalat Premium Tour\"):visible, h2:has-text(\"Dalat Premium\"):visible, h3:has-text(\"Dalat Premium\"):visible, h2:has-text(\"Экскурсия в Далат «Премиум»\"):visible, h3:has-text(\"Экскурсия в Далат «Премиум»\"):visible"
+        "value": ".px-site-tour-grid .px-site-tour-card:first-child, .px-tour-grid .px-tour-card:first-child"
       },
-      "label": "Open Dalat Premium"
+      "label": "Open recommended tour"
     },
     {
       "action": "wait",
