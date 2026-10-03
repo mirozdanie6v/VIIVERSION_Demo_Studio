@@ -1,5 +1,5 @@
 import { inspectApplication, type ApplicationSnapshot } from "./inspector.js";
-import { parseScenario } from "./scenario.js";
+import { assertNoEnvironmentReferences, parseScenario } from "./scenario.js";
 import type { DemoScenario, Viewport } from "./types.js";
 
 const PLAN_SCHEMA = {
@@ -173,6 +173,7 @@ export async function planDemo(
     clickRipple: { enabled: true },
   };
 
+  assertNoEnvironmentReferences(raw);
   const scenario = parseScenario(raw);
   return {
     scenario,

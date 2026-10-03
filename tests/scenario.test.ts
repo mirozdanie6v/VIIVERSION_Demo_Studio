@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { interpolate, parseScenario, resolveUrl, ScenarioValidationError } from "../src/scenario.js";
+import { assertNoEnvironmentReferences, interpolate, parseScenario, resolveUrl, ScenarioValidationError } from "../src/scenario.js";
 
 test("parses a valid scenario", () => {
   const scenario = parseScenario({
@@ -39,4 +39,22 @@ test("interpolates scenario and environment variables", () => {
 
 test("resolves relative URLs against baseUrl", () => {
   assert.equal(resolveUrl("/catalog", "https://demo.viiversion.com/app"), "https://demo.viiversion.com/catalog");
+});
+
+
+test("rejects environment references in externally generated scenarios", () => {
+  assert.throws(
+    () =>
+      assertNoEnvironmentReferences({
+        name: "Unsafe",
+        steps: [
+          {
+            action: "fill",
+            target: { by: "role", value: "textbox", name: "Email" },
+            value: "{{env.PRIVATE_VALUE}}",
+          },
+        ],
+      }),
+    /Environment references are not allowed/,
+  );
 });

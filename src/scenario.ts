@@ -278,6 +278,15 @@ export function parseScenario(input: unknown): DemoScenario {
   return input as unknown as DemoScenario;
 }
 
+export function assertNoEnvironmentReferences(value: unknown): void {
+  const source = JSON.stringify(value);
+  if (/\{\{env\.[A-Za-z_][A-Za-z0-9_]*\}\}/.test(source)) {
+    throw new Error(
+      "Environment references are not allowed in externally generated scenarios.",
+    );
+  }
+}
+
 export function interpolate(
   value: string,
   variables: Record<string, string> = {},
