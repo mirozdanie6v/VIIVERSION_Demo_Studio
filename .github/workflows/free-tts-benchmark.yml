@@ -1,0 +1,160 @@
+name: Free TTS Benchmark
+
+on:
+  push:
+    branches:
+      - experiment/free-tts-benchmark
+    paths:
+      - '.github/workflows/free-tts-benchmark.yml'
+      - 'scripts/hf_tts.py'
+      - 'src/voice-provider-huggingface.ts'
+      - 'src/voice-router.ts'
+      - 'examples/max-tour-russian-premium.json'
+
+jobs:
+  supertonic:
+    name: Supertonic 3 · Russian MAX TOUR
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Demo Studio
+        run: npm install
+
+      - name: Install media tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Install Supertonic 3
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install supertonic
+
+      - name: Build shared MAX TOUR sample
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const scenario = JSON.parse(fs.readFileSync('examples/max-tour-russian-premium.json', 'utf8'));
+          const step = scenario.steps.find(s => s.voiceText && s.voiceText.includes('Макс Тур превращает'));
+          if (!step) throw new Error('MAX TOUR benchmark narration not found');
+          fs.writeFileSync('benchmark-text.txt', step.voiceText.trim() + '\n');
+          NODE
+          cat benchmark-text.txt
+
+      - name: Generate Supertonic sample through Demo Studio Voice Engine
+        env:
+          HF_TTS_ENABLED: '1'
+          HF_TTS_ENGINE: supertonic
+          HF_TTS_VOICE: M1
+          HF_TTS_PYTHON: python
+        run: |
+          npm run voice -- \
+            --locale ru-RU \
+            --text-file benchmark-text.txt \
+            --out benchmark-supertonic.mp3 \
+            --provider huggingface
+          ffmpeg -y -i benchmark-supertonic.mp3 \
+            -af "loudnorm=I=-16:TP=-1.5:LRA=7" \
+            -c:a libmp3lame -b:a 192k benchmark-supertonic-normalized.mp3
+          ffprobe -v error -show_entries format=duration -of default=nw=1 benchmark-supertonic-normalized.mp3 > benchmark-supertonic-duration.txt
+          cat benchmark-supertonic-duration.txt
+
+      - name: Upload Supertonic sample
+        uses: actions/upload-artifact@v4
+        with:
+          name: free-tts-supertonic-ru
+          path: |
+            benchmark-text.txt
+            benchmark-supertonic.mp3
+            benchmark-supertonic-normalized.mp3
+            benchmark-supertonic.mp3.voice.json
+            benchmark-supertonic-duration.txt
+          if-no-files-found: error
+
+  chatterbox:
+    name: Chatterbox V3 · Russian MAX TOUR
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Demo Studio
+        run: npm install
+
+      - name: Install media tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Prepare Python packaging
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install "numpy<2"
+
+      - name: Install Chatterbox V3
+        run: python -m pip install chatterbox-tts
+
+      - name: Build shared MAX TOUR sample
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const scenario = JSON.parse(fs.readFileSync('examples/max-tour-russian-premium.json', 'utf8'));
+          const step = scenario.steps.find(s => s.voiceText && s.voiceText.includes('Макс Тур превращает'));
+          if (!step) throw new Error('MAX TOUR benchmark narration not found');
+          fs.writeFileSync('benchmark-text.txt', step.voiceText.trim() + '\n');
+          NODE
+          cat benchmark-text.txt
+
+      - name: Generate Chatterbox V3 sample through Demo Studio Voice Engine
+        env:
+          HF_TTS_ENABLED: '1'
+          HF_TTS_ENGINE: chatterbox
+          HF_TTS_DEVICE: cpu
+          HF_TTS_PYTHON: python
+        run: |
+          npm run voice -- \
+            --locale ru-RU \
+            --text-file benchmark-text.txt \
+            --out benchmark-chatterbox.mp3 \
+            --provider huggingface
+          ffmpeg -y -i benchmark-chatterbox.mp3 \
+            -af "loudnorm=I=-16:TP=-1.5:LRA=7" \
+            -c:a libmp3lame -b:a 192k benchmark-chatterbox-normalized.mp3
+          ffprobe -v error -show_entries format=duration -of default=nw=1 benchmark-chatterbox-normalized.mp3 > benchmark-chatterbox-duration.txt
+          cat benchmark-chatterbox-duration.txt
+
+      - name: Upload Chatterbox sample
+        uses: actions/upload-artifact@v4
+        with:
+          name: free-tts-chatterbox-ru
+          path: |
+            benchmark-text.txt
+            benchmark-chatterbox.mp3
+            benchmark-chatterbox-normalized.mp3
+            benchmark-chatterbox.mp3.voice.json
+            benchmark-chatterbox-duration.txt
+          if-no-files-found: error
