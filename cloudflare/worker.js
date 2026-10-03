@@ -80,6 +80,24 @@ function publicStaticResponse(request) {
     );
   }
 
+  if (url.pathname === "/support") {
+    return staticPage(
+      "Support",
+      `<h1>Support</h1>
+<p>VIIVERSION Demo Studio creates presentation videos from authorized web applications.</p>
+<h2>Before reporting a problem</h2>
+<ul>
+  <li>Confirm the target URL is publicly reachable over HTTPS.</li>
+  <li>Use a non-destructive test flow.</li>
+  <li>Keep the job ID if a generation fails or remains incomplete.</li>
+</ul>
+<h2>Support</h2>
+<p>For product and review support, contact VIIVERSION through <a href="https://viiversion.com">viiversion.com</a> and include “Demo Studio” plus the relevant job ID when available.</p>
+<h2>Service status</h2>
+<p>The production health endpoint is <a href="/health">/health</a>.</p>`,
+    );
+  }
+
   if (url.pathname === "/terms") {
     return staticPage(
       "Terms of Service",
@@ -502,7 +520,35 @@ export class DemoStudioContainer extends DurableObject {
 }
 
 export default {
-  fetch(request, env) {
+  async fetch(request, env) {
+    const url = new URL(request.url);
+
+    if (
+      (request.method === "GET" || request.method === "HEAD") &&
+      url.pathname === "/review/demo.mp4"
+    ) {
+      const object = await env.DEMO_STUDIO_ARTIFACTS.get(
+        "review/plugin-walkthrough.mp4",
+      );
+
+      if (!object) {
+        return new Response("Review demo is not available yet.", {
+          status: 404,
+          headers: { "Content-Type": "text/plain; charset=utf-8" },
+        });
+      }
+
+      return new Response(request.method === "HEAD" ? null : object.body, {
+        status: 200,
+        headers: {
+          "Content-Type": "video/mp4",
+          "Content-Length": String(object.size),
+          "Cache-Control": "public, max-age=3600",
+          ETag: object.httpEtag,
+        },
+      });
+    }
+
     const staticResponse = publicStaticResponse(request);
     if (staticResponse) return staticResponse;
     return env.DEMO_STUDIO.getByName("primary").fetch(request);

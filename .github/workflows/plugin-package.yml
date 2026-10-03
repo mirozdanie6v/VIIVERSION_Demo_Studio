@@ -27,6 +27,10 @@ jobs:
           jq -e '.version | test("^[0-9]+\\.[0-9]+\\.[0-9]+$")' plugin/plugin.json >/dev/null
           jq -e '.mcpServers.demo_studio.type == "streamable-http"' plugin/mcp.json >/dev/null
           jq -e '.mcpServers.demo_studio.url == "https://demostudio.viiversion.com/mcp"' plugin/mcp.json >/dev/null
+          jq -e '.extensions["com.openai"].interface.supportURL == "https://demostudio.viiversion.com/support"' plugin/plugin.json >/dev/null
+          jq -e '.extensions["com.openai"].review.test_cases.positive | length == 5' plugin/plugin.json >/dev/null
+          jq -e '.extensions["com.openai"].review.test_cases.negative | length == 3' plugin/plugin.json >/dev/null
+          jq -e '.extensions["com.openai"].review.demo_recording_url == "https://demostudio.viiversion.com/review/demo.mp4"' plugin/plugin.json >/dev/null
 
       - name: Validate skill
         shell: bash
@@ -45,6 +49,10 @@ jobs:
           test -f plugin/plugin.json
           test -f plugin/mcp.json
           test -d plugin/skills
+          test -f plugin/assets/logo.svg
+          test -f plugin/assets/composer-icon.svg
+          grep -Eq '<svg[^>]+(width="512" height="512"|viewBox="0 0 512 512")' plugin/assets/logo.svg
+          grep -Eq '<svg[^>]+(width="512" height="512"|viewBox="0 0 512 512")' plugin/assets/composer-icon.svg
           test ! -e plugin/.env
           if grep -RIE '(sk-[A-Za-z0-9_-]{16,}|BEGIN (RSA|OPENSSH|EC) PRIVATE KEY)' plugin; then
             echo "Potential secret detected in plugin package"

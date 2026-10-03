@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">VIIVERSION Demo Studio</title>
+  <desc id="desc">Geometric VII monogram on a dark rounded square.</desc>
+  <defs>
+    <linearGradient id="bg" x1="48" y1="32" x2="464" y2="480" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#20283A"/>
+      <stop offset="0.52" stop-color="#0D1119"/>
+      <stop offset="1" stop-color="#07090D"/>
+    </linearGradient>
+    <linearGradient id="mark" x1="128" y1="132" x2="390" y2="390" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="0.55" stop-color="#C9D5FF"/>
+      <stop offset="1" stop-color="#8DA9FF"/>
+    </linearGradient>
+  </defs>
+  <rect x="16" y="16" width="480" height="480" rx="112" fill="url(#bg)"/>
+  <rect x="16.5" y="16.5" width="479" height="479" rx="111.5" fill="none" stroke="#FFFFFF" stroke-opacity=".12"/>
+  <path d="M111 139h58l69 176 69-176h58L266 383h-56L111 139Z" fill="url(#mark)"/>
+  <rect x="337" y="139" width="27" height="117" rx="13.5" fill="#FFFFFF" fill-opacity=".92"/>
+  <rect x="377" y="139" width="27" height="117" rx="13.5" fill="#FFFFFF" fill-opacity=".58"/>
+</svg>
