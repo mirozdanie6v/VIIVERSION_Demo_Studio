@@ -158,3 +158,67 @@ test("technical waits do not collapse setup into proof", () => {
   assert.equal(plan.qualityGate.checks.sourceOverlapFree, true);
   assert.ok(plan.scenes[1].sourceStart >= plan.scenes[0].sourceEnd);
 });
+
+
+test("compresses long unlabeled technical waits but preserves content holds", () => {
+  const plan = buildEditorBrainPlan({
+    scenario: {
+      name: "Paced demo",
+      steps: [
+        { action: "click", label: "Open product" },
+        { action: "wait", ms: 1800 },
+        { action: "scroll", y: 400, label: "Show details" },
+        {
+          action: "wait",
+          ms: 1200,
+          label: "Let the viewer read",
+          narration: "Key details remain visible long enough to understand.",
+        },
+      ],
+    },
+    timeline: [
+      {
+        index: 0,
+        label: "Open product",
+        action: "click",
+        startedAt: "2026-10-03T00:00:00.000Z",
+        finishedAt: "2026-10-03T00:00:00.300Z",
+        success: true,
+      },
+      {
+        index: 1,
+        label: "wait #2",
+        action: "wait",
+        startedAt: "2026-10-03T00:00:00.300Z",
+        finishedAt: "2026-10-03T00:00:02.100Z",
+        success: true,
+      },
+      {
+        index: 2,
+        label: "Show details",
+        action: "scroll",
+        startedAt: "2026-10-03T00:00:02.100Z",
+        finishedAt: "2026-10-03T00:00:02.500Z",
+        success: true,
+      },
+      {
+        index: 3,
+        label: "Let the viewer read",
+        action: "wait",
+        startedAt: "2026-10-03T00:00:02.500Z",
+        finishedAt: "2026-10-03T00:00:03.700Z",
+        success: true,
+      },
+    ],
+    startedAt: "2026-10-03T00:00:00.000Z",
+    finishedAt: "2026-10-03T00:00:03.700Z",
+  });
+
+  assert.equal(plan.qualityGate.passed, true);
+  assert.ok(
+    plan.qualityGate.metrics.editedDurationSeconds <=
+      plan.qualityGate.metrics.sourceDurationSeconds - 0.8,
+  );
+  assert.ok(plan.scenes[0].sourceEnd <= 0.9);
+  assert.ok(plan.scenes.at(-1)?.stepIndexes.includes(3));
+});

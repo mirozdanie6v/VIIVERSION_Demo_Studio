@@ -197,7 +197,7 @@ export function semanticStep(
     case "wait":
       sceneType = "transition";
       shotIntent = "atmosphere";
-      importance = 0.08;
+      importance = text.trim() ? 0.5 : 0.08;
       continuity = "reaction_to_previous";
       break;
     default:
@@ -308,9 +308,20 @@ function makeCandidates(
 
       if (!isReaction) break;
 
-      const nextEnd =
-        secondsBetween(manifest.startedAt, next.finishedAt) +
-        tailFor(nextSemantic);
+      const nextStartedAt = secondsBetween(
+        manifest.startedAt,
+        next.startedAt,
+      );
+      const nextFinishedAt = secondsBetween(
+        manifest.startedAt,
+        next.finishedAt,
+      );
+      const technicalTransition =
+        nextSemantic.sceneType === "transition" &&
+        nextSemantic.importance <= 0.1;
+      const nextEnd = technicalTransition
+        ? Math.min(nextFinishedAt, nextStartedAt + 0.42) + 0.12
+        : nextFinishedAt + tailFor(nextSemantic);
 
       sourceEnd = Math.min(duration, Math.max(sourceEnd, nextEnd));
       stepIndexes.push(next.index);
