@@ -13,7 +13,7 @@ export type CaptionPlan = {
   version: "caption-brain-v1";
   cues: CaptionCue[];
   safeZone: {
-    alignment: 2;
+    alignment: number;
     fontSize: number;
     marginV: number;
     marginH: number;
@@ -90,10 +90,10 @@ function sourceToOutput(
 function safeZoneFor(preset: CaptionPreset): CaptionPlan["safeZone"] {
   if (preset === "9:16") {
     return {
-      alignment: 2,
-      fontSize: 20,
-      marginV: 120,
-      marginH: 62,
+      alignment: 8,
+      fontSize: 28,
+      marginV: 78,
+      marginH: 84,
       outline: 0,
     };
   }
