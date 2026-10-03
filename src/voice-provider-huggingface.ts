@@ -56,11 +56,12 @@ async function run(
   executable: string,
   args: string[],
   stdin: string,
+  env: NodeJS.ProcessEnv = process.env,
 ): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     const child = spawn(executable, args, {
       stdio: ["pipe", "ignore", "pipe"],
-      env: process.env,
+      env: { ...process.env, ...env },
     });
     let stderr = "";
     child.stderr.on("data", (chunk) => {
@@ -163,7 +164,7 @@ export class HuggingFaceVoiceProvider implements VoiceProvider {
       args.push("--model", request.model);
     }
 
-    await run(python, args, directed.directedText);
+    await run(python, args, directed.directedText, env);
 
     if (wavPath !== request.outputPath) {
       await transcode(wavPath, request.outputPath, env.FFMPEG_PATH ?? "ffmpeg");
