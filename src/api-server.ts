@@ -4,6 +4,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { toNodeHandler } from "@modelcontextprotocol/node";
 import { authenticateBearer } from "./auth.js";
 import { assertTrustedHttpRequest } from "./http-security.js";
+import { FAVICON_SVG, LANDING_PAGE } from "./landing.js";
 import type { DemoJobRequest } from "./job-manager.js";
 import { createDemoStudioMcpHandler } from "./mcp-server.js";
 import { buildOpenApiDocument } from "./openapi.js";
@@ -164,11 +165,31 @@ export function createDemoStudioHttpServer(
 
       const pathname = requestPath(request);
 
+      if (request.method === "GET" && pathname === "/") {
+        response.writeHead(200, {
+          "Content-Type": "text/html; charset=utf-8",
+          "Cache-Control": "public, max-age=300",
+          "X-Content-Type-Options": "nosniff",
+        });
+        response.end(LANDING_PAGE);
+        return;
+      }
+
+      if (request.method === "GET" && pathname === "/favicon.svg") {
+        response.writeHead(200, {
+          "Content-Type": "image/svg+xml; charset=utf-8",
+          "Cache-Control": "public, max-age=86400",
+          "X-Content-Type-Options": "nosniff",
+        });
+        response.end(FAVICON_SVG);
+        return;
+      }
+
       if (request.method === "GET" && pathname === "/health") {
         sendJson(response, 200, {
           ok: true,
           service: "viiversion-demo-studio",
-          version: "0.10.0",
+          version: "0.10.1",
         });
         return;
       }

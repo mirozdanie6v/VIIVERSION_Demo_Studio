@@ -1,6 +1,6 @@
 {
   "name": "viiversion-demo-studio",
-  "version": "0.10.0",
+  "version": "0.10.1",
   "private": true,
   "description": "AI-directed presentation-video generation for web applications",
   "type": "module",

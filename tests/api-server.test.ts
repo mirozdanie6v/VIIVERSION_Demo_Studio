@@ -36,6 +36,21 @@ test("serves health, OpenAPI and authenticated job status", { concurrency: false
     const port = (server.address() as AddressInfo).port;
     const base = "http://127.0.0.1:" + port;
 
+    const landing = await fetch(base + "/");
+    assert.equal(landing.status, 200);
+    assert.match(
+      landing.headers.get("content-type") ?? "",
+      /text\/html/,
+    );
+    assert.match(await landing.text(), /VIIVERSION Demo Studio/);
+
+    const favicon = await fetch(base + "/favicon.svg");
+    assert.equal(favicon.status, 200);
+    assert.match(
+      favicon.headers.get("content-type") ?? "",
+      /image\/svg\+xml/,
+    );
+
     const health = await fetch(base + "/health");
     assert.equal(health.status, 200);
     assert.equal((await health.json() as { ok: boolean }).ok, true);
