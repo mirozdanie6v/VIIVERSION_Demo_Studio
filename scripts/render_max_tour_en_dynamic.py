@@ -212,7 +212,7 @@ def main():
             sh(['ffmpeg','-loglevel','error','-y','-loop','1','-i',str(img),'-t',f'{dur:.3f}','-r',str(FPS),'-an','-c:v','libx264','-preset','veryfast','-crf','20','-pix_fmt','yuv420p',str(out)]); last_source=out
         clips.append(out)
 
-    concat=outdir/'concat.txt'; concat.write_text('\n'.join([f"file '{p.as_posix()}'" for p in clips])+'\n')
+    concat=outdir/'concat.txt'; concat.write_text('\n'.join([f"file '{p.name}'" for p in clips])+'\n')
     visual=outdir/'visual.mp4'; sh(['ffmpeg','-loglevel','error','-y','-f','concat','-safe','0','-i',str(concat),'-c','copy',str(visual)])
 
     voice_mix=outdir/'voiceover.mp3'; cmd=['ffmpeg','-loglevel','error','-y']
