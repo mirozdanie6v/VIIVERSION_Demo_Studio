@@ -1,0 +1,342 @@
+{
+  "name": "MAX TOUR — English Full-Screen Dynamic Customer Journey v2",
+  "baseUrl": "https://max-tour.viiversion.com",
+  "viewport": {
+    "width": 430,
+    "height": 932
+  },
+  "defaultPauseMs": 350,
+  "presentation": {
+    "smartZoom": {
+      "scale": 1.24,
+      "mobileScale": 1.18,
+      "transitionMs": 260,
+      "settleMs": 80
+    },
+    "focusRing": {
+      "enabled": true,
+      "color": "rgba(255,255,255,0.46)",
+      "width": 2,
+      "padding": 6
+    },
+    "clickRipple": {
+      "enabled": true,
+      "color": "rgba(255,255,255,0.78)",
+      "size": 54,
+      "durationMs": 320
+    },
+    "localeOverlay": {
+      "language": "en",
+      "replacements": {
+        "Ваш лучший отдых": "Your best holiday",
+        "Выбрать тур": "Choose a tour",
+        "17 найдено": "17 found",
+        "Экскурсия в Далат «Премиум»": "Dalat Premium Tour",
+        "Далат «Премиум»": "Dalat Premium",
+        "Премиум экскурсии": "Premium tours",
+        "Экскурсия в Далат «ВИП»": "Dalat VIP Tour",
+        "Экскурсия в Далат «Стеклянный мост»": "Dalat Glass Bridge Tour",
+        "Экскурсия в провинцию Фуйен": "Phu Yen Province Tour",
+        "Дневная обзорная экскурсия по Нячангу": "Nha Trang City Tour",
+        "Нячанг": "Nha Trang",
+        "Далат": "Dalat",
+        "Фуйен": "Phu Yen",
+        "Дананг": "Da Nang",
+        "Фукуок": "Phu Quoc",
+        "Ханой": "Hanoi",
+        "Главная": "Home",
+        "Экскурсии": "Tours",
+        "Мои поездки": "My trips",
+        "Помощь": "Help",
+        "Выбрать путешествие": "Choose a journey",
+        "Премиум коллекция": "Premium collection",
+        "СОБРАНО ДЛЯ ВАС": "CURATED FOR YOU",
+        "ПРЕМИУМ ВЫБОР": "PREMIUM PICK",
+        "Открыть программу": "Open itinerary",
+        "КОЛЛЕКЦИЯ": "COLLECTION",
+        "Популярные экскурсии": "Popular tours",
+        "Смотреть все": "View all",
+        "Небольшие группы": "Small groups",
+        "Индивидуально": "Private",
+        "Индивидуальный": "Private",
+        "Групповой": "Group",
+        "Забираем из отеля": "Hotel pickup",
+        "Понятная стоимость": "Clear pricing",
+        "О МАРШРУТЕ": "ABOUT THE ROUTE",
+        "День, собранный по деталям": "A day designed around the details",
+        "Сбор": "Pickup",
+        "Возвращение": "Return",
+        "Формат": "Format",
+        "Группа / индивидуально": "Group / private",
+        "ФОТОИСТОРИЯ": "PHOTO STORY",
+        "ПРОГРАММА": "ITINERARY",
+        "По шагам": "Step by step",
+        "УЖЕ ВКЛЮЧЕНО": "INCLUDED",
+        "В поездке": "On the trip",
+        "ДОПОЛНИТЕЛЬНО": "EXTRAS",
+        "ЧТО ВЗЯТЬ": "WHAT TO BRING",
+        "Перед выездом": "Before departure",
+        "Источник программы и условий": "Source of itinerary and terms",
+        "Официальная страница MAX TOUR": "Official MAX TOUR page",
+        "Выбрать формат": "Choose format",
+        "за взрослого": "per adult",
+        "по программе": "per itinerary",
+        "Бронирование экскурсии": "Tour booking",
+        "ТУР И ФОРМАТ": "TOUR & FORMAT",
+        "Что хотите забронировать?": "What would you like to book?",
+        "Экскурсия": "Tour",
+        "Своя компания · выбранная дата · online-оплата": "Private group · selected date · online payment",
+        "Продолжить индивидуально": "Continue privately",
+        "СОСТАВ": "GROUP SIZE",
+        "Кто едет?": "Who is travelling?",
+        "Взрослые": "Adults",
+        "Дети": "Children",
+        "Возраст, лет": "Age",
+        "Выбрать дату": "Choose date",
+        "ДАТА И ТРАНСФЕР": "DATE & TRANSFER",
+        "Когда едем?": "When are you going?",
+        "Желаемая дата": "Preferred date",
+        "Отель": "Hotel",
+        "Трансфер считается автоматически": "Transfer is calculated automatically",
+        "Данные путешественников": "Traveller details",
+        "КОНТАКТ И УЧАСТНИКИ": "CONTACT & TRAVELLERS",
+        "Данные для подтверждения": "Confirmation details",
+        "Ваше имя": "Your name",
+        "Телефон": "Phone",
+        "ФИО": "Full name",
+        "Дата рождения": "Date of birth",
+        "Получить итоговую стоимость": "Get total price",
+        "ОПЛАТА": "PAYMENT",
+        "Перенос и отмена": "Changes & cancellation",
+        "ПОДТВЕРЖДЕНИЕ": "CONFIRMATION",
+        "Оплачено": "Paid",
+        "Осталось": "Remaining",
+        "Открыть поездку": "Open trip",
+        "ИИ-Помощник": "AI Assistant",
+        "AI-консультант": "AI Consultant",
+        "Задайте вопрос": "Ask a question",
+        "Напишите вопрос": "Type your question",
+        "Отправить": "Send",
+        "от": "from",
+        "Подробнее": "Details",
+        "Насыщенная однодневная программа по Далату с кофейными плантациями, Глиняной деревней, пагодой Линь Фуок, Датанла и канатной дорогой.": "A full-day Dalat itinerary with coffee plantations, the Clay Village, Linh Phuoc Pagoda, Datanla Waterfall and a cable car.",
+        "5:00–5:30 сбор участников из отелей": "5:00–5:30 hotel pickup",
+        "около 20:00 возвращение в Нячанг": "around 20:00 return to Nha Trang",
+        "Кофейные плантации": "Coffee plantations",
+        "Горный перевал": "Mountain pass",
+        "«Глиняная деревня»": "Clay Village",
+        "Пагода Линь Фуок": "Linh Phuoc Pagoda",
+        "Обед в ресторане": "Restaurant lunch",
+        "Водопад Датанла": "Datanla Waterfall",
+        "Кофейная ферма и зоопарк": "Coffee farm & zoo",
+        "Канатная дорога": "Cable car",
+        "Обед": "Lunch",
+        "Все входные билеты и канатная дорога": "All entrance tickets and cable car",
+        "Профессиональные русскоязычные гиды": "Professional guides",
+        "Трансфер на микроавтобусе": "Minibus transfer",
+        "Комфортная группа 14–20 человек": "Comfortable group of 14–20",
+        "Бутылка воды каждому участнику": "Bottle of water for each guest",
+        "Одежда с закрытыми коленями и плечами": "Clothing covering knees and shoulders",
+        "Завтрак": "Breakfast",
+        "Кофта": "Light jacket",
+        "Дождевик": "Raincoat",
+        "Удобная обувь": "Comfortable shoes",
+        "Деньги на мелкие расходы и сувениры в донгах": "Cash in VND for small expenses and souvenirs"
+      }
+    }
+  },
+  "steps": [
+    {
+      "action": "goto",
+      "url": "/",
+      "label": "Open MAX TOUR"
+    },
+    {
+      "action": "waitFor",
+      "target": {
+        "by": "text",
+        "value": "Your best holiday",
+        "exact": false
+      },
+      "state": "visible",
+      "timeoutMs": 20000
+    },
+    {
+      "action": "hover",
+      "target": {
+        "by": "role",
+        "value": "button",
+        "name": "Choose a tour",
+        "exact": true
+      },
+      "pauseAfterMs": 4500,
+      "label": "Focus first action"
+    },
+    {
+      "action": "click",
+      "target": {
+        "by": "role",
+        "value": "button",
+        "name": "Choose a tour",
+        "exact": true
+      },
+      "label": "Open catalog"
+    },
+    {
+      "action": "waitFor",
+      "target": {
+        "by": "text",
+        "value": "17 found",
+        "exact": true
+      },
+      "state": "visible",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "hover",
+      "target": {
+        "by": "text",
+        "value": "17 found",
+        "exact": true
+      },
+      "pauseAfterMs": 4200,
+      "label": "Catalog value"
+    },
+    {
+      "action": "scroll",
+      "y": 420,
+      "label": "Browse catalog",
+      "pauseAfterMs": 500
+    },
+    {
+      "action": "hover",
+      "target": {
+        "by": "css",
+        "value": "h3:has-text(\"Dalat Premium\"):visible"
+      },
+      "pauseAfterMs": 4200,
+      "label": "Focus Dalat Premium"
+    },
+    {
+      "action": "click",
+      "target": {
+        "by": "css",
+        "value": "h3:has-text(\"Dalat Premium\"):visible"
+      },
+      "label": "Open Dalat Premium"
+    },
+    {
+      "action": "wait",
+      "ms": 5000,
+      "label": "Tour details"
+    },
+    {
+      "action": "scroll",
+      "y": 500,
+      "label": "Explore details",
+      "pauseAfterMs": 500
+    },
+    {
+      "action": "wait",
+      "ms": 4400,
+      "label": "Tour proof"
+    },
+    {
+      "action": "hover",
+      "target": {
+        "by": "css",
+        "value": "button:has-text(\"Private\"):visible"
+      },
+      "pauseAfterMs": 3000,
+      "label": "Private option"
+    },
+    {
+      "action": "click",
+      "target": {
+        "by": "css",
+        "value": "button:has-text(\"Private\"):visible"
+      },
+      "label": "Choose private"
+    },
+    {
+      "action": "wait",
+      "ms": 4200,
+      "label": "Booking path"
+    },
+    {
+      "action": "scroll",
+      "y": 420,
+      "label": "Booking form",
+      "pauseAfterMs": 500
+    },
+    {
+      "action": "wait",
+      "ms": 5200,
+      "label": "Structured booking"
+    },
+    {
+      "action": "click",
+      "target": {
+        "by": "role",
+        "value": "button",
+        "name": "AI Assistant",
+        "exact": true
+      },
+      "label": "Open AI assistant"
+    },
+    {
+      "action": "waitFor",
+      "target": {
+        "by": "css",
+        "value": "input:visible, textarea:visible, [contenteditable=\"true\"]:visible"
+      },
+      "state": "visible",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "fill",
+      "target": {
+        "by": "css",
+        "value": "input:visible, textarea:visible, [contenteditable=\"true\"]:visible"
+      },
+      "value": "Which excursion would you recommend for a couple who wants nature, beautiful views, and a relaxed full-day trip? Please answer in English.",
+      "pauseAfterMs": 2200,
+      "label": "Ask for an excursion recommendation"
+    },
+    {
+      "action": "click",
+      "target": {
+        "by": "css",
+        "value": "button:has-text(\"→\"):visible"
+      },
+      "label": "Send AI question",
+      "pauseAfterMs": 500
+    },
+    {
+      "action": "wait",
+      "ms": 9000,
+      "label": "Show AI recommendation"
+    },
+    {
+      "action": "hover",
+      "target": {
+        "by": "text",
+        "value": "AI Consultant",
+        "exact": false
+      },
+      "pauseAfterMs": 3200,
+      "label": "AI proof"
+    },
+    {
+      "action": "hover",
+      "target": {
+        "by": "role",
+        "value": "button",
+        "name": "AI Assistant",
+        "exact": true
+      },
+      "pauseAfterMs": 2200,
+      "label": "Closing beat"
+    }
+  ]
+}
