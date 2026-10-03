@@ -1,0 +1,76 @@
+name: Voice Casting
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'examples/voice-cast.json'
+      - 'src/voice-*.ts'
+      - 'package.json'
+      - '.github/workflows/voice-casting.yml'
+
+concurrency:
+  group: voice-casting
+  cancel-in-progress: true
+
+jobs:
+  cast:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      OPENAI_TTS_MODEL: ${{ vars.OPENAI_TTS_MODEL || 'gpt-4o-mini-tts' }}
+      ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+      ELEVENLABS_VOICE_ID: ${{ secrets.ELEVENLABS_VOICE_ID }}
+      ELEVENLABS_VOICE_ID_RU: ${{ secrets.ELEVENLABS_VOICE_ID_RU }}
+      ELEVENLABS_VOICE_ID_RU_RU: ${{ secrets.ELEVENLABS_VOICE_ID_RU_RU }}
+      ELEVENLABS_VOICE_ID_EN: ${{ secrets.ELEVENLABS_VOICE_ID_EN }}
+      ELEVENLABS_VOICE_ID_EN_US: ${{ secrets.ELEVENLABS_VOICE_ID_EN_US }}
+      ELEVENLABS_VOICE_ID_VI: ${{ secrets.ELEVENLABS_VOICE_ID_VI }}
+      ELEVENLABS_VOICE_ID_VI_VN: ${{ secrets.ELEVENLABS_VOICE_ID_VI_VN }}
+      ELEVENLABS_MODEL: ${{ vars.ELEVENLABS_MODEL || 'eleven_v3' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Report configured premium providers
+        shell: bash
+        run: |
+          node - <<'NODE'
+          console.log(JSON.stringify({
+            openaiConfigured: Boolean(process.env.OPENAI_API_KEY),
+            elevenLabsKeyConfigured: Boolean(process.env.ELEVENLABS_API_KEY),
+            elevenLabsGlobalVoiceConfigured: Boolean(process.env.ELEVENLABS_VOICE_ID),
+            elevenLabsRussianVoiceConfigured: Boolean(process.env.ELEVENLABS_VOICE_ID_RU_RU || process.env.ELEVENLABS_VOICE_ID_RU),
+            elevenLabsEnglishVoiceConfigured: Boolean(process.env.ELEVENLABS_VOICE_ID_EN_US || process.env.ELEVENLABS_VOICE_ID_EN),
+            elevenLabsVietnameseVoiceConfigured: Boolean(process.env.ELEVENLABS_VOICE_ID_VI_VN || process.env.ELEVENLABS_VOICE_ID_VI)
+          }, null, 2));
+          NODE
+
+      - name: Generate multilingual voice cast
+        run: |
+          npm run voice:cast -- \
+            --config examples/voice-cast.json \
+            --out artifacts/voice-cast
+
+      - name: Show casting report
+        if: always()
+        run: cat artifacts/voice-cast/voice-cast-report.json || true
+
+      - name: Upload voice cast
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: multilingual-voice-cast
+          path: artifacts/voice-cast/
+          if-no-files-found: error
