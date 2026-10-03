@@ -53,6 +53,7 @@ export type EditorQualityGate = {
     finalMeaningfulStepCovered: boolean;
     durationsValid: boolean;
     chronological: boolean;
+    sourceOverlapFree: boolean;
   };
   metrics: {
     meaningfulSteps: number;
@@ -402,6 +403,45 @@ function mergeCandidates(
   return merged;
 }
 
+function resolveSourceOverlaps(
+  scenes: Array<Omit<EditorScene, "outputStart" | "outputEnd">>,
+): Array<Omit<EditorScene, "outputStart" | "outputEnd">> {
+  const resolved = scenes.map((scene) => ({ ...scene }));
+
+  for (let index = 1; index < resolved.length; index += 1) {
+    const previous = resolved[index - 1];
+    const current = resolved[index];
+
+    if (current.sourceStart >= previous.sourceEnd) continue;
+
+    const minimumSceneSeconds = 0.25;
+    const lowerBoundary = previous.sourceStart + minimumSceneSeconds;
+    const upperBoundary = current.sourceEnd - minimumSceneSeconds;
+    const preferredBoundary =
+      current.importance >= previous.importance
+        ? current.sourceStart
+        : previous.sourceEnd;
+
+    let boundary: number;
+    if (lowerBoundary <= upperBoundary) {
+      boundary = Math.min(
+        upperBoundary,
+        Math.max(lowerBoundary, preferredBoundary),
+      );
+    } else {
+      boundary =
+        (Math.max(previous.sourceStart, current.sourceStart) +
+          Math.min(previous.sourceEnd, current.sourceEnd)) /
+        2;
+    }
+
+    previous.sourceEnd = boundary;
+    current.sourceStart = boundary;
+  }
+
+  return resolved;
+}
+
 function assignOutputTimes(
   scenes: Array<Omit<EditorScene, "outputStart" | "outputEnd">>,
 ): EditorScene[] {
@@ -459,6 +499,12 @@ function qualityGate(
     return duration >= 0.2 && duration <= 8.5;
   });
 
+  const sourceOverlapFree = scenes.every(
+    (scene, index) =>
+      index === 0 ||
+      scene.sourceStart >= scenes[index - 1].sourceEnd - 0.001,
+  );
+
   const checks = {
     scenesExist: scenes.length > 0,
     importantCoverage: weightedCoverage >= 0.95,
@@ -466,6 +512,7 @@ function qualityGate(
       !finalMeaningful || coveredIndexes.has(finalMeaningful.index),
     durationsValid,
     chronological,
+    sourceOverlapFree,
   };
 
   return {
@@ -492,7 +539,9 @@ export function buildEditorBrainPlan(
   );
 
   let scenes = assignOutputTimes(
-    mergeCandidates(makeCandidates(manifest, semantics)),
+    resolveSourceOverlaps(
+      mergeCandidates(makeCandidates(manifest, semantics)),
+    ),
   );
 
   if (scenes.length === 0 && sourceDuration(manifest) > 0) {
