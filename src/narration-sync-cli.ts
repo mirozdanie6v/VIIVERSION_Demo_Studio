@@ -40,6 +40,23 @@ function srtTime(seconds: number): string {
   );
 }
 
+function assTime(seconds: number): string {
+  const cs = Math.max(0, Math.round(seconds * 100));
+  const hours = Math.floor(cs / 360000);
+  const minutes = Math.floor((cs % 360000) / 6000);
+  const secs = Math.floor((cs % 6000) / 100);
+  const centis = cs % 100;
+  return `${hours}:${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}.${String(centis).padStart(2, "0")}`;
+}
+
+function escapeAssText(value: string): string {
+  return value
+    .replace(/\\/g, "\\\\")
+    .replace(/\{/g, "\\{")
+    .replace(/\}/g, "\\}")
+    .replace(/\n/g, "\\N");
+}
+
 async function run(executable: string, args: string[]): Promise<string> {
   return await new Promise<string>((resolve, reject) => {
     const child = spawn(executable, args, { stdio: ["ignore", "pipe", "inherit"] });
@@ -197,6 +214,31 @@ async function main() {
     .join("\n\n") + (cues.length ? "\n" : "");
 
   await writeFile(path.join(runDir, "synced-captions.srt"), srt, "utf8");
+
+  const assHeader = [
+    "[Script Info]",
+    "ScriptType: v4.00+",
+    "PlayResX: 1080",
+    "PlayResY: 1920",
+    "ScaledBorderAndShadow: yes",
+    "WrapStyle: 2",
+    "",
+    "[V4+ Styles]",
+    "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
+    "Style: Default,DejaVu Sans,28,&H00FFFFFF,&H00FFFFFF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0,0,8,84,84,112,1",
+    "",
+    "[Events]",
+    "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
+  ];
+  const assEvents = cues.map((cue) =>
+    `Dialogue: 0,${assTime(cue.start)},${assTime(cue.end)},Default,,0,0,0,,${escapeAssText(cue.text)}`
+  );
+  await writeFile(
+    path.join(runDir, "synced-captions.ass"),
+    [...assHeader, ...assEvents, ""].join("\n"),
+    "utf8",
+  );
+
   await writeFile(
     path.join(runDir, "narration-sync.json"),
     JSON.stringify(
@@ -219,7 +261,7 @@ async function main() {
 
   console.log(JSON.stringify({
     voiceover: path.join(runDir, "voiceover.mp3"),
-    captions: path.join(runDir, "synced-captions.srt"),
+    captions: path.join(runDir, "synced-captions.ass"),
     contentDuration,
     finalNarrationEnd,
     segmentCount: planned.length,
