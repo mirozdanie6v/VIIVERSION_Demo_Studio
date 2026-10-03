@@ -231,3 +231,30 @@ Use `--no-intro`, `--no-outro`, or `--no-captions` when a clean raw export is ne
 - MCP Streamable HTTP: `/mcp`
 
 Production deployments should use the Docker image, a real `DEMO_STUDIO_API_KEY`, public Host/Origin allowlists, and `ALLOW_PRIVATE_TARGETS=false`.
+
+
+## Editor Brain v0.11
+
+The production renderer now uses the VIIVERSION editorial pipeline rather than direct timeline trimming:
+
+```
+Capture → Semantic Timeline → Editor Brain → Critic → Music Brain → Subtitle Brain → FFmpeg
+```
+
+Editor Brain ports the semantic-v5 editorial model from `mirozdanie6v/EventVideoHumanEditor`: scene type, shot intent, importance, continuity, story note, edit strategy and a quality gate.
+
+Each render writes inspectable editorial artifacts:
+
+- `editor_brain.json`
+- `editor_critic.json`
+- `music_brain.json`
+- `captions.json`
+- `scenes.json`
+
+For music-aware cuts, pass a known BPM:
+
+```bash
+npm run render -- --run artifacts/<run-id> --music track.mp3 --music-bpm 120
+```
+
+See `docs/EDITOR_BRAIN_REUSE.md` for the reuse map.
