@@ -353,8 +353,16 @@ function mergeCandidates(
     const continuityDriven =
       previous.shotIntents.includes("continuity_action") &&
       candidate.shotIntents.includes("continuity_action");
+    const narrativeBoundary =
+      previous.narrativeRole !== candidate.narrativeRole &&
+      (
+        previous.narrativeRole === "setup" ||
+        candidate.narrativeRole === "proof" ||
+        candidate.narrativeRole === "conversion"
+      );
 
     if (
+      !narrativeBoundary &&
       combinedDuration <= 6.5 &&
       (gap <= 0.22 || (gap <= 0.48 && continuityDriven))
     ) {
