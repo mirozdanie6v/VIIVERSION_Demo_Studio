@@ -92,7 +92,7 @@ function safeZoneFor(preset: CaptionPreset): CaptionPlan["safeZone"] {
     return {
       alignment: 8,
       fontSize: 28,
-      marginV: 78,
+      marginV: 96,
       marginH: 84,
       outline: 0,
     };
