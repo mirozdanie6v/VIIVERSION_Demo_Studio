@@ -240,5 +240,18 @@
       "narration": "Хотите такой же путь для своих клиентов? Напишите нам — адаптируем решение под ваш бизнес.",
       "voiceText": "Хотите такой же путь для своих клиентов? Напишите нам — адаптируем решение под ваш бизнес."
     }
-  ]
+  ],
+  "voice": {
+    "locale": "ru-RU",
+    "provider": "auto",
+    "persona": "viiversion-presenter",
+    "instructions": "Bright, warm, confident premium product-demo presenter. Natural human rhythm, medium energetic pace, short organic pauses, no grave tone, no trailer voice, no radio-announcer cadence.",
+    "requireNativeTimings": false,
+    "pronunciation": {
+      "MAX TOUR": "Макс Тур",
+      "AI-консультант": "эй-ай консультант",
+      "Далат": "Дала́т",
+      "Премиум": "Пре́миум"
+    }
+  }
 }
