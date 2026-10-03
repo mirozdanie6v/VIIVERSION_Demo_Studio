@@ -198,7 +198,7 @@ jobs:
             --run "${{ steps.run.outputs.dir }}" \
             --preset 9:16 \
             --voiceover "${{ steps.run.outputs.dir }}/voiceover.mp3" \
-            --captions-file "${{ steps.run.outputs.dir }}/synced-captions.srt" \
+            --captions-file "${{ steps.run.outputs.dir }}/synced-captions.ass" \
             --music "${{ steps.run.outputs.dir }}/background.m4a" \
             --music-volume 0.10 \
             --music-bpm 96 \
@@ -211,12 +211,15 @@ jobs:
 
       - name: Verify final video
         shell: bash
+        env:
+          RUN_DIR: ${{ steps.run.outputs.dir }}
         run: |
           set -euo pipefail
           run_dir="${{ steps.run.outputs.dir }}"
           test -s "${run_dir}/voiceover.mp3"
           test -s "${run_dir}/narration-sync.json"
           test -s "${run_dir}/synced-captions.srt"
+          test -s "${run_dir}/synced-captions.ass"
           test -s "${run_dir}/captions.srt"
           test -s "${run_dir}/background.m4a"
           test -s "${run_dir}/final-9x16.mp4"
@@ -225,8 +228,25 @@ jobs:
           awk -v d="$duration" 'BEGIN { exit !(d >= 85 && d <= 240) }'
           echo "FINAL_DURATION=$duration"
 
-          ffmpeg -y -ss 0:00:20 -i "${run_dir}/final-9x16.mp4" -frames:v 1 "${run_dir}/qa-subtitle-zone.png"
-          ffmpeg -y -ss 0:01:25 -i "${run_dir}/final-9x16.mp4" -frames:v 1 "${run_dir}/qa-ai-frame.png" || true
+          subtitle_time=$(python3 - <<'PY'
+import json, os
+p=os.path.join(os.environ["RUN_DIR"],"narration-sync.json")
+d=json.load(open(p))
+s=next(x for x in d["segments"] if x["stepIndex"]==2)
+print(round(s["start"]+min(2.5,s["duration"]/2),3))
+PY
+          )
+          ai_time=$(python3 - <<'PY'
+import json, os
+p=os.path.join(os.environ["RUN_DIR"],"narration-sync.json")
+d=json.load(open(p))
+s=next(x for x in d["segments"] if x["stepIndex"]==21)
+print(round(s["start"]+min(4.0,s["duration"]/2),3))
+PY
+          )
+
+          ffmpeg -y -ss "$subtitle_time" -i "${run_dir}/final-9x16.mp4" -frames:v 1 "${run_dir}/qa-subtitle-zone.png"
+          ffmpeg -y -ss "$ai_time" -i "${run_dir}/final-9x16.mp4" -frames:v 1 "${run_dir}/qa-ai-frame.png"
           ffmpeg -y -sseof -3 -i "${run_dir}/final-9x16.mp4" -frames:v 1 "${run_dir}/qa-outro.png"
 
       - name: Upload final presentation
