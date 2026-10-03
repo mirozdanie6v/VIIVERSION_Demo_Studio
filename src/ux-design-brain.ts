@@ -534,7 +534,9 @@ function preflightStatus(
       mobile.httpStatus < 400 &&
       mobile.consoleErrors.length === 0 &&
       mobile.failedRequests.length === 0,
-    privacySecurity: true,
+    privacySecurity:
+      desktop.externalOrigins.length === 0 &&
+      mobile.externalOrigins.length === 0,
   };
 
   const blocking = findings.some((finding) => finding.severity === "critical");
