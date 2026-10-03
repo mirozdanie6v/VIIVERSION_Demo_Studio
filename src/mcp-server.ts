@@ -15,7 +15,7 @@ export function createDemoStudioMcpHandler(service: DemoStudioService) {
 
     const server = new McpServer({
       name: "viiversion-demo-studio",
-      version: "0.10.1",
+      version: "0.11.0",
     });
 
     server.registerTool(
