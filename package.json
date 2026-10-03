@@ -14,7 +14,8 @@
     "ux-audit": "tsx src/ux-design-cli.ts",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test tests/*.test.ts",
-    "deploy:cloudflare": "wrangler deploy"
+    "deploy:cloudflare": "wrangler deploy",
+    "voice": "tsx src/voice-engine-cli.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/node": "^2.0.0",
