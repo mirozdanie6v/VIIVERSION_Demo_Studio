@@ -28,6 +28,7 @@ export type RenderOptions = {
   musicBeatOffsetSeconds?: number;
   brandLabel?: string;
   cta?: string;
+  ctaSecondary?: string;
   title?: string;
   intro?: boolean;
   outro?: boolean;
@@ -108,10 +109,14 @@ function buildMainVideoFilters(
   scenes: EditScene[],
 ): string[] {
   const filters: string[] = [];
-  const base =
-    `scale=${width}:${height}:force_original_aspect_ratio=decrease,` +
-    `pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2,` +
-    "setsar=1,fps=30,settb=AVTB";
+  const vertical = width < height;
+  const base = vertical
+    ? `scale=900:1480:force_original_aspect_ratio=decrease,` +
+      `pad=${width}:${height}:(ow-iw)/2:330:color=0x070A10,` +
+      "setsar=1,fps=30,settb=AVTB"
+    : `scale=${width}:${height}:force_original_aspect_ratio=decrease,` +
+      `pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:color=0x070A10,` +
+      "setsar=1,fps=30,settb=AVTB";
 
   if (scenes.length === 0) {
     filters.push(`[0:v]${base}[mainraw]`);
@@ -281,11 +286,13 @@ export async function renderRun(options: RenderOptions): Promise<string> {
 
   const brandLabel = options.brandLabel ?? "VIIVERSION";
   if (brandLabel) {
-    const brandSize = preset === "9:16" ? 22 : 28;
-    const brandX = preset === "9:16" ? 22 : 42;
-    const brandY = preset === "9:16" ? 22 : 34;
+    const brandSize = preset === "9:16" ? 20 : 28;
+    const brandX = preset === "9:16" ? 42 : 42;
+    const brandY = preset === "9:16" ? 28 : 34;
     mainDecor.push(
-      `drawtext=font='DejaVu Sans':text='${escapeDrawText(brandLabel)}':fontcolor=white@0.92:fontsize=${brandSize}:x=w-tw-${brandX}:y=${brandY}:box=1:boxcolor=black@0.28:boxborderw=7`,
+      preset === "9:16"
+        ? `drawtext=font='DejaVu Sans':text='${escapeDrawText(brandLabel)}':fontcolor=white@0.78:fontsize=${brandSize}:x=${brandX}:y=${brandY},drawbox=x=42:y=62:w=996:h=1:color=white@0.13:t=fill`
+        : `drawtext=font='DejaVu Sans':text='${escapeDrawText(brandLabel)}':fontcolor=white@0.92:fontsize=${brandSize}:x=w-tw-${brandX}:y=${brandY}:box=1:boxcolor=black@0.28:boxborderw=7`,
     );
   }
 
@@ -317,10 +324,16 @@ export async function renderRun(options: RenderOptions): Promise<string> {
   const finalVideoInputs: string[] = [];
 
   if (introEnabled) {
+    const introBrandSize = preset === "9:16" ? 34 : 42;
+    const introTitleSize = preset === "9:16" ? 54 : 50;
     filterParts.push(
-      `color=c=0x090B10:s=${width}x${height}:r=30:d=${number(introSeconds)},` +
-        `drawtext=font='DejaVu Sans':text='${escapeDrawText(brandLabel)}':fontcolor=white:fontsize=46:x=(w-tw)/2:y=(h-th)/2-34,` +
-        `drawtext=font='DejaVu Sans':text='${escapeDrawText(title)}':fontcolor=white@0.72:fontsize=24:x=(w-tw)/2:y=(h-th)/2+32,` +
+      `color=c=0x070A10:s=${width}x${height}:r=30:d=${number(introSeconds)},` +
+        `drawbox=x=72:y=${Math.round(height * 0.22)}:w=6:h=${Math.round(height * 0.18)}:color=white@0.9:t=fill,` +
+        `drawbox=x=72:y=${Math.round(height * 0.42)}:w=${Math.round(width * 0.55)}:h=2:color=white@0.18:t=fill,` +
+        `drawtext=font='DejaVu Sans':text='${escapeDrawText(brandLabel)}':fontcolor=white@0.72:fontsize=${introBrandSize}:x=96:y=${Math.round(height * 0.20)},` +
+        `drawtext=font='DejaVu Sans':text='${escapeDrawText(title)}':fontcolor=white:fontsize=${introTitleSize}:x=96:y=${Math.round(height * 0.29)},` +
+        `drawtext=font='DejaVu Sans':text='PRODUCT EXPERIENCE':fontcolor=white@0.46:fontsize=22:x=96:y=${Math.round(height * 0.45)},` +
+        `fade=t=in:st=0:d=0.45,fade=t=out:st=${number(Math.max(0, introSeconds - 0.45))}:d=0.45,` +
         "format=yuv420p,settb=AVTB[intro]",
     );
     finalVideoInputs.push("[intro]");
@@ -330,11 +343,17 @@ export async function renderRun(options: RenderOptions): Promise<string> {
 
   if (outroEnabled) {
     const outroText =
-      options.cta ?? "Powered by VIIVERSION Demo Studio";
+      options.cta ?? "Готовы показать такой путь вашим клиентам?";
+    const outroSecondary =
+      options.ctaSecondary ?? "Напишите нам — адаптируем решение под ваш бизнес.";
     filterParts.push(
-      `color=c=0x090B10:s=${width}x${height}:r=30:d=${number(outroSeconds)},` +
-        `drawtext=font='DejaVu Sans':text='${escapeDrawText(brandLabel)}':fontcolor=white:fontsize=44:x=(w-tw)/2:y=(h-th)/2-26,` +
-        `drawtext=font='DejaVu Sans':text='${escapeDrawText(outroText)}':fontcolor=white@0.8:fontsize=24:x=(w-tw)/2:y=(h-th)/2+34,` +
+      `color=c=0x070A10:s=${width}x${height}:r=30:d=${number(outroSeconds)},` +
+        `drawbox=x=72:y=${Math.round(height * 0.24)}:w=6:h=${Math.round(height * 0.24)}:color=white@0.9:t=fill,` +
+        `drawtext=font='DejaVu Sans':text='${escapeDrawText(brandLabel)}':fontcolor=white@0.68:fontsize=30:x=96:y=${Math.round(height * 0.20)},` +
+        `drawtext=font='DejaVu Sans':text='${escapeDrawText(outroText)}':fontcolor=white:fontsize=${preset === "9:16" ? 46 : 42}:x=96:y=${Math.round(height * 0.31)},` +
+        `drawtext=font='DejaVu Sans':text='${escapeDrawText(outroSecondary)}':fontcolor=white@0.72:fontsize=24:x=96:y=${Math.round(height * 0.44)},` +
+        `drawtext=font='DejaVu Sans':text='VIIVERSION.COM':fontcolor=white@0.48:fontsize=20:x=96:y=${Math.round(height * 0.70)},` +
+        `fade=t=in:st=0:d=0.45,fade=t=out:st=${number(Math.max(0, outroSeconds - 0.55))}:d=0.55,` +
         "format=yuv420p,settb=AVTB[outro]",
     );
     finalVideoInputs.push("[outro]");
