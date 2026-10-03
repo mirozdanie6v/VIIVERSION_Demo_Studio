@@ -101,7 +101,7 @@ jobs:
             cat "$txt" | piper --model "$model" --output_file "$raw"
 
             ffmpeg -y -i "$raw" \
-              -af "highpass=f=72,lowpass=f=14000,acompressor=threshold=-19dB:ratio=1.8:attack=22:release=210,loudnorm=I=-16:TP=-1.5:LRA=7" \
+              -af "volume=0.92,highpass=f=72,lowpass=f=10000,acompressor=threshold=-19dB:ratio=1.8:attack=22:release=210,loudnorm=I=-16:TP=-1.5:LRA=7" \
               -c:a libmp3lame -b:a 192k "$out"
           done
 
