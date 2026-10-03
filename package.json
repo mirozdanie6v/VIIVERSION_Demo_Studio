@@ -1,6 +1,6 @@
 {
   "name": "viiversion-demo-studio",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "private": true,
   "description": "AI-directed presentation-video generation for web applications",
   "type": "module",
@@ -12,7 +12,8 @@
     "capture": "tsx src/cli.ts",
     "render": "tsx src/render-cli.ts",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test tests/*.test.ts"
+    "test": "tsx --test tests/*.test.ts",
+    "deploy:cloudflare": "wrangler deploy"
   },
   "dependencies": {
     "@modelcontextprotocol/node": "^2.0.0",
@@ -23,7 +24,8 @@
   "devDependencies": {
     "@types/node": "^24.0.0",
     "tsx": "^4.20.0",
-    "typescript": "^5.9.0"
+    "typescript": "^5.9.0",
+    "wrangler": "^4.136.0"
   },
   "engines": {
     "node": ">=20"
