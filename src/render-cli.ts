@@ -40,9 +40,23 @@ async function main() {
     }
 
     voiceoverPath = path.join(runDir, "voiceover.mp3");
+    const scenarioVoice = manifest.scenario.voice;
     await createVoiceover(narration, voiceoverPath, {
-      voice: arg("--voice"),
-      instructions: arg("--voice-instructions"),
+      locale: arg("--locale") ?? scenarioVoice?.locale ?? "en-US",
+      provider:
+        (arg("--voice-provider") as "auto" | "elevenlabs" | "openai" | "piper" | undefined) ??
+        scenarioVoice?.provider ??
+        "auto",
+      voice: arg("--voice") ?? scenarioVoice?.voiceId,
+      model: arg("--voice-model") ?? scenarioVoice?.model,
+      persona: scenarioVoice?.persona ?? "viiversion-presenter",
+      instructions:
+        arg("--voice-instructions") ??
+        scenarioVoice?.instructions,
+      pronunciation: scenarioVoice?.pronunciation,
+      requireNativeTimings:
+        has("--require-voice-timings") ||
+        scenarioVoice?.requireNativeTimings,
     });
   }
 
