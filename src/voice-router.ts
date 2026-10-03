@@ -101,7 +101,13 @@ export class VoiceRouter {
 
   async synthesize(request: VoiceRequest): Promise<VoiceResult> {
     const decision = this.inspect(request);
-    if (!decision.selected) {
+    const explicit = request.provider && request.provider !== "auto";
+    const ranked = [...decision.candidates]
+      .filter((item) => item.configured && item.localeSupported)
+      .filter((item) => !request.requireNativeTimings || item.nativeTimings)
+      .sort((a, b) => b.score - a.score);
+
+    if (!ranked.length) {
       const summary = decision.candidates
         .map(
           (item) =>
@@ -113,18 +119,26 @@ export class VoiceRouter {
       );
     }
 
-    const provider = this.providers.find(
-      (candidate) => candidate.id === decision.selected,
-    );
-    if (!provider) throw new Error("Voice router selected an unknown provider.");
+    const failures: string[] = [];
 
-    if (request.requireNativeTimings && !provider.nativeTimings) {
-      throw new Error(
-        `Provider ${provider.id} does not supply native timing metadata required for this request.`,
+    for (const candidate of ranked) {
+      const provider = this.providers.find(
+        (item) => item.id === candidate.provider,
       );
+      if (!provider) continue;
+
+      try {
+        return await provider.synthesize(request, this.context);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        failures.push(`${provider.id}: ${message}`);
+        if (explicit) throw error;
+      }
     }
 
-    return provider.synthesize(request, this.context);
+    throw new Error(
+      `All configured voice providers failed for ${request.locale}. ${failures.join(" | ")}`,
+    );
   }
 }
 
