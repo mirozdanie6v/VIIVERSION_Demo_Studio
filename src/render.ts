@@ -349,6 +349,9 @@ export async function renderRun(options: RenderOptions): Promise<string> {
   }
 
   const voiceDelayMs = Math.round(introSeconds * 1000);
+  const contentDurationSeconds = scenes.at(-1)?.outputEnd ?? 0;
+  const finalDurationSeconds =
+    introSeconds + contentDurationSeconds + outroSeconds;
 
   if (voiceIndex !== undefined && musicIndex !== undefined) {
     const volume = options.musicVolume ?? 0.16;
@@ -356,15 +359,16 @@ export async function renderRun(options: RenderOptions): Promise<string> {
       `[${voiceIndex}:a]adelay=${voiceDelayMs}|${voiceDelayMs},apad,asplit=2[voice_sidechain][voice_mix]`,
       `[${musicIndex}:a]volume=${volume}[music]`,
       "[music][voice_sidechain]sidechaincompress=threshold=0.03:ratio=10:attack=20:release=350[ducked]",
-      "[voice_mix][ducked]amix=inputs=2:duration=longest:normalize=0[aout]",
+      "[voice_mix][ducked]amix=inputs=2:duration=longest:normalize=0[mixed]",
+      `[mixed]atrim=duration=${number(finalDurationSeconds)},asetpts=N/SR/TB[aout]`,
     );
   } else if (voiceIndex !== undefined) {
     filterParts.push(
-      `[${voiceIndex}:a]adelay=${voiceDelayMs}|${voiceDelayMs},apad[aout]`,
+      `[${voiceIndex}:a]adelay=${voiceDelayMs}|${voiceDelayMs},apad,atrim=duration=${number(finalDurationSeconds)},asetpts=N/SR/TB[aout]`,
     );
   } else if (musicIndex !== undefined) {
     filterParts.push(
-      `[${musicIndex}:a]volume=${options.musicVolume ?? 0.16}[aout]`,
+      `[${musicIndex}:a]volume=${options.musicVolume ?? 0.16},atrim=duration=${number(finalDurationSeconds)},asetpts=N/SR/TB[aout]`,
     );
   }
 
