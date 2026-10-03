@@ -38,6 +38,7 @@ test("critic trims an overlong scene before render", () => {
         finalMeaningfulStepCovered: true,
         durationsValid: true,
         chronological: true,
+        sourceOverlapFree: true,
       },
       metrics: {
         meaningfulSteps: 1,
