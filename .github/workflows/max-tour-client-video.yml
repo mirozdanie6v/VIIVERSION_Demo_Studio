@@ -1,0 +1,59 @@
+name: MAX TOUR Client Video
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'examples/max-tour-client.json'
+      - '.github/workflows/max-tour-client-video.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: max-tour-client-video
+  cancel-in-progress: true
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Install FFmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Capture MAX TOUR walkthrough
+        env:
+          DEMO_STUDIO_ALLOWED_HOSTS: max-tour.viiversion.com
+          ALLOW_PRIVATE_TARGETS: "false"
+        run: npm run capture -- --scenario examples/max-tour-client.json
+
+      - name: Resolve run directory
+        id: run
+        shell: bash
+        run: echo "dir=$(find artifacts -mindepth 1 -maxdepth 1 -type d | sort | tail -n 1)" >> "$GITHUB_OUTPUT"
+
+      - name: Render client MP4
+        run: |
+          npm run render --             --run "${{ steps.run.outputs.dir }}"             --preset 9:16             --brand "VIIVERSION"             --title "MAX TOUR · клиентский путь"             --cta "Так может выглядеть ваше приложение"
+
+      - name: Upload client video
+        uses: actions/upload-artifact@v4
+        with:
+          name: max-tour-client-video
+          path: artifacts/
+          if-no-files-found: error
