@@ -176,7 +176,7 @@
       "action": "waitFor",
       "target": {
         "by": "css",
-        "value": "[placeholder*=\"Напишите сообщение\"]"
+        "value": "input:visible, textarea:visible, [contenteditable=\"true\"]:visible"
       },
       "state": "visible",
       "timeoutMs": 15000
@@ -185,7 +185,7 @@
       "action": "fill",
       "target": {
         "by": "css",
-        "value": "[placeholder*=\"Напишите сообщение\"]"
+        "value": "input:visible, textarea:visible, [contenteditable=\"true\"]:visible"
       },
       "value": "Ты AI-консультант? Что ты умеешь?",
       "pauseAfterMs": 1700,
@@ -197,23 +197,8 @@
         "by": "css",
         "value": "button:has-text(\"→\"):visible"
       },
-      "label": "Отправляем вопрос",
+      "label": "Отправляем вопрос AI-консультанту",
       "pauseAfterMs": 650
-    },
-    {
-      "action": "wait",
-      "ms": 10500,
-      "narration": "Консультант отвечает в том же интерфейсе, помогает подобрать вариант, объясняет детали и ведёт клиента дальше по пути к бронированию. Это поддержка, которая доступна именно в тот момент, когда возникает вопрос."
-    },
-    {
-      "action": "wait",
-      "ms": 6500,
-      "narration": "Для MAX TOUR это более цельный клиентский опыт, меньше потерянных обращений и более подготовленные заявки для менеджеров."
-    },
-    {
-      "action": "wait",
-      "ms": 6500,
-      "narration": "Хотите такой же путь для своих клиентов? VIIVERSION адаптирует решение под ваши туры, процессы и каналы продаж. Напишите нам — покажем, как это будет работать для вашего бизнеса."
     }
   ]
 }
