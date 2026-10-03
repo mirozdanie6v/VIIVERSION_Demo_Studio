@@ -61,6 +61,23 @@ jobs:
       - name: Render final MP4
         run: npm run render -- --run "${{ steps.run.outputs.dir }}" --preset 16:9 --brand VIIVERSION --cta "Built with VIIVERSION Demo Studio"
 
+      - name: Verify editorial brain artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_dir="${{ steps.run.outputs.dir }}"
+          test -s "${run_dir}/editor_brain.json"
+          test -s "${run_dir}/editor_critic.json"
+          test -s "${run_dir}/music_brain.json"
+          test -s "${run_dir}/captions.json"
+          test -s "${run_dir}/captions.srt"
+          test -s "${run_dir}/scenes.json"
+          jq -e '.version == "editor-brain-v1" and .qualityGate.passed == true' "${run_dir}/editor_brain.json" >/dev/null
+          jq -e '.version == "editor-critic-v1" and .passed == true' "${run_dir}/editor_critic.json" >/dev/null
+          jq -e '.version == "music-brain-v1"' "${run_dir}/music_brain.json" >/dev/null
+          jq -e '.version == "caption-brain-v1" and (.cues | length) > 0' "${run_dir}/captions.json" >/dev/null
+          jq -e '.editorBrainVersion == "editor-brain-v1" and (.scenes | length) > 0' "${run_dir}/scenes.json" >/dev/null
+
       - name: Upload recording artifacts
         uses: actions/upload-artifact@v4
         with:
