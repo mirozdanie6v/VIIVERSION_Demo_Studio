@@ -165,3 +165,12 @@ Do not optimize Demo Studio around one language, one voice, or one vendor.
 New providers implement the `VoiceProvider` interface and participate in routing. New languages should primarily require locale/voice configuration rather than new editing code.
 
 Full product-video rendering should not be used for voice casting. First approve short voice samples, then render the full presentation with the selected voice profile.
+
+
+## Casting lesson: model capability is locale-specific
+
+The 2026-10-03 casting run confirmed that model support must be resolved per locale. In the tested Runway/Eleven speech surface, `eleven_multilingual_v2` rejected Vietnamese (`vi`), while `eleven_v3` successfully generated Vietnamese speech.
+
+Therefore the router must treat provider + model + locale as one capability decision rather than assuming a provider supports every locale with every model.
+
+See `docs/VOICE_CASTING_2026-10-03.md`.
