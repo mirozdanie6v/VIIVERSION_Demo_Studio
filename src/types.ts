@@ -40,6 +40,10 @@ export type PresentationConfig = {
     size?: number;
     durationMs?: number;
   };
+  localeOverlay?: {
+    language: string;
+    replacements: Record<string, string>;
+  };
 };
 
 export type CameraFrame = {
