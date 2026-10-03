@@ -189,7 +189,7 @@ export function createDemoStudioHttpServer(
         sendJson(response, 200, {
           ok: true,
           service: "viiversion-demo-studio",
-          version: "0.10.1",
+          version: "0.11.0",
         });
         return;
       }
