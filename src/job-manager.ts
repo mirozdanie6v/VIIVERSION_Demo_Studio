@@ -63,6 +63,22 @@ function positiveInteger(value: string | undefined, fallback: number): number {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
 }
 
+export function toPublicDemoJob(job: DemoJob): PublicDemoJob {
+  return {
+    id: job.id,
+    status: job.status,
+    progress: job.progress,
+    message: job.message,
+    createdAt: job.createdAt,
+    updatedAt: job.updatedAt,
+    completedAt: job.completedAt,
+    error: job.error,
+    artifactReady: Boolean(
+      job.artifactPath && job.status === "completed",
+    ),
+  };
+}
+
 function narrationFor(scenario: DemoScenario): string {
   return scenario.steps
     .map((step) => step.narration?.trim())
@@ -136,19 +152,7 @@ export class DemoJobManager {
   }
 
   private publicJob(job: DemoJob): PublicDemoJob {
-    return {
-      id: job.id,
-      status: job.status,
-      progress: job.progress,
-      message: job.message,
-      createdAt: job.createdAt,
-      updatedAt: job.updatedAt,
-      completedAt: job.completedAt,
-      error: job.error,
-      artifactReady: Boolean(
-        job.artifactPath && job.status === "completed",
-      ),
-    };
+    return toPublicDemoJob(job);
   }
 
   private async update(
