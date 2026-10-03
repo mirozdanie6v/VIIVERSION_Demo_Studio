@@ -6,6 +6,8 @@ on:
     branches: [main]
     paths:
       - 'examples/max-tour-english-2min.json'
+      - 'src/editor-brain.ts'
+      - 'src/editor-critic.ts'
       - 'src/caption-brain.ts'
       - 'src/render.ts'
       - '.github/workflows/max-tour-english-2min.yml'
