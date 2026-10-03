@@ -65,7 +65,7 @@ function narrationFor(scenario: DemoScenario): string {
 }
 
 
-async function persistFinalArtifact(
+export async function persistFinalArtifact(
   jobId: string,
   artifactPath: string,
 ): Promise<boolean> {
