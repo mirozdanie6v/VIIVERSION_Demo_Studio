@@ -225,8 +225,10 @@ def make_sfx(out,total,section_starts,payment_start,confirm_time):
 def main():
     ap=argparse.ArgumentParser()
     ap.add_argument("--run",required=True)
-    ap.add_argument("--voices",required=True)
-    ap.add_argument("--music",required=True)
+    ap.add_argument("--voices")
+    ap.add_argument("--music")
+    ap.add_argument("--audio-master")
+    ap.add_argument("--timing-report")
     ap.add_argument("--payment-video",required=True)
     ap.add_argument("--out",required=True)
     args=ap.parse_args()
@@ -267,16 +269,30 @@ def main():
       ],src=("Establish booking","Show quote")),
     ]
 
-    voices_dir=Path(args.voices)
-    voice_files=[voices_dir/f"{s['name']}.mp3" for s in sections]
-    durations=[probe(p) for p in voice_files]
     gap=0.10
-    starts_out=[]; cur=0.0
-    for d in durations:
-        starts_out.append(cur); cur+=d+gap
-    content_end=cur-gap
-    outro_dur=6.0
-    total=content_end+outro_dur
+    voice_files=[]
+    if args.audio_master:
+        if not args.timing_report:
+            raise SystemExit("--timing-report is required with --audio-master")
+        prior=json.load(open(args.timing_report))
+        by_name={x["name"]:x for x in prior["sections"]}
+        durations=[float(by_name[s["name"]]["duration"]) for s in sections]
+        starts_out=[float(by_name[s["name"]]["start"]) for s in sections]
+        content_end=float(prior["contentEnd"])
+        outro_dur=float(prior.get("outroDuration",6.0))
+        total=content_end+outro_dur
+    else:
+        if not args.voices or not args.music:
+            raise SystemExit("--voices and --music are required unless --audio-master is supplied")
+        voices_dir=Path(args.voices)
+        voice_files=[voices_dir/f"{s['name']}.mp3" for s in sections]
+        durations=[probe(p) for p in voice_files]
+        starts_out=[]; cur=0.0
+        for d in durations:
+            starts_out.append(cur); cur+=d+gap
+        content_end=cur-gap
+        outro_dur=6.0
+        total=content_end+outro_dur
 
     home_frame=out/"home.png"
     extract_frame(capture,starts_src["Establish home"]+0.25,home_frame)
@@ -323,23 +339,34 @@ def main():
     ass=out/"captions.ass"
     write_ass(ass,sections,starts_out,durations,payment_start,content_end,outro_dur)
 
-    voiceover=out/"voiceover.wav"; build_voiceover(voice_files,starts_out,voiceover)
-    sfx=out/"sound-design.wav"
-    make_sfx(sfx,total,starts_out,payment_start,payment_start+min(5.8,durations[-1]*0.52))
-
     final=out/"MAX_TOUR_Premium_Product_Film_v6_FINAL.mp4"
-    fc=(
-        f"[0:v]ass='{ass.as_posix()}'[v];"
-        f"[1:a]volume=0.115,atrim=duration={total:.3f},asetpts=N/SR/TB[m];"
-        f"[m][2:a]sidechaincompress=threshold=0.035:ratio=9:attack=14:release=300[duck];"
-        f"[duck][2:a][3:a]amix=inputs=3:duration=longest:normalize=0,alimiter=limit=0.95[a]"
-    )
-    sh([
-        "ffmpeg","-loglevel","error","-y","-i",str(visual),"-stream_loop","-1","-i",str(args.music),
-        "-i",str(voiceover),"-i",str(sfx),"-filter_complex",fc,"-map","[v]","-map","[a]",
-        "-t",f"{total:.3f}","-c:v","libx264","-preset","medium","-crf","18","-pix_fmt","yuv420p",
-        "-c:a","aac","-b:a","192k","-movflags","+faststart",str(final)
-    ])
+    if args.audio_master:
+        fc=(
+            f"[0:v]ass='{ass.as_posix()}'[v];"
+            f"[1:a]atrim=duration={total:.3f},asetpts=N/SR/TB,alimiter=limit=0.95[a]"
+        )
+        sh([
+            "ffmpeg","-loglevel","error","-y","-i",str(visual),"-i",str(args.audio_master),
+            "-filter_complex",fc,"-map","[v]","-map","[a]",
+            "-t",f"{total:.3f}","-c:v","libx264","-preset","medium","-crf","18","-pix_fmt","yuv420p",
+            "-c:a","aac","-b:a","192k","-movflags","+faststart",str(final)
+        ])
+    else:
+        voiceover=out/"voiceover.wav"; build_voiceover(voice_files,starts_out,voiceover)
+        sfx=out/"sound-design.wav"
+        make_sfx(sfx,total,starts_out,payment_start,payment_start+min(5.8,durations[-1]*0.52))
+        fc=(
+            f"[0:v]ass='{ass.as_posix()}'[v];"
+            f"[1:a]volume=0.115,atrim=duration={total:.3f},asetpts=N/SR/TB[m];"
+            f"[m][2:a]sidechaincompress=threshold=0.035:ratio=9:attack=14:release=300[duck];"
+            f"[duck][2:a][3:a]amix=inputs=3:duration=longest:normalize=0,alimiter=limit=0.95[a]"
+        )
+        sh([
+            "ffmpeg","-loglevel","error","-y","-i",str(visual),"-stream_loop","-1","-i",str(args.music),
+            "-i",str(voiceover),"-i",str(sfx),"-filter_complex",fc,"-map","[v]","-map","[a]",
+            "-t",f"{total:.3f}","-c:v","libx264","-preset","medium","-crf","18","-pix_fmt","yuv420p",
+            "-c:a","aac","-b:a","192k","-movflags","+faststart",str(final)
+        ])
 
     qa_times=[1.5,starts_out[1]+1.0,starts_out[2]+1.0,starts_out[3]+2.0,starts_out[4]+1.0,payment_start+2.0,content_end+3.0]
     for t in qa_times:
