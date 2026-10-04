@@ -168,9 +168,30 @@ export async function planDemo(
   raw.baseUrl = typeof raw.baseUrl === "string" ? raw.baseUrl : snapshot.url;
   raw.viewport = raw.viewport ?? snapshot.viewport;
   raw.presentation = {
-    smartZoom: { scale: 1.14, mobileScale: 1.04, transitionMs: 320 },
-    focusRing: { enabled: true },
-    clickRipple: { enabled: true },
+    semanticCamera: {
+      enabled: true,
+      establishScale: 1,
+      focusScale: 1.1,
+      mobileFocusScale: 1.1,
+      safeAreaPx: 44,
+      focusTransitionMs: 240,
+      resolveTransitionMs: 300,
+    },
+    smartZoom: { enabled: false },
+    cursor: { enabled: false },
+    focusRing: {
+      enabled: true,
+      color: "rgba(255,166,92,0.28)",
+      width: 1,
+      padding: 5,
+    },
+    clickRipple: { enabled: false },
+    tactilePress: {
+      enabled: true,
+      scale: 0.985,
+      durationMs: 190,
+      glowColor: "rgba(255,151,72,0.30)",
+    },
   };
 
   assertNoEnvironmentReferences(raw);
