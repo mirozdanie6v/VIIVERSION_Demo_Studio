@@ -1,0 +1,43 @@
+name: MAX TOUR Live DOM Diagnostic
+
+on:
+  push:
+    branches:
+      - 'render/max-tour-en-v5-full-journey-20261004'
+    paths:
+      - '.github/workflows/temp-max-tour-live-diagnostic.yml'
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npx playwright install --with-deps chromium
+      - name: Inspect live MAX TOUR DOM
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import { chromium } from 'playwright';
+          const browser = await chromium.launch({headless:true});
+          const page = await browser.newPage({viewport:{width:430,height:932}});
+          await page.goto('https://max-tour.viiversion.com/', {waitUntil:'domcontentloaded', timeout:30000});
+          await page.waitForTimeout(6000);
+          console.log('URL=', page.url());
+          console.log('TITLE=', await page.title());
+          console.log('BODY_TEXT_START');
+          console.log((await page.locator('body').innerText()).slice(0,12000));
+          console.log('BODY_TEXT_END');
+          console.log('BUTTONS=', await page.locator('button').allTextContents());
+          console.log('CLASSES=', await page.locator('[class]').evaluateAll(els => [...new Set(els.flatMap(e => String(e.className||'').split(/\s+/)).filter(Boolean))].slice(0,250)));
+          await page.screenshot({path:'max-tour-live.png',fullPage:false});
+          await browser.close();
+          NODE
+      - uses: actions/upload-artifact@v4
+        with:
+          name: max-tour-live-diagnostic
+          path: max-tour-live.png
