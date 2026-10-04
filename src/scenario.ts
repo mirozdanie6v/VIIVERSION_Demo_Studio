@@ -143,10 +143,26 @@ function validatePresentation(value: unknown, problems: string[]) {
     }
   }
 
+  if (value.semanticCamera !== undefined) {
+    if (!isRecord(value.semanticCamera)) {
+      problems.push("presentation.semanticCamera must be an object.");
+    } else {
+      validateOptionalBoolean(value.semanticCamera.enabled, "presentation.semanticCamera.enabled", problems);
+      validateOptionalNumber(value.semanticCamera.establishScale, "presentation.semanticCamera.establishScale", problems, { min: 1 });
+      validateOptionalNumber(value.semanticCamera.focusScale, "presentation.semanticCamera.focusScale", problems, { min: 1 });
+      validateOptionalNumber(value.semanticCamera.mobileFocusScale, "presentation.semanticCamera.mobileFocusScale", problems, { min: 1 });
+      validateOptionalNumber(value.semanticCamera.maxCropRatio, "presentation.semanticCamera.maxCropRatio", problems, { min: 0 });
+      validateOptionalNumber(value.semanticCamera.safeAreaPx, "presentation.semanticCamera.safeAreaPx", problems, { min: 0 });
+      validateOptionalNumber(value.semanticCamera.focusTransitionMs, "presentation.semanticCamera.focusTransitionMs", problems, { min: 0 });
+      validateOptionalNumber(value.semanticCamera.resolveTransitionMs, "presentation.semanticCamera.resolveTransitionMs", problems, { min: 0 });
+    }
+  }
+
   if (value.cursor !== undefined) {
     if (!isRecord(value.cursor)) {
       problems.push("presentation.cursor must be an object.");
     } else {
+      validateOptionalBoolean(value.cursor.enabled, "presentation.cursor.enabled", problems);
       validateOptionalNumber(value.cursor.size, "presentation.cursor.size", problems, { min: 1 });
       validateOptionalNumber(value.cursor.borderWidth, "presentation.cursor.borderWidth", problems, { min: 0 });
       validateOptionalString(value.cursor.fill, "presentation.cursor.fill", problems);
@@ -174,6 +190,17 @@ function validatePresentation(value: unknown, problems: string[]) {
       validateOptionalNumber(value.clickRipple.size, "presentation.clickRipple.size", problems, { min: 1 });
       validateOptionalNumber(value.clickRipple.durationMs, "presentation.clickRipple.durationMs", problems, { min: 0 });
       validateOptionalString(value.clickRipple.color, "presentation.clickRipple.color", problems);
+    }
+  }
+
+  if (value.tactilePress !== undefined) {
+    if (!isRecord(value.tactilePress)) {
+      problems.push("presentation.tactilePress must be an object.");
+    } else {
+      validateOptionalBoolean(value.tactilePress.enabled, "presentation.tactilePress.enabled", problems);
+      validateOptionalNumber(value.tactilePress.scale, "presentation.tactilePress.scale", problems, { min: 0.8 });
+      validateOptionalNumber(value.tactilePress.durationMs, "presentation.tactilePress.durationMs", problems, { min: 0 });
+      validateOptionalString(value.tactilePress.glowColor, "presentation.tactilePress.glowColor", problems);
     }
   }
 
