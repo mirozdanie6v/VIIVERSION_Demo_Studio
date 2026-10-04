@@ -453,7 +453,7 @@ export class DemoJobManager {
   private retryable(error: unknown): boolean {
     if (error instanceof PermanentJobError) return false;
     const message = error instanceof Error ? error.message : String(error);
-    return !/quota exceeded|invalid or missing bearer|host header|origin is not allowed/i.test(
+    return !/quota exceeded|invalid or missing bearer|host header|origin is not allowed|visual critic blocked|editor brain quality gate failed/i.test(
       message,
     );
   }
@@ -479,6 +479,8 @@ export class DemoJobManager {
           const nextAttempt = job.attempt + 1;
           const backoffSeconds = Math.min(20, 3 * nextAttempt);
 
+          job.attempt = nextAttempt;
+          job.retryReason = reason;
           await this.beginStage(job, {
             status: "retrying",
             stage: "retry_wait",
@@ -494,10 +496,7 @@ export class DemoJobManager {
               ").",
             timeoutSeconds: backoffSeconds + 45,
           });
-          job.attempt = nextAttempt;
-          job.retryReason = reason;
           await this.persistRecovery(job);
-          await this.persist(job);
           await delay(backoffSeconds * 1000);
           continue;
         }
