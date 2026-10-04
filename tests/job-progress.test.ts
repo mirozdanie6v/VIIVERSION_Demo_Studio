@@ -63,5 +63,5 @@ test("status page contains live progress and retry UI", () => {
   assert.match(html, /Generation progress/);
   assert.match(html, /Automatic recovery/);
   assert.match(html, /v1\/jobs/);
-  assert.match(html, /setTimeout\(poll,2000\)/);
+  assert.match(html, /setTimeout\(poll,\s*2000\)/);
 });
