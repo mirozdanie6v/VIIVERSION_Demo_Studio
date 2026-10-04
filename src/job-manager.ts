@@ -136,29 +136,58 @@ function isTerminal(status: DemoJobStatus): boolean {
 }
 
 export function toPublicDemoJob(job: DemoJob): PublicDemoJob {
-  const stageElapsedSeconds = secondsSince(job.stageStartedAt);
-  const heartbeatAgeSeconds = secondsSince(job.heartbeatAt);
+  const stage = job.stage ?? (
+    job.status === "preflighting"
+      ? "preflight"
+      : job.status === "directing"
+        ? "director"
+        : job.status === "capturing"
+          ? "capture"
+          : job.status === "voicing"
+            ? "voiceover"
+            : job.status === "rendering"
+              ? "render"
+              : job.status === "persisting"
+                ? "persist"
+                : job.status === "retrying"
+                  ? "retry_wait"
+                  : job.status === "completed"
+                    ? "complete"
+                    : job.status === "failed"
+                      ? "failed"
+                      : "queued"
+  );
+  const updatedAt = job.updatedAt ?? job.createdAt;
+  const heartbeatAt = job.heartbeatAt ?? updatedAt;
+  const stageStartedAt = job.stageStartedAt ?? updatedAt;
+  const stageTimeoutSeconds = job.stageTimeoutSeconds ?? 300;
+  const attempt = job.attempt ?? 1;
+  const maxAttempts = job.maxAttempts ?? 3;
+  const history = job.history ?? [];
+  const stageElapsedSeconds = secondsSince(stageStartedAt);
+  const heartbeatAgeSeconds = secondsSince(heartbeatAt);
+
   return {
     id: job.id,
     status: job.status,
-    stage: job.stage,
-    stageLabel: job.stageLabel,
+    stage,
+    stageLabel: job.stageLabel ?? stage,
     progress: job.progress,
     message: job.message,
     createdAt: job.createdAt,
-    updatedAt: job.updatedAt,
-    heartbeatAt: job.heartbeatAt,
-    stageStartedAt: job.stageStartedAt,
-    stageTimeoutSeconds: job.stageTimeoutSeconds,
+    updatedAt,
+    heartbeatAt,
+    stageStartedAt,
+    stageTimeoutSeconds,
     stageElapsedSeconds,
     heartbeatAgeSeconds,
     stalled:
       !isTerminal(job.status) &&
-      stageElapsedSeconds > job.stageTimeoutSeconds,
-    attempt: job.attempt,
-    maxAttempts: job.maxAttempts,
+      stageElapsedSeconds > stageTimeoutSeconds,
+    attempt,
+    maxAttempts,
     retryReason: job.retryReason,
-    history: job.history.slice(-20),
+    history: history.slice(-20),
     completedAt: job.completedAt,
     error: job.error,
     artifactReady: Boolean(
