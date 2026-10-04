@@ -47,9 +47,97 @@ function staticPage(title, body) {
   });
 }
 
+function jobStatusPage(jobId) {
+  const safeId = String(jobId).replace(/[^0-9a-f-]/gi, "");
+  const html = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Generation progress · VIIVERSION Demo Studio</title>
+<style>
+:root{color-scheme:dark;font-family:Inter,ui-sans-serif,system-ui,sans-serif}
+body{margin:0;background:#090b10;color:#f5f7fb}
+main{max-width:760px;margin:0 auto;padding:56px 24px 88px}
+.muted{color:#9ea6b8}.card{background:#11151d;border:1px solid #282d38;border-radius:18px;padding:22px;margin-top:20px}
+.bar{height:14px;border-radius:999px;background:#222733;overflow:hidden;margin:18px 0 10px}
+.fill{height:100%;width:0;background:linear-gradient(90deg,#9a7cff,#54d5ff);transition:width .35s ease}
+.row{display:flex;gap:12px;flex-wrap:wrap;margin-top:14px}.pill{border:1px solid #343a48;border-radius:999px;padding:7px 11px;font-size:13px}
+.history{margin:0;padding:0;list-style:none}.history li{padding:10px 0;border-top:1px solid #242a34;color:#c9ced8}
+.error{color:#ffb0b0;white-space:pre-wrap}a{color:#b7c9ff}code{word-break:break-all}
+</style>
+</head>
+<body><main>
+<div class="muted">VIIVERSION · Demo Studio</div>
+<h1>Generation progress</h1>
+<div class="card">
+<div id="stage">Loading…</div>
+<div class="bar"><div class="fill" id="fill"></div></div>
+<div id="percent">0%</div>
+<p id="message" class="muted">Connecting to durable job state…</p>
+<div class="row"><span class="pill" id="attempt">Attempt —</span><span class="pill" id="elapsed">Stage —</span><span class="pill" id="heartbeat">Heartbeat —</span></div>
+<p id="retry" class="muted"></p><p id="error" class="error"></p><p id="artifact"></p>
+</div>
+<div class="card"><strong>Recent activity</strong><ul id="history" class="history"></ul></div>
+<p class="muted">Job ID: <code>${safeId}</code></p>
+</main>
+<script>
+const jobId=${JSON.stringify(safeId)};
+const endpoint="/v1/jobs/"+encodeURIComponent(jobId);
+const $=(id)=>document.getElementById(id);
+const age=(iso)=>iso?Math.max(0,Math.floor((Date.now()-Date.parse(iso))/1000)):0;
+function render(job){
+ $("stage").textContent=job.stageLabel||job.stage||job.status;
+ $("fill").style.width=Math.max(0,Math.min(100,job.progress||0))+"%";
+ $("percent").textContent=(job.progress||0)+"%";
+ $("message").textContent=job.message||"";
+ $("attempt").textContent="Attempt "+(job.attempt||1)+"/"+(job.maxAttempts||1);
+ $("elapsed").textContent="Stage "+age(job.stageStartedAt)+"s";
+ $("heartbeat").textContent="Heartbeat "+age(job.heartbeatAt)+"s ago";
+ $("retry").textContent=job.retryReason?"Automatic recovery: "+job.retryReason:"";
+ $("error").textContent=job.error||"";
+ $("artifact").innerHTML=job.artifactReady?'<a href="'+endpoint+'/artifact">Open final MP4</a>':"";
+ const history=$("history");history.innerHTML="";
+ for(const item of (job.history||[]).slice().reverse()){
+  const li=document.createElement("li");
+  li.textContent=new Date(item.at).toLocaleTimeString()+" · "+(item.stage||item.status)+" · "+item.progress+"% · "+item.message;
+  history.appendChild(li);
+ }
+ return job.status!=="completed"&&job.status!=="failed";
+}
+async function poll(){
+ try{
+  const r=await fetch(endpoint,{cache:"no-store"});
+  if(!r.ok)throw new Error("Status request returned HTTP "+r.status);
+  const keep=render(await r.json());
+  if(keep)setTimeout(poll,2000);
+ }catch(error){
+  $("message").textContent="Connection problem. Retrying automatically…";
+  $("error").textContent=String(error&&error.message?error.message:error);
+  setTimeout(poll,3000);
+ }
+}
+poll();
+</script></body></html>`;
+  return new Response(html, {
+    headers: {
+      "Content-Type": "text/html; charset=utf-8",
+      "Cache-Control": "no-store",
+      "X-Content-Type-Options": "nosniff",
+    },
+  });
+}
+
 function publicStaticResponse(request) {
   if (request.method !== "GET" && request.method !== "HEAD") return undefined;
   const url = new URL(request.url);
+
+  const jobStatusMatch = url.pathname.match(
+    /^\/jobs\/([0-9a-f-]{36})$/i,
+  );
+  if (jobStatusMatch) {
+    return jobStatusPage(jobStatusMatch[1]);
+  }
 
   if (url.pathname === "/") {
     return staticPage(
