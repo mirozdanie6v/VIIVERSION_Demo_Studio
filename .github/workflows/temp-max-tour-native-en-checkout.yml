@@ -1,0 +1,79 @@
+name: MAX TOUR Native EN Checkout Diagnostic
+
+on:
+  push:
+    branches:
+      - 'render/max-tour-en-v5-full-journey-20261004'
+    paths:
+      - '.github/workflows/temp-max-tour-native-en-checkout.yml'
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npx playwright install --with-deps chromium
+      - name: Complete native EN checkout
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import { chromium } from 'playwright';
+          const browser=await chromium.launch({headless:true});
+          const page=await browser.newPage({viewport:{width:430,height:932}});
+          await page.goto('https://max-tour.viiversion.com/',{waitUntil:'domcontentloaded',timeout:30000});
+          await page.waitForTimeout(1800);
+          await page.getByRole('button',{name:'EN',exact:true}).click();
+          await page.waitForTimeout(350);
+          await page.getByRole('button',{name:'Tours',exact:true}).click();
+          await page.waitForTimeout(500);
+          await page.getByText('Da Lat “Premium”',{exact:false}).first().click();
+          await page.waitForTimeout(400);
+          await page.getByRole('button',{name:'Join',exact:true}).first().click();
+          await page.waitForTimeout(500);
+
+          const minus=page.getByRole('button',{name:'−',exact:true});
+          console.log('MINUS_COUNT=',await minus.count());
+          if(await minus.count()>=2) await minus.nth(1).click();
+          await page.waitForTimeout(250);
+
+          const inputs=page.locator('input');
+          const info=await inputs.evaluateAll(els=>els.map((e,i)=>({i,type:e.getAttribute('type'),placeholder:e.getAttribute('placeholder'),value:e.value})));
+          console.log('INPUT_INFO=',JSON.stringify(info));
+
+          const hotel=inputs.filter({has:undefined}).nth(8);
+          await hotel.fill('Amiana Resort');
+          const names=page.locator('input[placeholder="Full name"]');
+          const dates=page.locator('input[type="date"]');
+          console.log('NAMES=',await names.count(),'DATES=',await dates.count());
+          await names.nth(0).fill('Demo Guest One');
+          await names.nth(1).fill('Demo Guest Two');
+          await dates.nth(1).fill('2000-01-01');
+          await dates.nth(2).fill('2001-01-01');
+
+          await page.getByRole('button',{name:'VNPAY',exact:false}).click();
+          await page.getByRole('button',{name:'Continue to payment',exact:true}).click();
+          await page.waitForTimeout(700);
+          console.log('=== AFTER CONTINUE PAYMENT ===');
+          console.log('TEXT=',JSON.stringify((await page.locator('body').innerText()).slice(-7000)));
+          console.log('BUTTONS=',JSON.stringify(await page.locator('button').evaluateAll(els=>els.map((e,i)=>({i,text:(e.textContent||'').replace(/\s+/g,' ').trim(),cls:String(e.className||'')})).filter(x=>x.text))));
+          console.log('INPUTS=',JSON.stringify(await page.locator('input,textarea').evaluateAll(els=>els.map((e,i)=>({i,type:e.getAttribute('type'),placeholder:e.getAttribute('placeholder'),value:e.value,cls:String(e.className||'')})))));
+          console.log('CLASSES=',JSON.stringify(await page.locator('[class]').evaluateAll(els=>[...new Set(els.flatMap(e=>String(e.className||'').split(/\s+/)).filter(Boolean))].filter(x=>/pay|payment|confirm|success|booking|order|contact|phone/i.test(x)).slice(0,240))));
+
+          const actionButtons=page.locator('button').filter({hasText:/pay|confirm|complete|demo|book/i});
+          console.log('ACTION_COUNT=',await actionButtons.count());
+          if(await actionButtons.count()){
+            console.log('ACTION_TEXTS=',JSON.stringify(await actionButtons.allTextContents()));
+            await actionButtons.last().click();
+            await page.waitForTimeout(1000);
+            console.log('=== AFTER FINAL ACTION ===');
+            console.log('TEXT2=',JSON.stringify((await page.locator('body').innerText()).slice(-7000)));
+            console.log('BUTTONS2=',JSON.stringify(await page.locator('button').allTextContents()));
+            console.log('CLASSES2=',JSON.stringify(await page.locator('[class]').evaluateAll(els=>[...new Set(els.flatMap(e=>String(e.className||'').split(/\s+/)).filter(Boolean))].filter(x=>/pay|payment|confirm|success|booking|order|trip/i.test(x)).slice(0,240))));
+          }
+          await browser.close();
+          NODE
