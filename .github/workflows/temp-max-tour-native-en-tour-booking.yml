@@ -1,0 +1,70 @@
+name: MAX TOUR Native EN Tour Booking Diagnostic
+
+on:
+  push:
+    branches:
+      - 'render/max-tour-en-v5-full-journey-20261004'
+    paths:
+      - '.github/workflows/temp-max-tour-native-en-tour-booking.yml'
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npx playwright install --with-deps chromium
+      - name: Inspect native EN full catalog tour and booking
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import { chromium } from 'playwright';
+          const browser=await chromium.launch({headless:true});
+          const page=await browser.newPage({viewport:{width:430,height:932}});
+          await page.goto('https://max-tour.viiversion.com/',{waitUntil:'domcontentloaded',timeout:30000});
+          await page.waitForTimeout(2000);
+          await page.getByRole('button',{name:'EN',exact:true}).click();
+          await page.waitForTimeout(500);
+          await page.getByRole('button',{name:'Tours',exact:true}).click();
+          await page.waitForTimeout(800);
+          console.log('CATALOG_URL=',page.url());
+          console.log('CATALOG_COUNT=',await page.locator('.tour-card').count());
+          console.log('DALAT_TEXT_COUNT=',await page.getByText('Da Lat “Premium”',{exact:false}).count());
+          const dalat=page.getByText('Da Lat “Premium”',{exact:false}).first();
+          await dalat.click();
+          await page.waitForTimeout(700);
+          console.log('TOUR_URL=',page.url());
+          console.log('TOUR_TEXT=',JSON.stringify((await page.locator('body').innerText()).slice(0,10000)));
+          console.log('TOUR_BUTTONS=',JSON.stringify(await page.locator('button').evaluateAll(els=>els.map((e,i)=>({i,text:(e.textContent||'').replace(/\s+/g,' ').trim(),cls:String(e.className||'')})))));
+          console.log('TOUR_CLASSES=',JSON.stringify(await page.locator('[class]').evaluateAll(els=>[...new Set(els.flatMap(e=>String(e.className||'').split(/\s+/)).filter(Boolean))].filter(x=>/tour|detail|book|cta|assistant|ai|price|option|sticky/i.test(x)).slice(0,260))));
+
+          await page.getByRole('button',{name:'AI Assistant',exact:true}).last().click();
+          await page.waitForTimeout(500);
+          console.log('AI_INPUTS=',JSON.stringify(await page.locator('input,textarea,[contenteditable=true]').evaluateAll(els=>els.map((e,i)=>({i,tag:e.tagName,placeholder:e.getAttribute('placeholder'),aria:e.getAttribute('aria-label'),cls:String(e.className||'')})))));
+          console.log('AI_BUTTONS=',JSON.stringify(await page.locator('button').evaluateAll(els=>els.map((e,i)=>({i,text:(e.textContent||'').replace(/\s+/g,' ').trim(),cls:String(e.className||'')})).filter(x=>/send|→|clear|ai|tour/i.test(x.text+' '+x.cls)))));
+          const aiInput=page.locator('.ai-consultant-input textarea, .ai-consultant-input input, textarea').last();
+          console.log('AI_INPUT_COUNT=',await aiInput.count());
+          if(await aiInput.count()){
+            await aiInput.fill("We're a couple looking for a relaxed full-day excursion with nature and beautiful views. What would you recommend for us?");
+            const before=await page.locator('.ai-msg').count();
+            console.log('AI_MSG_BEFORE=',before);
+            const send=page.locator('.ai-consultant-input button, .ai-chat-panel button').last();
+            console.log('AI_SEND=',await send.count(), await send.textContent().catch(()=>'')); 
+            if(await send.count()) await send.click(); else await aiInput.press('Enter');
+            await page.waitForFunction(({before})=>document.querySelectorAll('.ai-msg').length>before,{before},{timeout:30000});
+            await page.waitForTimeout(900);
+            console.log('AI_MSG_AFTER=',await page.locator('.ai-msg').count());
+            console.log('AI_ANSWER=',JSON.stringify((await page.locator('.ai-messages').innerText()).slice(-6000)));
+          }
+          await page.getByRole('button',{name:'Tours',exact:true}).click();
+          await page.waitForTimeout(400);
+          await page.getByText('Da Lat “Premium”',{exact:false}).first().click();
+          await page.waitForTimeout(500);
+          console.log('ENTRY_BUTTONS=',JSON.stringify(await page.locator('button').evaluateAll(els=>els.map((e,i)=>({i,text:(e.textContent||'').replace(/\s+/g,' ').trim(),cls:String(e.className||'')})).filter(x=>/book|select|choose|format|reserve|private|group/i.test(x.text+' '+x.cls)))));
+          console.log('ENTRY_LINKS=',JSON.stringify(await page.locator('a').evaluateAll(els=>els.map((e,i)=>({i,text:(e.textContent||'').replace(/\s+/g,' ').trim(),href:e.getAttribute('href'),cls:String(e.className||'')})).filter(x=>/book|select|choose|format|reserve/i.test(x.text+' '+x.href+' '+x.cls)))));
+          await browser.close();
+          NODE
