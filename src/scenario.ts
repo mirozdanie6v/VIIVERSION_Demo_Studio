@@ -214,6 +214,7 @@ function validateStep(step: unknown, index: number, problems: string[]) {
     "wait",
     "waitFor",
     "waitForNavigation",
+    "waitForContentGrowth",
     "assert",
   ];
 
@@ -281,6 +282,17 @@ function validateStep(step: unknown, index: number, problems: string[]) {
     case "waitForNavigation":
       if (step.waitUntil !== undefined && !["load", "domcontentloaded", "networkidle"].includes(String(step.waitUntil))) {
         problems.push(`${path}.waitUntil must be load, domcontentloaded or networkidle.`);
+      }
+      if (step.timeoutMs !== undefined && !isNonNegativeNumber(step.timeoutMs)) {
+        problems.push(`${path}.timeoutMs must be a non-negative number.`);
+      }
+      break;
+    case "waitForContentGrowth":
+      if (step.target !== undefined || step.selector !== undefined) {
+        validateTarget(step.target ?? step.selector, `${path}.target`, problems);
+      }
+      if (step.minAddedChars !== undefined && !isNonNegativeNumber(step.minAddedChars)) {
+        problems.push(`${path}.minAddedChars must be a non-negative number.`);
       }
       if (step.timeoutMs !== undefined && !isNonNegativeNumber(step.timeoutMs)) {
         problems.push(`${path}.timeoutMs must be a non-negative number.`);
