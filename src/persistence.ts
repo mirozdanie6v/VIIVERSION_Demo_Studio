@@ -84,3 +84,16 @@ export async function persistJobSnapshot(
     "application/json; charset=utf-8",
   );
 }
+
+
+export async function persistJobRecovery(
+  jobId: string,
+  payload: unknown,
+): Promise<void> {
+  if (!durablePersistenceEnabled()) return;
+  await putInternal(
+    "/__internal/recovery/" + encodeURIComponent(jobId),
+    JSON.stringify(payload),
+    "application/json; charset=utf-8",
+  );
+}
