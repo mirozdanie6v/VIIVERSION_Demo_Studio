@@ -1,0 +1,88 @@
+name: MAX TOUR Native EN Exact Path Diagnostic
+
+on:
+  push:
+    branches:
+      - 'render/max-tour-en-v5-full-journey-20261004'
+    paths:
+      - '.github/workflows/temp-max-tour-native-en-exact.yml'
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npx playwright install --with-deps chromium
+      - name: Inspect exact native EN path
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import { chromium } from 'playwright';
+          const browser=await chromium.launch({headless:true});
+          const page=await browser.newPage({viewport:{width:430,height:932}});
+          await page.goto('https://max-tour.viiversion.com/',{waitUntil:'domcontentloaded',timeout:30000});
+          await page.waitForTimeout(2000);
+          await page.getByRole('button',{name:'EN',exact:true}).click();
+          await page.waitForTimeout(600);
+          await page.getByRole('button',{name:'Choose a tour',exact:true}).click();
+          await page.waitForTimeout(700);
+
+          const cards=page.locator('.tour-card');
+          const cardData=await cards.evaluateAll(els=>els.map((e,i)=>({i,text:(e.textContent||'').replace(/\s+/g,' ').trim().slice(0,500)})));
+          console.log('CARDS=',JSON.stringify(cardData));
+          const idx=cardData.find(x=>/Da Lat.*Premium/i.test(x.text))?.i ?? -1;
+          console.log('DALAT_INDEX=',idx);
+          if(idx<0) throw new Error('Da Lat Premium card not found');
+          await cards.nth(idx).click();
+          await page.waitForTimeout(800);
+
+          console.log('TOUR_URL=',page.url());
+          console.log('TOUR_TEXT=',JSON.stringify((await page.locator('body').innerText()).slice(0,10000)));
+          console.log('TOUR_BUTTONS=',JSON.stringify(await page.locator('button').evaluateAll(els=>els.map((e,i)=>({i,text:(e.textContent||'').replace(/\s+/g,' ').trim(),cls:String(e.className||'')})))));
+          console.log('TOUR_CLASSES=',JSON.stringify(await page.locator('[class]').evaluateAll(els=>[...new Set(els.flatMap(e=>String(e.className||'').split(/\s+/)).filter(Boolean))].filter(x=>/tour|detail|book|cta|sticky|assistant|ai|price|option/i.test(x)).slice(0,240))));
+          await page.screenshot({path:'exact-tour.png',fullPage:false});
+
+          const aiButtons=page.getByRole('button',{name:'AI Assistant',exact:true});
+          console.log('AI_BUTTON_COUNT=',await aiButtons.count());
+          await aiButtons.last().click();
+          await page.waitForTimeout(600);
+          console.log('AI_TEXT=',JSON.stringify((await page.locator('body').innerText()).slice(-7000)));
+          console.log('AI_INPUTS=',JSON.stringify(await page.locator('input,textarea,[contenteditable=true]').evaluateAll(els=>els.map((e,i)=>({i,tag:e.tagName,placeholder:e.getAttribute('placeholder'),aria:e.getAttribute('aria-label'),cls:String(e.className||'')})))));
+          console.log('AI_BUTTONS=',JSON.stringify(await page.locator('button').evaluateAll(els=>els.map((e,i)=>({i,text:(e.textContent||'').replace(/\s+/g,' ').trim(),cls:String(e.className||'')})).filter(x=>/send|→|ai|clear|tour/i.test(x.text+' '+x.cls)))));
+          console.log('AI_MSGS_BEFORE=',await page.locator('.ai-msg').count());
+
+          const aiInput=page.locator('.ai-consultant-input input, .ai-consultant-input textarea, .ai-chat-panel textarea, .ai-chat-panel input').last();
+          console.log('AI_INPUT_SELECTED=',await aiInput.count());
+          if(await aiInput.count()){
+            await aiInput.fill("We're a couple looking for a relaxed full-day excursion with nature and beautiful views. What would you recommend for us?");
+            const before=await page.locator('.ai-msg').count();
+            const send=page.locator('.ai-consultant-input button, .ai-chat-panel button').filter({hasText:/→|send/i}).last();
+            console.log('AI_SEND_SELECTED=',await send.count());
+            if(await send.count()) await send.click(); else await aiInput.press('Enter');
+            await page.waitForFunction(({before})=>document.querySelectorAll('.ai-msg').length>before,{before},{timeout:30000});
+            await page.waitForTimeout(800);
+            console.log('AI_MSGS_AFTER=',await page.locator('.ai-msg').count());
+            console.log('AI_MESSAGES_TEXT=',JSON.stringify((await page.locator('.ai-messages').innerText()).slice(-6000)));
+            await page.screenshot({path:'exact-ai-answer.png',fullPage:false});
+          }
+
+          await page.getByRole('button',{name:'Tours',exact:true}).click();
+          await page.waitForTimeout(500);
+          const cards2=page.locator('.tour-card');
+          const cardData2=await cards2.evaluateAll(els=>els.map((e,i)=>({i,text:(e.textContent||'').replace(/\s+/g,' ').trim()})));
+          const idx2=cardData2.find(x=>/Da Lat.*Premium/i.test(x.text))?.i ?? -1;
+          await cards2.nth(idx2).click();
+          await page.waitForTimeout(500);
+          console.log('BOOKING_ENTRY=',JSON.stringify(await page.locator('button').evaluateAll(els=>els.map((e,i)=>({i,text:(e.textContent||'').replace(/\s+/g,' ').trim(),cls:String(e.className||'')})).filter(x=>/book|select|choose|format|reserve|private|group/i.test(x.text+' '+x.cls)))));
+          console.log('BOOKING_ENTRY_CLASSES=',JSON.stringify(await page.locator('[class]').evaluateAll(els=>[...new Set(els.flatMap(e=>String(e.className||'').split(/\s+/)).filter(Boolean))].filter(x=>/book|format|cta|sticky|tour/i.test(x)).slice(0,220))));
+          await browser.close();
+          NODE
+      - uses: actions/upload-artifact@v4
+        with:
+          name: max-tour-native-en-exact
+          path: exact-*.png
