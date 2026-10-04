@@ -1,0 +1,479 @@
+{
+  "name": "MAX TOUR — Native English Full Journey v5.5",
+  "baseUrl": "https://max-tour.viiversion.com",
+  "viewport": {
+    "width": 430,
+    "height": 932
+  },
+  "defaultPauseMs": 220,
+  "presentation": {
+    "smartZoom": {
+      "scale": 1.18,
+      "mobileScale": 1.12,
+      "transitionMs": 420,
+      "settleMs": 120
+    },
+    "focusRing": {
+      "enabled": true,
+      "color": "rgba(255,255,255,0.40)",
+      "width": 2,
+      "padding": 7
+    },
+    "clickRipple": {
+      "enabled": true,
+      "color": "rgba(255,255,255,0.76)",
+      "size": 58,
+      "durationMs": 360
+    }
+  },
+  "steps": [
+    {
+      "action": "goto",
+      "url": "/",
+      "label": "Home"
+    },
+    {
+      "action": "waitFor",
+      "target": {
+        "by": "role",
+        "value": "button",
+        "name": "EN",
+        "exact": true
+      },
+      "state": "visible",
+      "timeoutMs": 20000,
+      "label": "Wait EN"
+    },
+    {
+      "action": "click",
+      "target": {
+        "by": "role",
+        "value": "button",
+        "name": "EN",
+        "exact": true
+      },
+      "pauseAfterMs": 450,
+      "label": "Switch to English"
+    },
+    {
+      "action": "waitFor",
+      "target": {
+        "by": "role",
+        "value": "button",
+        "name": "Choose a tour",
+        "exact": true
+      },
+      "state": "visible",
+      "timeoutMs": 20000,
+      "label": "Wait home hero"
+    },
+    {
+      "action": "wait",
+      "ms": 1200,
+      "label": "Establish home"
+    },
+    {
+      "action": "hover",
+      "target": {
+        "by": "role",
+        "value": "button",
+        "name": "Choose a tour",
+        "exact": true
+      },
+      "pauseAfterMs": 900,
+      "label": "Focus choose tour"
+    },
+    {
+      "action": "click",
+      "target": {
+        "by": "role",
+        "value": "button",
+        "name": "Tours",
+        "exact": true
+      },
+      "label": "Open catalog"
+    },
+    {
+      "action": "waitFor",
+      "target": {
+        "by": "text",
+        "value": "Da Lat “Premium”",
+        "exact": false
+      },
+      "state": "visible",
+      "timeoutMs": 15000,
+      "label": "Wait catalog"
+    },
+    {
+      "action": "wait",
+      "ms": 1000,
+      "label": "Establish catalog"
+    },
+    {
+      "action": "scroll",
+      "y": 300,
+      "label": "Browse catalog",
+      "pauseAfterMs": 350
+    },
+    {
+      "action": "hover",
+      "target": {
+        "by": "text",
+        "value": "Da Lat “Premium”",
+        "exact": false
+      },
+      "pauseAfterMs": 950,
+      "label": "Focus Dalat Premium"
+    },
+    {
+      "action": "click",
+      "target": {
+        "by": "text",
+        "value": "Da Lat “Premium”",
+        "exact": false
+      },
+      "label": "Open Dalat Premium"
+    },
+    {
+      "action": "waitFor",
+      "target": {
+        "by": "role",
+        "value": "button",
+        "name": "Join",
+        "exact": true
+      },
+      "state": "visible",
+      "timeoutMs": 15000,
+      "label": "Wait tour"
+    },
+    {
+      "action": "wait",
+      "ms": 1200,
+      "label": "Establish tour"
+    },
+    {
+      "action": "scroll",
+      "y": 420,
+      "label": "Explore tour details",
+      "pauseAfterMs": 350
+    },
+    {
+      "action": "wait",
+      "ms": 1300,
+      "label": "Read tour details"
+    },
+    {
+      "action": "click",
+      "target": {
+        "by": "css",
+        "value": "button.nav-btn:has-text(\"AI Assistant\"):visible"
+      },
+      "label": "Open AI consultant"
+    },
+    {
+      "action": "waitFor",
+      "target": {
+        "by": "css",
+        "value": ".ai-consultant-input textarea:visible"
+      },
+      "state": "visible",
+      "timeoutMs": 15000,
+      "label": "Wait AI input"
+    },
+    {
+      "action": "fill",
+      "target": {
+        "by": "css",
+        "value": ".ai-consultant-input textarea:visible"
+      },
+      "value": "We're a couple looking for a relaxed full-day excursion with nature and beautiful views. What would you recommend for us? Please answer in English.",
+      "pauseAfterMs": 700,
+      "label": "Ask a human excursion question"
+    },
+    {
+      "action": "click",
+      "target": {
+        "by": "css",
+        "value": ".ai-consultant-input button:visible >> nth=-1"
+      },
+      "label": "Send AI question",
+      "pauseAfterMs": 0
+    },
+    {
+      "action": "wait",
+      "label": "Wait for actual AI answer",
+      "ms": 5000
+    },
+    {
+      "action": "wait",
+      "ms": 1800,
+      "label": "Read AI answer"
+    },
+    {
+      "action": "click",
+      "target": {
+        "by": "css",
+        "value": "button.nav-btn:has-text(\"Tours\"):visible"
+      },
+      "pauseAfterMs": 450,
+      "label": "Close AI consultant"
+    },
+    {
+      "action": "waitFor",
+      "target": {
+        "by": "text",
+        "value": "Da Lat “Premium”",
+        "exact": false
+      },
+      "state": "visible",
+      "timeoutMs": 15000,
+      "label": "Return to catalog"
+    },
+    {
+      "action": "click",
+      "target": {
+        "by": "text",
+        "value": "Da Lat “Premium”",
+        "exact": false
+      },
+      "pauseAfterMs": 450,
+      "label": "Return to Dalat"
+    },
+    {
+      "action": "waitFor",
+      "target": {
+        "by": "css",
+        "value": ".detail-hero:visible"
+      },
+      "state": "visible",
+      "timeoutMs": 15000,
+      "label": "Return to tour"
+    },
+    {
+      "action": "waitFor",
+      "target": {
+        "by": "css",
+        "value": "button:has-text(\"Join\"):visible >> nth=0"
+      },
+      "state": "visible",
+      "timeoutMs": 15000,
+      "label": "Wait booking CTA"
+    },
+    {
+      "action": "hover",
+      "target": {
+        "by": "css",
+        "value": "button:has-text(\"Join\"):visible >> nth=0"
+      },
+      "pauseAfterMs": 750,
+      "label": "Focus booking CTA"
+    },
+    {
+      "action": "click",
+      "target": {
+        "by": "css",
+        "value": "button:has-text(\"Join\"):visible >> nth=0"
+      },
+      "label": "Start booking"
+    },
+    {
+      "action": "waitFor",
+      "target": {
+        "by": "css",
+        "value": "button:has-text(\"Continue to payment\"):visible"
+      },
+      "state": "visible",
+      "timeoutMs": 15000,
+      "label": "Wait booking"
+    },
+    {
+      "action": "wait",
+      "ms": 900,
+      "label": "Establish booking"
+    },
+    {
+      "action": "click",
+      "target": {
+        "by": "css",
+        "value": "button:has-text(\"−\"):visible >> nth=1"
+      },
+      "label": "Continue private"
+    },
+    {
+      "action": "waitFor",
+      "target": {
+        "by": "css",
+        "value": "button:has-text(\"Continue to payment\"):visible"
+      },
+      "state": "visible",
+      "timeoutMs": 10000,
+      "label": "Wait group size"
+    },
+    {
+      "action": "wait",
+      "label": "Continue group size",
+      "ms": 450
+    },
+    {
+      "action": "waitFor",
+      "target": {
+        "by": "css",
+        "value": "input[type=\"date\"]:visible"
+      },
+      "state": "visible",
+      "timeoutMs": 10000,
+      "label": "Wait date"
+    },
+    {
+      "action": "wait",
+      "label": "Select available date",
+      "ms": 450
+    },
+    {
+      "action": "fill",
+      "target": {
+        "by": "css",
+        "value": "input[placeholder=\"Например: Sunrise\"]:visible"
+      },
+      "value": "Amiana Resort",
+      "label": "Enter hotel"
+    },
+    {
+      "action": "wait",
+      "label": "Continue to traveller details",
+      "ms": 400
+    },
+    {
+      "action": "waitFor",
+      "target": {
+        "by": "css",
+        "value": "input[placeholder=\"Full name\"]:visible"
+      },
+      "state": "visible",
+      "timeoutMs": 10000,
+      "label": "Wait traveller details"
+    },
+    {
+      "action": "fill",
+      "target": {
+        "by": "css",
+        "value": "input[placeholder=\"Full name\"]:visible >> nth=0"
+      },
+      "value": "Demo Guest",
+      "label": "Enter contact name"
+    },
+    {
+      "action": "fill",
+      "target": {
+        "by": "css",
+        "value": "input[placeholder=\"Full name\"]:visible >> nth=1"
+      },
+      "value": "Demo Guest Two",
+      "label": "Enter second traveller"
+    },
+    {
+      "action": "fill",
+      "target": {
+        "by": "css",
+        "value": "input[placeholder=\"Full name\"]:visible >> nth=0"
+      },
+      "value": "Demo Guest One",
+      "label": "Traveller one name"
+    },
+    {
+      "action": "fill",
+      "target": {
+        "by": "css",
+        "value": "input[type=\"date\"]:visible >> nth=1"
+      },
+      "value": "2000-01-01",
+      "label": "Traveller one birth date"
+    },
+    {
+      "action": "fill",
+      "target": {
+        "by": "css",
+        "value": "input[placeholder=\"Full name\"]:visible >> nth=1"
+      },
+      "value": "Demo Guest Two",
+      "label": "Traveller two name"
+    },
+    {
+      "action": "fill",
+      "target": {
+        "by": "css",
+        "value": "input[type=\"date\"]:visible >> nth=2"
+      },
+      "value": "2001-01-01",
+      "label": "Traveller two birth date"
+    },
+    {
+      "action": "wait",
+      "label": "Calculate total",
+      "ms": 700
+    },
+    {
+      "action": "waitFor",
+      "target": {
+        "by": "css",
+        "value": "button:has-text(\"Continue to payment\"):visible"
+      },
+      "state": "visible",
+      "timeoutMs": 15000,
+      "label": "Wait quote"
+    },
+    {
+      "action": "wait",
+      "ms": 1000,
+      "label": "Show quote"
+    },
+    {
+      "action": "wait",
+      "label": "Review payment options",
+      "ms": 500
+    },
+    {
+      "action": "click",
+      "target": {
+        "by": "css",
+        "value": "button.nav-btn:has-text(\"My Trips\"):visible"
+      },
+      "label": "Open My Trips"
+    },
+    {
+      "action": "waitFor",
+      "target": {
+        "by": "css",
+        "value": ".trip-card:visible"
+      },
+      "state": "visible",
+      "timeoutMs": 15000,
+      "label": "Wait My Trips"
+    },
+    {
+      "action": "wait",
+      "ms": 850,
+      "label": "Show booked trips"
+    },
+    {
+      "action": "wait",
+      "label": "Review booked trip",
+      "ms": 400
+    },
+    {
+      "action": "waitFor",
+      "target": {
+        "by": "css",
+        "value": ".trip-card:visible"
+      },
+      "state": "visible",
+      "timeoutMs": 15000,
+      "label": "Wait booking confirmation"
+    },
+    {
+      "action": "wait",
+      "ms": 1600,
+      "label": "Booking confirmation"
+    }
+  ]
+}
