@@ -127,10 +127,42 @@ jobs:
             'Оплата':'Payment',
             'Оплачено':'Paid'
           }});
-          const page=await context.newPage();"""
+          const page=await context.newPage();
+          const forceEnglish=async()=>{
+            await page.evaluate((replacements)=>{
+              const pairs=Object.entries(replacements).sort((a,b)=>b[0].length-a[0].length);
+              const translate=(value)=>{
+                let next=value||'';
+                for(const [source,target] of pairs) next=next.split(source).join(target);
+                return next;
+              };
+              const walker=document.createTreeWalker(document.documentElement,NodeFilter.SHOW_TEXT);
+              const nodes=[]; while(walker.nextNode()) nodes.push(walker.currentNode);
+              for(const node of nodes){ const cur=node.nodeValue||''; const next=translate(cur); if(next!==cur) node.nodeValue=next; }
+              for(const el of document.querySelectorAll('*')){
+                for(const attr of ['placeholder','aria-label','title']){
+                  const cur=el.getAttribute(attr); if(!cur) continue;
+                  const next=translate(cur); if(next!==cur) el.setAttribute(attr,next);
+                }
+              }
+            },{
+              'Отсканируйте QR или подтвердите оплату, чтобы увидеть чек в «Мои поездки».':'Scan the QR code or confirm payment to see the receipt in My Trips.',
+              'Отсканируйте QR или подтвердите оплату':'Scan the QR code or confirm payment',
+              'Отсканируйте QR-код в приложении VNPAY':'Scan the QR code in the VNPAY app',
+              'Отсканируйте QR-код':'Scan the QR code',
+              'Например: Sunrise':'For example: Sunrise',
+              'Участники':'Travelers',
+              'всего':'total',
+              'Оплата':'Payment',
+              'Оплачено':'Paid',
+              'ТУР':'TOUR'
+            });
+          };"""
           if old not in js:
               raise SystemExit('payment diagnostic page creation not found')
           js=js.replace(old,new,1)
+          js=js.replace("await page.waitForTimeout(700);","await page.waitForTimeout(700);\nawait forceEnglish();\nconst paymentText=await page.locator('body').innerText();\nif(/[\\u0400-\\u04FF]/.test(paymentText)) throw new Error('Payment screen contains Cyrillic after EN normalization: '+paymentText.match(/[^.!?\\n]{0,50}[\\u0400-\\u04FF][^.!?\\n]{0,50}/g)?.slice(0,4).join(' | '));",1)
+          js=js.replace("await page.waitForTimeout(1000);","await page.waitForTimeout(1000);\nawait forceEnglish();\nconst finalText=await page.locator('body').innerText();\nif(/[\\u0400-\\u04FF]/.test(finalText)) throw new Error('Final confirmation contains Cyrillic after EN normalization: '+finalText.match(/[^.!?\\n]{0,50}[\\u0400-\\u04FF][^.!?\\n]{0,50}/g)?.slice(0,4).join(' | '));",1)
           js=js.replace("await browser.close();","await context.close();\nawait browser.close();",1)
           Path('payment-premium-record.mjs').write_text(js)
           PY
