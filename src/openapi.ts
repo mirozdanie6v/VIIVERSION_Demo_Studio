@@ -3,7 +3,7 @@ export function buildOpenApiDocument(baseUrl = process.env.PUBLIC_BASE_URL ?? "h
     openapi: "3.1.0",
     info: {
       title: "VIIVERSION Demo Studio API",
-      version: "0.12.0",
+      version: "0.12.1",
       description:
         "Generate polished presentation videos from web applications using AI-directed browser automation.",
     },
