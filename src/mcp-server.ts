@@ -231,7 +231,11 @@ export function createDemoStudioMcpHandler(service: DemoStudioService) {
           };
         }
 
-        const output: Record<string, unknown> = { ...job };
+        const output: Record<string, unknown> = {
+          ...job,
+          status_page_url:
+            publicBaseUrl() + "/jobs/" + job.id,
+        };
         if (job.artifactReady) {
           output.artifact_url =
             publicBaseUrl() + "/v1/jobs/" + job.id + "/artifact";
