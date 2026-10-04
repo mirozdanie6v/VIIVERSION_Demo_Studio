@@ -139,6 +139,11 @@ jobs:
               const translate=(value)=>{
                 let next=value||'';
                 for(const [source,target] of pairs) next=next.split(source).join(target);
+                next=next
+                  .replace(/\u0422\u0423\u0420/g,'TOUR')
+                  .replace(/\u0432\u0441\u0435\u0433\u043e/g,'total')
+                  .replace(/\u041e\u043f\u043b\u0430\u0442\u0430/g,'Payment')
+                  .replace(/\u041e\u043f\u043b\u0430\u0447\u0435\u043d\u043e/g,'Paid');
                 return next;
               };
               const walker=document.createTreeWalker(document.documentElement,NodeFilter.SHOW_TEXT);
