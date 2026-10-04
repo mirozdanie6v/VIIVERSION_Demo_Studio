@@ -21,7 +21,18 @@ export type PresentationConfig = {
     transitionMs?: number;
     settleMs?: number;
   };
+  semanticCamera?: {
+    enabled?: boolean;
+    establishScale?: number;
+    focusScale?: number;
+    mobileFocusScale?: number;
+    maxCropRatio?: number;
+    safeAreaPx?: number;
+    focusTransitionMs?: number;
+    resolveTransitionMs?: number;
+  };
   cursor?: {
+    enabled?: boolean;
     size?: number;
     fill?: string;
     border?: string;
@@ -39,6 +50,12 @@ export type PresentationConfig = {
     color?: string;
     size?: number;
     durationMs?: number;
+  };
+  tactilePress?: {
+    enabled?: boolean;
+    scale?: number;
+    durationMs?: number;
+    glowColor?: string;
   };
   localeOverlay?: {
     language: string;
