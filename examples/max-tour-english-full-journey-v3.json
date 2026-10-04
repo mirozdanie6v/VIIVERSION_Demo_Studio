@@ -262,13 +262,17 @@
     {
       "action": "wait",
       "ms": 1200,
-      "label": "Establish home"
+      "label": "Establish home",
+      "target": {
+        "by": "css",
+        "value": ".px-hero-actions .px-button:visible, .px-hero-actions button:visible, .px-hero button:visible"
+      }
     },
     {
       "action": "hover",
       "target": {
         "by": "css",
-        "value": "button:has-text(\"Choose a tour\"):visible, button:has-text(\"Choose a journey\"):visible"
+        "value": ".px-hero-actions .px-button:visible, .px-hero-actions button:visible, .px-hero button:visible"
       },
       "pauseAfterMs": 900,
       "label": "Focus choose tour"
@@ -277,7 +281,7 @@
       "action": "click",
       "target": {
         "by": "css",
-        "value": "button:has-text(\"Choose a tour\"):visible, button:has-text(\"Choose a journey\"):visible"
+        "value": ".px-hero-actions .px-button:visible, .px-hero-actions button:visible, .px-hero button:visible"
       },
       "label": "Open catalog"
     },
@@ -443,7 +447,7 @@
       "action": "click",
       "target": {
         "by": "css",
-        "value": "button:has-text(\"Continue with private tour\"):visible, button:has-text(\"Continue privately\"):visible"
+        "value": ".px-commerce-card button.px-button-primary:visible, .px-commerce-card button.px-block:visible"
       },
       "label": "Continue private"
     },
@@ -460,7 +464,7 @@
       "action": "click",
       "target": {
         "by": "css",
-        "value": "button:has-text(\"Choose date\"):visible"
+        "value": ".px-commerce-card button.px-button-primary:visible, .px-commerce-card button.px-block:visible"
       },
       "label": "Continue group size"
     },
@@ -494,7 +498,7 @@
       "action": "click",
       "target": {
         "by": "css",
-        "value": "button:has-text(\"Traveller details\"):visible"
+        "value": ".px-commerce-card button.px-button-primary:visible, .px-commerce-card button.px-block:visible"
       },
       "label": "Continue to traveller details"
     },
@@ -511,7 +515,7 @@
       "action": "fill",
       "target": {
         "by": "css",
-        "value": "label:has-text(\"Your name\") input:visible"
+        "value": "label:has-text(\"Your name\") input:visible, label:has-text(\"Ваше имя\") input:visible"
       },
       "value": "Alex Morgan",
       "label": "Enter contact name"
@@ -520,7 +524,7 @@
       "action": "fill",
       "target": {
         "by": "css",
-        "value": "label:has-text(\"Phone\") input:visible"
+        "value": "label:has-text(\"Phone\") input:visible, label:has-text(\"Телефон\") input:visible"
       },
       "value": "+84 901 234 567",
       "label": "Enter phone"
@@ -565,7 +569,7 @@
       "action": "click",
       "target": {
         "by": "css",
-        "value": "button:has-text(\"Get total price\"):visible"
+        "value": ".px-commerce-card button.px-button-primary:visible, .px-commerce-card button.px-block:visible"
       },
       "label": "Calculate total"
     },
@@ -587,7 +591,7 @@
       "action": "click",
       "target": {
         "by": "css",
-        "value": "button:has-text(\"Bank card\"):visible"
+        "value": "button:has-text(\"Bank card\"):visible, button:has-text(\"Банковская карта\"):visible"
       },
       "label": "Choose card"
     },
@@ -595,7 +599,7 @@
       "action": "click",
       "target": {
         "by": "css",
-        "value": "button:has-text(\"MAX TOUR payment\"):visible"
+        "value": "button:has-text(\"MAX TOUR payment\"):visible, button:has-text(\"Оплата MAX TOUR\"):visible"
       },
       "label": "Create booking"
     },
