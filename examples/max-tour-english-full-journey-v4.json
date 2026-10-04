@@ -120,7 +120,7 @@
       "action": "waitFor",
       "target": {
         "by": "css",
-        "value": ".px-hero:visible, .px-app:visible"
+        "value": ".hero-lux__cta--primary:visible"
       },
       "state": "visible",
       "timeoutMs": 20000,
