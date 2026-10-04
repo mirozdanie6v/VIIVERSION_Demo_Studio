@@ -18,3 +18,21 @@ test("caps unsafe zoom values", () => {
   assert.equal(chooseZoomScale(1440, { smartZoom: { scale: 9 } }), 1.35);
   assert.equal(chooseZoomScale(390, { smartZoom: { mobileScale: 2 } }), 1.08);
 });
+
+test("semantic camera uses restrained premium focus scale", () => {
+  assert.equal(
+    chooseZoomScale(390, {
+      semanticCamera: { enabled: true, mobileFocusScale: 1.1 },
+    }),
+    1.1,
+  );
+});
+
+test("semantic camera caps aggressive mobile zoom", () => {
+  assert.equal(
+    chooseZoomScale(390, {
+      semanticCamera: { enabled: true, mobileFocusScale: 1.6 },
+    }),
+    1.12,
+  );
+});
