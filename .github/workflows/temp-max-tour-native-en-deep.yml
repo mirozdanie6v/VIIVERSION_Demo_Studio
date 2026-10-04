@@ -1,0 +1,84 @@
+name: MAX TOUR Native EN Deep Diagnostic
+
+on:
+  push:
+    branches:
+      - 'render/max-tour-en-v5-full-journey-20261004'
+    paths:
+      - '.github/workflows/temp-max-tour-native-en-deep.yml'
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npx playwright install --with-deps chromium
+      - name: Inspect live native EN tour AI booking
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import { chromium } from 'playwright';
+          const browser=await chromium.launch({headless:true});
+          const page=await browser.newPage({viewport:{width:430,height:932}});
+          await page.goto('https://max-tour.viiversion.com/',{waitUntil:'domcontentloaded',timeout:30000});
+          await page.waitForTimeout(2500);
+          await page.getByRole('button',{name:'EN',exact:true}).click();
+          await page.waitForTimeout(700);
+          await page.getByRole('button',{name:'Choose a tour',exact:true}).click();
+          await page.waitForTimeout(800);
+          const card=page.locator('.tour-card').filter({hasText:'Da Lat “Premium”'}).first();
+          console.log('DALAT_CARD_COUNT=',await card.count());
+          await card.click();
+          await page.waitForTimeout(900);
+          console.log('=== TOUR PAGE ===');
+          console.log((await page.locator('body').innerText()).slice(0,10000));
+          console.log('BUTTONS_TOUR=',await page.locator('button').allTextContents());
+          console.log('CLASSES_TOUR=',await page.locator('[class]').evaluateAll(els=>[...new Set(els.flatMap(e=>String(e.className||'').split(/\s+/)).filter(Boolean))].filter(x=>/tour|detail|book|cta|assistant|ai|price|option/i.test(x)).slice(0,220)));
+          await page.screenshot({path:'deep-tour.png',fullPage:false});
+
+          const ai=page.getByRole('button',{name:'AI Assistant',exact:true}).last();
+          console.log('AI_BUTTONS=',await page.getByRole('button',{name:'AI Assistant',exact:true}).count());
+          await ai.click();
+          await page.waitForTimeout(500);
+          console.log('=== AI OPEN ===');
+          console.log((await page.locator('body').innerText()).slice(-7000));
+          console.log('INPUTS_AI=',await page.locator('input,textarea,[contenteditable=true]').evaluateAll(els=>els.map(e=>({tag:e.tagName,placeholder:e.getAttribute('placeholder'),aria:e.getAttribute('aria-label'),class:e.className}))));
+          console.log('BUTTONS_AI=',await page.locator('button').allTextContents());
+          console.log('AI_MSG_COUNT=',await page.locator('.ai-msg').count());
+          await page.screenshot({path:'deep-ai-open.png',fullPage:false});
+
+          const input=page.locator('.ai-consultant-input input, .ai-consultant-input textarea, input[aria-label="Search tours"]').first();
+          console.log('AI_INPUT_COUNT=',await input.count());
+          if(await input.count()){
+            await input.fill("We're a couple looking for a relaxed full-day excursion with nature and beautiful views. What would you recommend for us?");
+            const before=await page.locator('.ai-msg').count();
+            const send=page.locator('.ai-consultant-input button, .ai-chat-panel button').filter({hasText:/→|send/i}).first();
+            console.log('SEND_COUNT=',await send.count());
+            if(await send.count()) await send.click(); else await input.press('Enter');
+            await page.waitForFunction(({before})=>document.querySelectorAll('.ai-msg').length>before,{before},{timeout:30000}).catch(()=>{});
+            await page.waitForTimeout(1000);
+            console.log('=== AI ANSWER ===');
+            console.log((await page.locator('.ai-messages').innerText()).slice(-5000));
+            console.log('AI_MSG_COUNT_AFTER=',await page.locator('.ai-msg').count());
+            await page.screenshot({path:'deep-ai-answer.png',fullPage:false});
+          }
+
+          await page.getByRole('button',{name:'Tours',exact:true}).click();
+          await page.waitForTimeout(500);
+          await page.locator('.tour-card').filter({hasText:'Da Lat “Premium”'}).first().click();
+          await page.waitForTimeout(500);
+          console.log('=== BOOKING ENTRY BUTTONS ===');
+          console.log(await page.locator('button').allTextContents());
+          const buttons=await page.locator('button').evaluateAll(els=>els.map(e=>({text:(e.textContent||'').trim(),cls:e.className})).filter(x=>/book|select|choose|format|reserve/i.test(x.text+' '+x.cls)));
+          console.log('BOOKING_CANDIDATES=',buttons);
+          await browser.close();
+          NODE
+      - uses: actions/upload-artifact@v4
+        with:
+          name: max-tour-native-en-deep
+          path: deep-*.png
