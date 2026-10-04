@@ -1,0 +1,56 @@
+name: MAX TOUR Native EN Booking Diagnostic
+
+on:
+  push:
+    branches:
+      - 'render/max-tour-en-v5-full-journey-20261004'
+    paths:
+      - '.github/workflows/temp-max-tour-native-en-booking.yml'
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npx playwright install --with-deps chromium
+      - name: Inspect native EN booking path
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import { chromium } from 'playwright';
+          const browser=await chromium.launch({headless:true});
+          const page=await browser.newPage({viewport:{width:430,height:932}});
+          const openTour=async()=>{
+            await page.goto('https://max-tour.viiversion.com/',{waitUntil:'domcontentloaded',timeout:30000});
+            await page.waitForTimeout(1800);
+            await page.getByRole('button',{name:'EN',exact:true}).click();
+            await page.waitForTimeout(400);
+            await page.getByRole('button',{name:'Tours',exact:true}).click();
+            await page.waitForTimeout(500);
+            await page.getByText('Da Lat “Premium”',{exact:false}).first().click();
+            await page.waitForTimeout(500);
+          };
+          await openTour();
+          await page.getByRole('button',{name:'Private from $420',exact:true}).click();
+          await page.waitForTimeout(500);
+          console.log('=== AFTER PRIVATE ===');
+          console.log('TEXT=',JSON.stringify((await page.locator('body').innerText()).slice(-6500)));
+          console.log('BUTTONS=',JSON.stringify(await page.locator('button').evaluateAll(els=>els.map((e,i)=>({i,text:(e.textContent||'').replace(/\s+/g,' ').trim(),cls:String(e.className||'')})).filter(x=>x.text))));
+          console.log('INPUTS=',JSON.stringify(await page.locator('input,select,textarea').evaluateAll(els=>els.map((e,i)=>({i,tag:e.tagName,type:e.getAttribute('type'),placeholder:e.getAttribute('placeholder'),value:e.value,cls:String(e.className||'')})))));
+          console.log('CLASSES=',JSON.stringify(await page.locator('[class]').evaluateAll(els=>[...new Set(els.flatMap(e=>String(e.className||'').split(/\s+/)).filter(Boolean))].filter(x=>/book|private|group|form|checkout|calendar|date|participant|contact|order|payment/i.test(x)).slice(0,260))));
+
+          await openTour();
+          await page.getByRole('button',{name:'Join',exact:true}).first().click();
+          await page.waitForTimeout(500);
+          console.log('=== AFTER JOIN ===');
+          console.log('TEXT=',JSON.stringify((await page.locator('body').innerText()).slice(-7000)));
+          console.log('BUTTONS=',JSON.stringify(await page.locator('button').evaluateAll(els=>els.map((e,i)=>({i,text:(e.textContent||'').replace(/\s+/g,' ').trim(),cls:String(e.className||'')})).filter(x=>x.text))));
+          console.log('INPUTS=',JSON.stringify(await page.locator('input,select,textarea').evaluateAll(els=>els.map((e,i)=>({i,tag:e.tagName,type:e.getAttribute('type'),placeholder:e.getAttribute('placeholder'),value:e.value,cls:String(e.className||'')})))));
+          console.log('CLASSES=',JSON.stringify(await page.locator('[class]').evaluateAll(els=>[...new Set(els.flatMap(e=>String(e.className||'').split(/\s+/)).filter(Boolean))].filter(x=>/book|private|group|form|checkout|calendar|date|participant|contact|order|payment/i.test(x)).slice(0,260))));
+          await browser.close();
+          NODE
