@@ -1,4 +1,5 @@
 import { DurableObject } from "cloudflare:workers";
+import { evaluateJobWatchdog } from "./watchdog-policy.js";
 
 const PUBLIC_HOST = "demostudio.viiversion.com";
 const CONTAINER_PORT = 8080;
@@ -7,6 +8,9 @@ const ACTIVE_IMAGE_KEY = "active-container-image";
 const INTERNAL_TOKEN_KEY = "internal-storage-token";
 const GENERATION_DAILY_LIMIT = 10;
 const INSPECTION_DAILY_LIMIT = 30;
+const ACTIVE_JOB_PREFIX = "active-job:";
+const JOB_WATCHDOG_INTERVAL_MS = 30 * 1000;
+const JOB_WATCHDOG_GRACE_MS = 15 * 1000;
 
 function staticPage(title, body) {
   const html = `<!doctype html>
@@ -44,9 +48,97 @@ function staticPage(title, body) {
   });
 }
 
+function jobStatusPage(jobId) {
+  const safeId = String(jobId).replace(/[^0-9a-f-]/gi, "");
+  const html = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Generation progress · VIIVERSION Demo Studio</title>
+<style>
+:root{color-scheme:dark;font-family:Inter,ui-sans-serif,system-ui,sans-serif}
+body{margin:0;background:#090b10;color:#f5f7fb}
+main{max-width:760px;margin:0 auto;padding:56px 24px 88px}
+.muted{color:#9ea6b8}.card{background:#11151d;border:1px solid #282d38;border-radius:18px;padding:22px;margin-top:20px}
+.bar{height:14px;border-radius:999px;background:#222733;overflow:hidden;margin:18px 0 10px}
+.fill{height:100%;width:0;background:linear-gradient(90deg,#9a7cff,#54d5ff);transition:width .35s ease}
+.row{display:flex;gap:12px;flex-wrap:wrap;margin-top:14px}.pill{border:1px solid #343a48;border-radius:999px;padding:7px 11px;font-size:13px}
+.history{margin:0;padding:0;list-style:none}.history li{padding:10px 0;border-top:1px solid #242a34;color:#c9ced8}
+.error{color:#ffb0b0;white-space:pre-wrap}a{color:#b7c9ff}code{word-break:break-all}
+</style>
+</head>
+<body><main>
+<div class="muted">VIIVERSION · Demo Studio</div>
+<h1>Generation progress</h1>
+<div class="card">
+<div id="stage">Loading…</div>
+<div class="bar"><div class="fill" id="fill"></div></div>
+<div id="percent">0%</div>
+<p id="message" class="muted">Connecting to durable job state…</p>
+<div class="row"><span class="pill" id="attempt">Attempt —</span><span class="pill" id="elapsed">Stage —</span><span class="pill" id="heartbeat">Heartbeat —</span></div>
+<p id="retry" class="muted"></p><p id="error" class="error"></p><p id="artifact"></p>
+</div>
+<div class="card"><strong>Recent activity</strong><ul id="history" class="history"></ul></div>
+<p class="muted">Job ID: <code>${safeId}</code></p>
+</main>
+<script>
+const jobId=${JSON.stringify(safeId)};
+const endpoint="/v1/jobs/"+encodeURIComponent(jobId);
+const $=(id)=>document.getElementById(id);
+const age=(iso)=>iso?Math.max(0,Math.floor((Date.now()-Date.parse(iso))/1000)):0;
+function render(job){
+ $("stage").textContent=job.stageLabel||job.stage||job.status;
+ $("fill").style.width=Math.max(0,Math.min(100,job.progress||0))+"%";
+ $("percent").textContent=(job.progress||0)+"%";
+ $("message").textContent=job.message||"";
+ $("attempt").textContent="Attempt "+(job.attempt||1)+"/"+(job.maxAttempts||1);
+ $("elapsed").textContent="Stage "+age(job.stageStartedAt)+"s";
+ $("heartbeat").textContent="Heartbeat "+age(job.heartbeatAt)+"s ago";
+ $("retry").textContent=job.retryReason?"Automatic recovery: "+job.retryReason:"";
+ $("error").textContent=job.error||"";
+ $("artifact").innerHTML=job.artifactReady?'<a href="'+endpoint+'/artifact">Open final MP4</a>':"";
+ const history=$("history");history.innerHTML="";
+ for(const item of (job.history||[]).slice().reverse()){
+  const li=document.createElement("li");
+  li.textContent=new Date(item.at).toLocaleTimeString()+" · "+(item.stage||item.status)+" · "+item.progress+"% · "+item.message;
+  history.appendChild(li);
+ }
+ return job.status!=="completed"&&job.status!=="failed";
+}
+async function poll(){
+ try{
+  const r=await fetch(endpoint,{cache:"no-store"});
+  if(!r.ok)throw new Error("Status request returned HTTP "+r.status);
+  const keep=render(await r.json());
+  if(keep)setTimeout(poll,2000);
+ }catch(error){
+  $("message").textContent="Connection problem. Retrying automatically…";
+  $("error").textContent=String(error&&error.message?error.message:error);
+  setTimeout(poll,3000);
+ }
+}
+poll();
+</script></body></html>`;
+  return new Response(html, {
+    headers: {
+      "Content-Type": "text/html; charset=utf-8",
+      "Cache-Control": "no-store",
+      "X-Content-Type-Options": "nosniff",
+    },
+  });
+}
+
 function publicStaticResponse(request) {
   if (request.method !== "GET" && request.method !== "HEAD") return undefined;
   const url = new URL(request.url);
+
+  const jobStatusMatch = url.pathname.match(
+    /^\/jobs\/([0-9a-f-]{36})$/i,
+  );
+  if (jobStatusMatch) {
+    return jobStatusPage(jobStatusMatch[1]);
+  }
 
   if (url.pathname === "/") {
     return staticPage(
@@ -297,6 +389,19 @@ export class DemoStudioContainer extends DurableObject {
     return bearerToken(request) === configured;
   }
 
+  async scheduleWatchdog() {
+    const existing = await this.ctx.storage.getAlarm();
+    const target = Date.now() + JOB_WATCHDOG_INTERVAL_MS;
+    if (!existing || existing > target) {
+      await this.ctx.storage.setAlarm(target);
+    }
+  }
+
+  async clearActiveJob(id) {
+    await this.ctx.storage.delete(ACTIVE_JOB_PREFIX + id);
+    await this.env.DEMO_STUDIO_ARTIFACTS.delete("recovery/" + id + ".json");
+  }
+
   async handleInternalRequest(request, url) {
     const artifactMatch = url.pathname.match(
       /^\/__internal\/artifacts\/([0-9a-f-]{36})$/i,
@@ -304,8 +409,11 @@ export class DemoStudioContainer extends DurableObject {
     const jobMatch = url.pathname.match(
       /^\/__internal\/jobs\/([0-9a-f-]{36})$/i,
     );
+    const recoveryMatch = url.pathname.match(
+      /^\/__internal\/recovery\/([0-9a-f-]{36})$/i,
+    );
 
-    if (!artifactMatch && !jobMatch) return undefined;
+    if (!artifactMatch && !jobMatch && !recoveryMatch) return undefined;
 
     const expected = await this.getInternalToken();
     if (bearerToken(request) !== expected) {
@@ -330,9 +438,32 @@ export class DemoStudioContainer extends DurableObject {
       return new Response(null, { status: 204 });
     }
 
+    if (recoveryMatch) {
+      const id = recoveryMatch[1];
+      const source = await request.text();
+      JSON.parse(source);
+      await this.env.DEMO_STUDIO_ARTIFACTS.put(
+        "recovery/" + id + ".json",
+        source,
+        {
+          httpMetadata: {
+            contentType: "application/json; charset=utf-8",
+            cacheControl: "no-store",
+          },
+        },
+      );
+      await this.ctx.storage.put(ACTIVE_JOB_PREFIX + id, { id });
+      await this.scheduleWatchdog();
+      return new Response(null, { status: 204 });
+    }
+
+    const id = jobMatch[1];
+    const source = await request.text();
+    const snapshot = JSON.parse(source);
+
     await this.env.DEMO_STUDIO_ARTIFACTS.put(
-      "jobs/" + jobMatch[1] + ".json",
-      request.body,
+      "jobs/" + id + ".json",
+      source,
       {
         httpMetadata: {
           contentType: "application/json; charset=utf-8",
@@ -340,6 +471,14 @@ export class DemoStudioContainer extends DurableObject {
         },
       },
     );
+
+    if (snapshot.status === "completed" || snapshot.status === "failed") {
+      await this.clearActiveJob(id);
+    } else {
+      await this.ctx.storage.put(ACTIVE_JOB_PREFIX + id, { id });
+      await this.scheduleWatchdog();
+    }
+
     return new Response(null, { status: 204 });
   }
 
@@ -393,7 +532,32 @@ export class DemoStudioContainer extends DurableObject {
 
     if (!object) return undefined;
 
-    return new Response(object.body, {
+    const snapshot = JSON.parse(await object.text());
+    const now = Date.now();
+    const stageStarted = Date.parse(
+      snapshot.stageStartedAt ?? snapshot.updatedAt ?? snapshot.createdAt,
+    );
+    const heartbeatAt = Date.parse(
+      snapshot.heartbeatAt ?? snapshot.updatedAt ?? snapshot.createdAt,
+    );
+    const stageElapsedSeconds = Number.isFinite(stageStarted)
+      ? Math.max(0, Math.floor((now - stageStarted) / 1000))
+      : 0;
+    const heartbeatAgeSeconds = Number.isFinite(heartbeatAt)
+      ? Math.max(0, Math.floor((now - heartbeatAt) / 1000))
+      : 0;
+    const timeout = Math.max(
+      30,
+      Number(snapshot.stageTimeoutSeconds ?? 300),
+    );
+    const terminal =
+      snapshot.status === "completed" || snapshot.status === "failed";
+
+    snapshot.stageElapsedSeconds = stageElapsedSeconds;
+    snapshot.heartbeatAgeSeconds = heartbeatAgeSeconds;
+    snapshot.stalled = !terminal && stageElapsedSeconds > timeout;
+
+    return new Response(JSON.stringify(snapshot), {
       status: 200,
       headers: {
         "Content-Type": "application/json; charset=utf-8",
@@ -401,6 +565,248 @@ export class DemoStudioContainer extends DurableObject {
         ETag: object.httpEtag,
       },
     });
+  }
+
+  async failStalledJob(id, snapshot, reason) {
+    const now = new Date().toISOString();
+    const history = Array.isArray(snapshot.history)
+      ? snapshot.history.slice(-19)
+      : [];
+    history.push({
+      at: now,
+      status: "failed",
+      stage: "failed",
+      progress: 100,
+      message: reason,
+      attempt: Number(snapshot.attempt ?? 1),
+    });
+
+    const failed = {
+      ...snapshot,
+      status: "failed",
+      stage: "failed",
+      stageLabel: "Failed",
+      progress: 100,
+      message: reason,
+      error: reason,
+      updatedAt: now,
+      heartbeatAt: now,
+      stageStartedAt: now,
+      stageTimeoutSeconds: 86400,
+      completedAt: now,
+      stalled: false,
+      history,
+    };
+
+    await this.env.DEMO_STUDIO_ARTIFACTS.put(
+      "jobs/" + id + ".json",
+      JSON.stringify(failed),
+      {
+        httpMetadata: {
+          contentType: "application/json; charset=utf-8",
+          cacheControl: "no-store",
+        },
+      },
+    );
+    await this.clearActiveJob(id);
+  }
+
+  async restartStalledJob(id, snapshot, recovery) {
+    const currentAttempt = Number(snapshot.attempt ?? recovery.attempt ?? 1);
+    const maxAttempts = Number(snapshot.maxAttempts ?? recovery.maxAttempts ?? 3);
+
+    if (currentAttempt >= maxAttempts) {
+      await this.failStalledJob(
+        id,
+        snapshot,
+        "The job stopped making progress and reached the automatic recovery limit.",
+      );
+      return;
+    }
+
+    const nextAttempt = currentAttempt + 1;
+    const now = new Date().toISOString();
+    const reason =
+      "Watchdog detected that stage " +
+      String(snapshot.stage ?? snapshot.status ?? "unknown") +
+      " exceeded its timeout.";
+
+    const history = Array.isArray(snapshot.history)
+      ? snapshot.history.slice(-19)
+      : [];
+    history.push({
+      at: now,
+      status: "retrying",
+      stage: "retry_wait",
+      progress: Math.min(Number(snapshot.progress ?? 0), 95),
+      message:
+        "Automatic watchdog recovery is restarting the job (attempt " +
+        nextAttempt +
+        "/" +
+        maxAttempts +
+        ").",
+      attempt: nextAttempt,
+    });
+
+    const retrySnapshot = {
+      ...snapshot,
+      status: "retrying",
+      stage: "retry_wait",
+      stageLabel: "Automatic recovery",
+      progress: Math.min(Number(snapshot.progress ?? 0), 95),
+      message:
+        "The current stage stopped progressing. Demo Studio is restarting it automatically.",
+      updatedAt: now,
+      heartbeatAt: now,
+      stageStartedAt: now,
+      stageTimeoutSeconds: 90,
+      attempt: nextAttempt,
+      maxAttempts,
+      retryReason: reason,
+      stalled: false,
+      history,
+      error: undefined,
+      completedAt: undefined,
+    };
+
+    const nextRecovery = {
+      ...recovery,
+      attempt: nextAttempt,
+      maxAttempts,
+      history,
+    };
+
+    await Promise.all([
+      this.env.DEMO_STUDIO_ARTIFACTS.put(
+        "jobs/" + id + ".json",
+        JSON.stringify(retrySnapshot),
+        {
+          httpMetadata: {
+            contentType: "application/json; charset=utf-8",
+            cacheControl: "no-store",
+          },
+        },
+      ),
+      this.env.DEMO_STUDIO_ARTIFACTS.put(
+        "recovery/" + id + ".json",
+        JSON.stringify(nextRecovery),
+        {
+          httpMetadata: {
+            contentType: "application/json; charset=utf-8",
+            cacheControl: "no-store",
+          },
+        },
+      ),
+    ]);
+
+    const container = this.ctx.container;
+    if (container?.running) {
+      await container.destroy(
+        "Restarting stalled Demo Studio generation job " + id,
+      );
+    }
+
+    this.starting = undefined;
+    await this.startAndWaitForPort();
+
+    const token = await this.getInternalToken();
+    const response = await this.ctx.container
+      .getTcpPort(CONTAINER_PORT)
+      .fetch("http://container/__internal/retry/" + id, {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + token,
+          "Content-Type": "application/json",
+          "x-forwarded-host": PUBLIC_HOST,
+          "x-forwarded-proto": "https",
+        },
+        body: JSON.stringify({
+          recovery: nextRecovery,
+          reason,
+        }),
+        signal: AbortSignal.timeout(30_000),
+      });
+
+    if (!response.ok) {
+      const detail = await response.text();
+      throw new Error(
+        "Container recovery returned HTTP " +
+          response.status +
+          ": " +
+          detail,
+      );
+    }
+    await response.body?.cancel();
+  }
+
+  async alarm() {
+    try {
+      const active = await this.ctx.storage.list({
+        prefix: ACTIVE_JOB_PREFIX,
+      });
+
+      for (const key of active.keys()) {
+        const id = key.slice(ACTIVE_JOB_PREFIX.length);
+        const jobObject = await this.env.DEMO_STUDIO_ARTIFACTS.get(
+          "jobs/" + id + ".json",
+        );
+
+        if (!jobObject) continue;
+
+        const snapshot = JSON.parse(await jobObject.text());
+        if (snapshot.status === "completed" || snapshot.status === "failed") {
+          await this.clearActiveJob(id);
+          continue;
+        }
+
+        const decision = evaluateJobWatchdog(
+          snapshot,
+          Date.now(),
+          JOB_WATCHDOG_GRACE_MS,
+        );
+
+        if (decision.action === "ignore") {
+          await this.clearActiveJob(id);
+          continue;
+        }
+        if (decision.action === "wait") continue;
+        if (decision.action === "fail") {
+          await this.failStalledJob(
+            id,
+            snapshot,
+            "The job stopped making progress and reached the automatic recovery limit.",
+          );
+          continue;
+        }
+
+        const recoveryObject =
+          await this.env.DEMO_STUDIO_ARTIFACTS.get(
+            "recovery/" + id + ".json",
+          );
+        if (!recoveryObject) {
+          await this.failStalledJob(
+            id,
+            snapshot,
+            "The job stalled and no private recovery record was available.",
+          );
+          continue;
+        }
+
+        const recovery = JSON.parse(await recoveryObject.text());
+        await this.restartStalledJob(id, snapshot, recovery);
+      }
+    } catch (error) {
+      console.error("[watchdog]", error);
+    } finally {
+      const remaining = await this.ctx.storage.list({
+        prefix: ACTIVE_JOB_PREFIX,
+      });
+      if (remaining.size > 0) {
+        await this.ctx.storage.setAlarm(
+          Date.now() + JOB_WATCHDOG_INTERVAL_MS,
+        );
+      }
+    }
   }
 
   async fetch(request) {
@@ -467,6 +873,8 @@ export class DemoStudioContainer extends DurableObject {
         DEMO_STUDIO_ALLOWED_ORIGINS: "https://" + PUBLIC_HOST,
         DEMO_STUDIO_MAX_CONCURRENT_JOBS: "1",
         DEMO_STUDIO_DAILY_JOB_LIMIT: "10",
+        DEMO_STUDIO_MAX_JOB_ATTEMPTS: "3",
+        DEMO_STUDIO_HEARTBEAT_MS: "10000",
         DEMO_STUDIO_STORAGE_ROOT: "/data/jobs",
         DEMO_STUDIO_INTERNAL_TOKEN: internalToken,
         ALLOW_PRIVATE_TARGETS: "false",

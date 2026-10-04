@@ -55,6 +55,18 @@ test("serves health, OpenAPI and authenticated job status", { concurrency: false
     assert.equal(health.status, 200);
     assert.equal((await health.json() as { ok: boolean }).ok, true);
 
+    const statusPage = await fetch(
+      base + "/jobs/00000000-0000-0000-0000-000000000000",
+    );
+    assert.equal(statusPage.status, 200);
+    assert.match(
+      statusPage.headers.get("content-type") ?? "",
+      /text\/html/,
+    );
+    const statusHtml = await statusPage.text();
+    assert.match(statusHtml, /Generation progress/);
+    assert.match(statusHtml, /Automatic recovery/);
+
     const openapi = await fetch(base + "/openapi.json");
     assert.equal(openapi.status, 200);
     const spec = await openapi.json() as { openapi: string };

@@ -329,3 +329,21 @@ npm run voice -- --locale vi-VN --text "Xin chào" --out /tmp/voice.mp3 --provid
 ```
 
 The approved free presenter voice is **Chatterbox Multilingual V3**. Install `requirements-tts-chatterbox.txt` on presentation-quality workers; `auto` prefers Chatterbox for supported locales and falls back to Supertonic where needed.
+
+
+## Transparent job progress and recovery
+
+Demo Studio v0.13 exposes every long-running generation as a live, durable job.
+
+A generation response includes both the JSON status endpoint and a browser progress page:
+
+```
+/v1/jobs/{job-id}
+/jobs/{job-id}
+```
+
+The progress view shows the current stage, percentage, attempt count, heartbeat, elapsed stage time, retry reason and recent activity.
+
+Transient errors retry automatically. A Cloudflare Durable Object watchdog monitors stage timeouts; if a generation stops progressing it destroys the stalled container, starts a clean container and resumes the same job ID from a private recovery record. Recovery is bounded to prevent infinite restart loops.
+
+See `docs/JOB_RELIABILITY.md` for the recovery model and stage timeouts.

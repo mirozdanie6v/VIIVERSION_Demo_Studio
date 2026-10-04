@@ -15,7 +15,7 @@ export function createDemoStudioMcpHandler(service: DemoStudioService) {
 
     const server = new McpServer({
       name: "viiversion-demo-studio",
-      version: "0.12.1",
+      version: "0.13.0",
     });
 
     server.registerTool(
@@ -113,6 +113,7 @@ export function createDemoStudioMcpHandler(service: DemoStudioService) {
         try {
           const created = await service.createScenarioJob(input, identity);
           const statusUrl = publicBaseUrl() + "/v1/jobs/" + created.job.id;
+          const statusPageUrl = publicBaseUrl() + "/jobs/" + created.job.id;
           return {
             content: [{
               type: "text",
@@ -120,6 +121,11 @@ export function createDemoStudioMcpHandler(service: DemoStudioService) {
                 job_id: created.job.id,
                 status: created.job.status,
                 status_url: statusUrl,
+                status_page_url: statusPageUrl,
+                progress: created.job.progress,
+                stage: created.job.stage,
+                attempt: created.job.attempt,
+                max_attempts: created.job.maxAttempts,
                 quota: created.quota,
               }),
             }],
@@ -165,6 +171,7 @@ export function createDemoStudioMcpHandler(service: DemoStudioService) {
         try {
           const created = await service.createJob(input, identity);
           const statusUrl = publicBaseUrl() + "/v1/jobs/" + created.job.id;
+          const statusPageUrl = publicBaseUrl() + "/jobs/" + created.job.id;
 
           return {
             content: [
@@ -174,6 +181,11 @@ export function createDemoStudioMcpHandler(service: DemoStudioService) {
                   job_id: created.job.id,
                   status: created.job.status,
                   status_url: statusUrl,
+                  status_page_url: statusPageUrl,
+                  progress: created.job.progress,
+                  stage: created.job.stage,
+                  attempt: created.job.attempt,
+                  max_attempts: created.job.maxAttempts,
                   quota: created.quota,
                 }),
               },
@@ -219,7 +231,11 @@ export function createDemoStudioMcpHandler(service: DemoStudioService) {
           };
         }
 
-        const output: Record<string, unknown> = { ...job };
+        const output: Record<string, unknown> = {
+          ...job,
+          status_page_url:
+            publicBaseUrl() + "/jobs/" + job.id,
+        };
         if (job.artifactReady) {
           output.artifact_url =
             publicBaseUrl() + "/v1/jobs/" + job.id + "/artifact";

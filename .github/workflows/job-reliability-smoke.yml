@@ -1,0 +1,247 @@
+name: Job Reliability Smoke
+
+on:
+  pull_request:
+    paths:
+      - 'src/job-manager.ts'
+      - 'src/job-status-page.ts'
+      - 'src/persistence.ts'
+      - 'src/api-server.ts'
+      - 'src/mcp-server.ts'
+      - 'src/service.ts'
+      - 'cloudflare/worker.js'
+      - 'cloudflare/watchdog-policy.js'
+      - '.github/workflows/job-reliability-smoke.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/job-manager.ts'
+      - 'src/job-status-page.ts'
+      - 'src/persistence.ts'
+      - 'src/api-server.ts'
+      - 'src/mcp-server.ts'
+      - 'src/service.ts'
+      - 'cloudflare/worker.js'
+      - 'cloudflare/watchdog-policy.js'
+      - '.github/workflows/job-reliability-smoke.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: demo-studio-job-reliability
+  cancel-in-progress: true
+
+jobs:
+  reliability:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Install FFmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Start fixture app
+        shell: bash
+        run: |
+          python3 -m http.server 4173 --bind 127.0.0.1 > /tmp/reliability-fixture.log 2>&1 &
+          for i in {1..30}; do
+            curl -fsS http://127.0.0.1:4173/fixtures/smoke.html >/dev/null && exit 0
+            sleep 0.25
+          done
+          cat /tmp/reliability-fixture.log
+          exit 1
+
+      - name: Start Demo Studio API
+        shell: bash
+        env:
+          ALLOW_PRIVATE_TARGETS: "true"
+          DEMO_STUDIO_ALLOW_UNAUTHENTICATED: "true"
+          HOST: 127.0.0.1
+          PORT: "8788"
+          PUBLIC_BASE_URL: http://127.0.0.1:8788
+          DEMO_STUDIO_STORAGE_ROOT: /tmp/demo-studio-reliability
+          DEMO_STUDIO_MAX_CONCURRENT_JOBS: "1"
+          DEMO_STUDIO_MAX_JOB_ATTEMPTS: "3"
+          DEMO_STUDIO_HEARTBEAT_MS: "500"
+        run: |
+          npm run serve > /tmp/reliability-api.log 2>&1 &
+          for i in {1..60}; do
+            curl -fsS http://127.0.0.1:8788/health >/dev/null && exit 0
+            sleep 0.25
+          done
+          cat /tmp/reliability-api.log
+          exit 1
+
+      - name: Verify successful job progress
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          normalize() {
+            source_file="$1"
+            target_file="$2"
+            if jq -e . "$source_file" >/dev/null 2>&1; then
+              cp "$source_file" "$target_file"
+            else
+              sed -n 's/^data: //p' "$source_file" | tail -n 1 > "$target_file"
+            fi
+            jq -e . "$target_file" >/dev/null
+          }
+
+          scenario=$(jq -c . examples/smoke.json)
+          payload=$(jq -nc             --arg url "http://127.0.0.1:4173/fixtures/smoke.html"             --argjson scenario "$scenario"             '{
+              jsonrpc:"2.0",
+              id:1,
+              method:"tools/call",
+              params:{
+                name:"create_demo_video_from_scenario",
+                arguments:{
+                  url:$url,
+                  scenario:$scenario,
+                  preset:"16:9",
+                  captions:true,
+                  voiceover:false,
+                  brand:"VIIVERSION"
+                }
+              }
+            }')
+
+          curl -fsS -X POST http://127.0.0.1:8788/mcp             -H 'content-type: application/json'             -H 'accept: application/json, text/event-stream'             --data "$payload" > /tmp/reliability-create.raw
+          normalize /tmp/reliability-create.raw /tmp/reliability-create.json
+
+          created=$(jq -r '.result.content[0].text | fromjson' /tmp/reliability-create.json)
+          job_id=$(echo "$created" | jq -r '.job_id')
+          status_page=$(echo "$created" | jq -r '.status_page_url')
+
+          test -n "$job_id"
+          test "$job_id" != "null"
+          test -n "$status_page"
+          curl -fsS "$status_page" | grep -Fq 'Generation progress'
+
+          completed=0
+          observed_progress=0
+          for i in $(seq 1 120); do
+            curl -fsS "http://127.0.0.1:8788/v1/jobs/${job_id}" > /tmp/reliability-status.json
+
+            jq -e '
+              (.progress | type == "number") and
+              (.stage | type == "string") and
+              (.stageLabel | type == "string") and
+              (.attempt >= 1) and
+              (.maxAttempts == 3) and
+              (.heartbeatAt | type == "string") and
+              (.stageStartedAt | type == "string") and
+              (.history | type == "array")
+            ' /tmp/reliability-status.json >/dev/null
+
+            progress=$(jq -r '.progress' /tmp/reliability-status.json)
+            if [ "$progress" -gt 0 ] && [ "$progress" -lt 100 ]; then
+              observed_progress=1
+            fi
+
+            status=$(jq -r '.status' /tmp/reliability-status.json)
+            if [ "$status" = "completed" ]; then
+              completed=1
+              break
+            fi
+            if [ "$status" = "failed" ]; then
+              cat /tmp/reliability-status.json
+              exit 1
+            fi
+            sleep 1
+          done
+
+          test "$completed" -eq 1
+          test "$observed_progress" -eq 1
+          jq -e '.progress == 100 and .artifactReady == true' /tmp/reliability-status.json >/dev/null
+
+          curl -fsS "http://127.0.0.1:8788/v1/jobs/${job_id}/artifact" -o /tmp/reliability-success.mp4
+          test "$(stat -c%s /tmp/reliability-success.mp4)" -gt 10000
+
+      - name: Verify bounded automatic retry
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          normalize() {
+            source_file="$1"
+            target_file="$2"
+            if jq -e . "$source_file" >/dev/null 2>&1; then
+              cp "$source_file" "$target_file"
+            else
+              sed -n 's/^data: //p' "$source_file" | tail -n 1 > "$target_file"
+            fi
+            jq -e . "$target_file" >/dev/null
+          }
+
+          bad_scenario=$(jq -nc '{
+            name:"Reliability retry test",
+            baseUrl:"http://127.0.0.1:4173",
+            viewport:{width:1440,height:900},
+            defaultPauseMs:50,
+            steps:[
+              {action:"goto",url:"/fixtures/smoke.html",label:"Open fixture"},
+              {
+                action:"waitFor",
+                target:{by:"testId",value:"element-that-never-exists"},
+                state:"visible",
+                timeoutMs:250,
+                label:"Intentional transient failure"
+              }
+            ]
+          }')
+
+          payload=$(jq -nc             --arg url "http://127.0.0.1:4173/fixtures/smoke.html"             --argjson scenario "$bad_scenario"             '{
+              jsonrpc:"2.0",
+              id:2,
+              method:"tools/call",
+              params:{
+                name:"create_demo_video_from_scenario",
+                arguments:{
+                  url:$url,
+                  scenario:$scenario,
+                  preset:"16:9",
+                  captions:false,
+                  voiceover:false
+                }
+              }
+            }')
+
+          curl -fsS -X POST http://127.0.0.1:8788/mcp             -H 'content-type: application/json'             -H 'accept: application/json, text/event-stream'             --data "$payload" > /tmp/reliability-fail-create.raw
+          normalize /tmp/reliability-fail-create.raw /tmp/reliability-fail-create.json
+
+          job_id=$(jq -r '.result.content[0].text | fromjson | .job_id' /tmp/reliability-fail-create.json)
+          test -n "$job_id"
+
+          failed=0
+          for i in $(seq 1 120); do
+            curl -fsS "http://127.0.0.1:8788/v1/jobs/${job_id}" > /tmp/reliability-fail-status.json
+            status=$(jq -r '.status' /tmp/reliability-fail-status.json)
+            if [ "$status" = "failed" ]; then
+              failed=1
+              break
+            fi
+            sleep 1
+          done
+
+          test "$failed" -eq 1
+          jq -e '
+            (.attempt == 3) and
+            (.maxAttempts == 3) and
+            (.error | type == "string") and
+            ([.history[].status] | index("retrying") != null)
+          ' /tmp/reliability-fail-status.json >/dev/null

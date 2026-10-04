@@ -2,6 +2,7 @@ import {
   DemoJobManager,
   type DemoJobRequest,
   type PublicDemoJob,
+  type DemoJobRecovery,
 } from "./job-manager.js";
 import { inspectApplication, type ApplicationSnapshot } from "./inspector.js";
 import { DailyQuota } from "./quota.js";
@@ -42,6 +43,14 @@ export class DemoStudioService {
     const quota = this.quota.consume(identity);
     const job = await this.jobs.submit(request);
     return { job, quota };
+  }
+
+  async resumeJob(
+    id: string,
+    recovery: DemoJobRecovery,
+    reason: string,
+  ): Promise<PublicDemoJob> {
+    return this.jobs.resume(id, recovery, reason);
   }
 
   async createScenarioJob(

@@ -4,7 +4,11 @@ import path from "node:path";
 import { buildStoryboard, planDemo } from "./director.js";
 import { recordUsageEvent } from "./metering.js";
 import { renderRun, type RenderPreset } from "./render.js";
-import { persistArtifact, persistJobSnapshot } from "./persistence.js";
+import {
+  persistArtifact,
+  persistJobRecovery,
+  persistJobSnapshot,
+} from "./persistence.js";
 import { runScenario } from "./runner.js";
 import { assertSafeHttpUrl } from "./security.js";
 import type { DemoScenario } from "./types.js";
@@ -28,18 +32,51 @@ export type DemoJobStatus =
   | "preflighting"
   | "directing"
   | "capturing"
+  | "voicing"
   | "rendering"
+  | "persisting"
+  | "retrying"
   | "completed"
   | "failed";
+
+export type DemoJobStage =
+  | "queued"
+  | "preflight"
+  | "director"
+  | "capture"
+  | "voiceover"
+  | "render"
+  | "persist"
+  | "retry_wait"
+  | "complete"
+  | "failed";
+
+export type DemoJobEvent = {
+  at: string;
+  status: DemoJobStatus;
+  stage: DemoJobStage;
+  progress: number;
+  message: string;
+  attempt: number;
+};
 
 export type DemoJob = {
   id: string;
   status: DemoJobStatus;
+  stage: DemoJobStage;
+  stageLabel: string;
   progress: number;
   message: string;
   request: DemoJobRequest;
   createdAt: string;
   updatedAt: string;
+  heartbeatAt: string;
+  stageStartedAt: string;
+  stageTimeoutSeconds: number;
+  attempt: number;
+  maxAttempts: number;
+  retryReason?: string;
+  history: DemoJobEvent[];
   completedAt?: string;
   scenarioPath?: string;
   storyboardPath?: string;
@@ -51,28 +88,106 @@ export type DemoJob = {
 export type PublicDemoJob = {
   id: string;
   status: DemoJobStatus;
+  stage: DemoJobStage;
+  stageLabel: string;
   progress: number;
   message: string;
   createdAt: string;
   updatedAt: string;
+  heartbeatAt: string;
+  stageStartedAt: string;
+  stageTimeoutSeconds: number;
+  stageElapsedSeconds: number;
+  heartbeatAgeSeconds: number;
+  stalled: boolean;
+  attempt: number;
+  maxAttempts: number;
+  retryReason?: string;
+  history: DemoJobEvent[];
   completedAt?: string;
   error?: string;
   artifactReady: boolean;
 };
+
+export type DemoJobRecovery = {
+  request: DemoJobRequest;
+  createdAt: string;
+  attempt: number;
+  maxAttempts: number;
+  history: DemoJobEvent[];
+};
+
+class PermanentJobError extends Error {}
 
 function positiveInteger(value: string | undefined, fallback: number): number {
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
 }
 
+function secondsSince(value: string, now = Date.now()): number {
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed)
+    ? Math.max(0, Math.floor((now - parsed) / 1000))
+    : 0;
+}
+
+function isTerminal(status: DemoJobStatus): boolean {
+  return status === "completed" || status === "failed";
+}
+
 export function toPublicDemoJob(job: DemoJob): PublicDemoJob {
+  const stage = job.stage ?? (
+    job.status === "preflighting"
+      ? "preflight"
+      : job.status === "directing"
+        ? "director"
+        : job.status === "capturing"
+          ? "capture"
+          : job.status === "voicing"
+            ? "voiceover"
+            : job.status === "rendering"
+              ? "render"
+              : job.status === "persisting"
+                ? "persist"
+                : job.status === "retrying"
+                  ? "retry_wait"
+                  : job.status === "completed"
+                    ? "complete"
+                    : job.status === "failed"
+                      ? "failed"
+                      : "queued"
+  );
+  const updatedAt = job.updatedAt ?? job.createdAt;
+  const heartbeatAt = job.heartbeatAt ?? updatedAt;
+  const stageStartedAt = job.stageStartedAt ?? updatedAt;
+  const stageTimeoutSeconds = job.stageTimeoutSeconds ?? 300;
+  const attempt = job.attempt ?? 1;
+  const maxAttempts = job.maxAttempts ?? 3;
+  const history = job.history ?? [];
+  const stageElapsedSeconds = secondsSince(stageStartedAt);
+  const heartbeatAgeSeconds = secondsSince(heartbeatAt);
+
   return {
     id: job.id,
     status: job.status,
+    stage,
+    stageLabel: job.stageLabel ?? stage,
     progress: job.progress,
     message: job.message,
     createdAt: job.createdAt,
-    updatedAt: job.updatedAt,
+    updatedAt,
+    heartbeatAt,
+    stageStartedAt,
+    stageTimeoutSeconds,
+    stageElapsedSeconds,
+    heartbeatAgeSeconds,
+    stalled:
+      !isTerminal(job.status) &&
+      stageElapsedSeconds > stageTimeoutSeconds,
+    attempt,
+    maxAttempts,
+    retryReason: job.retryReason,
+    history: history.slice(-20),
     completedAt: job.completedAt,
     error: job.error,
     artifactReady: Boolean(
@@ -88,6 +203,10 @@ function narrationFor(scenario: DemoScenario): string {
     .join(" ");
 }
 
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export class DemoJobManager {
   private readonly jobs = new Map<string, DemoJob>();
   private readonly queue: string[] = [];
@@ -96,8 +215,15 @@ export class DemoJobManager {
 
   readonly rootDir: string;
   readonly maxConcurrent: number;
+  readonly maxAttempts: number;
+  readonly heartbeatIntervalMs: number;
 
-  constructor(options: { rootDir?: string; maxConcurrent?: number } = {}) {
+  constructor(options: {
+    rootDir?: string;
+    maxConcurrent?: number;
+    maxAttempts?: number;
+    heartbeatIntervalMs?: number;
+  } = {}) {
     this.rootDir = path.resolve(
       options.rootDir ??
         process.env.DEMO_STUDIO_STORAGE_ROOT ??
@@ -106,6 +232,12 @@ export class DemoJobManager {
     this.maxConcurrent =
       options.maxConcurrent ??
       positiveInteger(process.env.DEMO_STUDIO_MAX_CONCURRENT_JOBS, 2);
+    this.maxAttempts =
+      options.maxAttempts ??
+      positiveInteger(process.env.DEMO_STUDIO_MAX_JOB_ATTEMPTS, 3);
+    this.heartbeatIntervalMs =
+      options.heartbeatIntervalMs ??
+      positiveInteger(process.env.DEMO_STUDIO_HEARTBEAT_MS, 10_000);
   }
 
   async submit(request: DemoJobRequest): Promise<PublicDemoJob> {
@@ -119,15 +251,72 @@ export class DemoJobManager {
     const job: DemoJob = {
       id: randomUUID(),
       status: "queued",
+      stage: "queued",
+      stageLabel: "Waiting for worker",
       progress: 0,
       message: "Waiting for an available worker.",
       request,
       createdAt: now,
       updatedAt: now,
+      heartbeatAt: now,
+      stageStartedAt: now,
+      stageTimeoutSeconds: 900,
+      attempt: 1,
+      maxAttempts: this.maxAttempts,
+      history: [],
     };
+    this.pushEvent(job);
 
     this.jobs.set(job.id, job);
     this.queue.push(job.id);
+    await this.persistRecovery(job);
+    await this.persist(job);
+    void this.drain();
+
+    return this.publicJob(job);
+  }
+
+  async resume(
+    id: string,
+    recovery: DemoJobRecovery,
+    reason: string,
+  ): Promise<PublicDemoJob> {
+    const existing = this.jobs.get(id);
+    if (existing && !isTerminal(existing.status)) {
+      return this.publicJob(existing);
+    }
+
+    await assertSafeHttpUrl(recovery.request.url);
+    const now = new Date().toISOString();
+    const attempt = Math.max(1, recovery.attempt);
+    const job: DemoJob = {
+      id,
+      status: "retrying",
+      stage: "retry_wait",
+      stageLabel: "Recovering job",
+      progress: 1,
+      message:
+        "Automatic recovery is restarting this job (attempt " +
+        attempt +
+        "/" +
+        recovery.maxAttempts +
+        ").",
+      request: recovery.request,
+      createdAt: recovery.createdAt,
+      updatedAt: now,
+      heartbeatAt: now,
+      stageStartedAt: now,
+      stageTimeoutSeconds: 60,
+      attempt,
+      maxAttempts: recovery.maxAttempts,
+      retryReason: reason,
+      history: recovery.history.slice(-20),
+    };
+    this.pushEvent(job);
+
+    this.jobs.set(id, job);
+    this.queue.push(id);
+    await this.persistRecovery(job);
     await this.persist(job);
     void this.drain();
 
@@ -157,13 +346,34 @@ export class DemoJobManager {
     return toPublicDemoJob(job);
   }
 
+  private pushEvent(job: DemoJob): void {
+    job.history.push({
+      at: job.updatedAt,
+      status: job.status,
+      stage: job.stage,
+      progress: job.progress,
+      message: job.message,
+      attempt: job.attempt,
+    });
+    if (job.history.length > 24) {
+      job.history.splice(0, job.history.length - 24);
+    }
+  }
+
   private async update(
     job: DemoJob,
     patch: Partial<Pick<
       DemoJob,
       | "status"
+      | "stage"
+      | "stageLabel"
       | "progress"
       | "message"
+      | "stageStartedAt"
+      | "stageTimeoutSeconds"
+      | "heartbeatAt"
+      | "attempt"
+      | "retryReason"
       | "scenarioPath"
       | "storyboardPath"
       | "runDir"
@@ -171,9 +381,44 @@ export class DemoJobManager {
       | "error"
       | "completedAt"
     >>,
+    options: { event?: boolean } = {},
   ): Promise<void> {
-    Object.assign(job, patch, { updatedAt: new Date().toISOString() });
+    const now = new Date().toISOString();
+    Object.assign(job, patch, {
+      updatedAt: now,
+      heartbeatAt: patch.heartbeatAt ?? now,
+    });
+    if (options.event !== false) this.pushEvent(job);
     await this.persist(job);
+  }
+
+  private async beginStage(
+    job: DemoJob,
+    input: {
+      status: DemoJobStatus;
+      stage: DemoJobStage;
+      stageLabel: string;
+      progress: number;
+      message: string;
+      timeoutSeconds: number;
+    },
+  ): Promise<void> {
+    const now = new Date().toISOString();
+    await this.update(job, {
+      ...input,
+      stageStartedAt: now,
+      heartbeatAt: now,
+      error: undefined,
+    });
+  }
+
+  private async heartbeat(job: DemoJob): Promise<void> {
+    if (isTerminal(job.status)) return;
+    await this.update(
+      job,
+      { heartbeatAt: new Date().toISOString() },
+      { event: false },
+    );
   }
 
   private async persist(job: DemoJob): Promise<void> {
@@ -184,6 +429,26 @@ export class DemoJobManager {
       JSON.stringify(job, null, 2) + "\n",
       "utf8",
     );
+
+    await persistJobSnapshot(job.id, this.publicJob(job)).catch(
+      (persistenceError) => {
+        console.error("[persistence] progress snapshot failed", persistenceError);
+      },
+    );
+  }
+
+  private recoveryPayload(job: DemoJob): DemoJobRecovery {
+    return {
+      request: job.request,
+      createdAt: job.createdAt,
+      attempt: job.attempt,
+      maxAttempts: job.maxAttempts,
+      history: job.history.slice(-20),
+    };
+  }
+
+  private async persistRecovery(job: DemoJob): Promise<void> {
+    await persistJobRecovery(job.id, this.recoveryPayload(job));
   }
 
   private async drain(): Promise<void> {
@@ -196,7 +461,12 @@ export class DemoJobManager {
         if (!id) break;
 
         const job = this.jobs.get(id);
-        if (!job || job.status !== "queued") continue;
+        if (
+          !job ||
+          (job.status !== "queued" && job.status !== "retrying")
+        ) {
+          continue;
+        }
 
         this.running += 1;
         void this.execute(job).finally(() => {
@@ -209,184 +479,297 @@ export class DemoJobManager {
     }
   }
 
+  private retryable(error: unknown): boolean {
+    if (error instanceof PermanentJobError) return false;
+    const message = error instanceof Error ? error.message : String(error);
+    return !/quota exceeded|invalid or missing bearer|host header|origin is not allowed|visual critic blocked|editor brain quality gate failed/i.test(
+      message,
+    );
+  }
+
   private async execute(job: DemoJob): Promise<void> {
-    const jobDir = path.join(this.rootDir, job.id);
-    const startedMs = Date.now();
-
-    try {
-      await this.update(job, {
-        status: "preflighting",
-        progress: 6,
-        message: "UX/Design Brain is checking desktop, mobile and visual-system constraints.",
-      });
-
-      const uxDesign = await auditUxDesign(job.request.url, {
-        outputDir: jobDir,
-      });
-
-      if (uxDesign.preflight.status === "BLOCKED") {
-        throw new Error(
-          "UX/Design preflight blocked generation: " +
-            uxDesign.preflight.findings
-              .map((finding) => finding.message)
-              .join(" "),
-        );
-      }
-
-      let scenario: DemoScenario;
-      let storyboard: string;
-      let snapshot: unknown;
-
-      if (job.request.scenario) {
-        scenario = job.request.scenario;
-        storyboard = buildStoryboard(scenario);
-        await this.update(job, {
-          status: "capturing",
-          progress: 28,
-          message: "Using the host-directed scenario and starting browser capture.",
+    while (true) {
+      const heartbeat = setInterval(() => {
+        void this.heartbeat(job).catch((error) => {
+          console.error("[heartbeat]", error);
         });
-      } else {
-        await this.update(job, {
-          status: "directing",
-          progress: 10,
-          message: "AI Director is inspecting the application and building the storyboard.",
-        });
+      }, this.heartbeatIntervalMs);
+      heartbeat.unref?.();
 
-        const directed = await planDemo(job.request.url, job.request.goal ?? "");
-        scenario = directed.scenario;
-        storyboard = directed.storyboard;
-        snapshot = directed.snapshot;
-      }
+      try {
+        await this.executeAttempt(job);
+        return;
+      } catch (error) {
+        clearInterval(heartbeat);
 
-      const scenarioPath = path.join(jobDir, "scenario.json");
-      const storyboardPath = path.join(jobDir, "storyboard.md");
-      const writes: Promise<unknown>[] = [
-        writeFile(scenarioPath, JSON.stringify(scenario, null, 2) + "\n", "utf8"),
-        writeFile(storyboardPath, storyboard + "\n", "utf8"),
-      ];
+        if (this.retryable(error) && job.attempt < job.maxAttempts) {
+          const reason =
+            error instanceof Error ? error.message : String(error);
+          const nextAttempt = job.attempt + 1;
+          const backoffSeconds = Math.min(20, 3 * nextAttempt);
 
-      if (snapshot) {
-        writes.push(
-          writeFile(
-            path.join(jobDir, "snapshot.json"),
-            JSON.stringify(snapshot, null, 2) + "\n",
-            "utf8",
-          ),
-        );
-      }
-
-      await Promise.all(writes);
-
-      await this.update(job, {
-        status: "capturing",
-        progress: 40,
-        message: "Browser is executing and recording the scenario.",
-        scenarioPath,
-        storyboardPath,
-      });
-
-      const capture = await runScenario(scenario, {
-        artifactsRoot: path.join(jobDir, "captures"),
-      });
-
-      await this.update(job, {
-        progress: 68,
-        message: "Browser capture is complete.",
-        runDir: capture.runDir,
-      });
-
-      let voiceoverPath: string | undefined;
-      if (job.request.voiceover) {
-        const narration = narrationFor(scenario);
-        if (!narration) {
-          throw new Error("Voiceover requested, but the scenario contains no narration.");
+          job.attempt = nextAttempt;
+          job.retryReason = reason;
+          await this.beginStage(job, {
+            status: "retrying",
+            stage: "retry_wait",
+            stageLabel: "Automatic retry",
+            progress: Math.min(job.progress, 92),
+            message:
+              "A recoverable error occurred. Retrying automatically in " +
+              backoffSeconds +
+              " seconds (attempt " +
+              nextAttempt +
+              "/" +
+              job.maxAttempts +
+              ").",
+            timeoutSeconds: backoffSeconds + 45,
+          });
+          await this.persistRecovery(job);
+          await delay(backoffSeconds * 1000);
+          continue;
         }
 
-        voiceoverPath = path.join(jobDir, "voiceover.mp3");
-        await createVoiceover(narration, voiceoverPath, {
-          voice: job.request.voice,
-        });
+        await this.fail(job, error);
+        return;
+      } finally {
+        clearInterval(heartbeat);
       }
+    }
+  }
 
-      await this.update(job, {
-        status: "rendering",
-        progress: 78,
-        message: "Rendering final presentation video.",
-      });
+  private async executeAttempt(job: DemoJob): Promise<void> {
+    await this.beginStage(job, {
+      status: "preflighting",
+      stage: "preflight",
+      stageLabel: "UX & design preflight",
+      progress: 5,
+      message:
+        "Checking desktop, mobile, accessibility and visual-system constraints.",
+      timeoutSeconds: 150,
+    });
 
-      const preset = job.request.preset ?? "16:9";
-      const artifactPath = path.join(
-        jobDir,
-        "final-" + preset.replace(":", "x") + ".mp4",
+    const uxDesign = await auditUxDesign(job.request.url, {
+      outputDir: path.join(this.rootDir, job.id),
+    });
+
+    if (uxDesign.preflight.status === "BLOCKED") {
+      throw new PermanentJobError(
+        "UX/Design preflight blocked generation: " +
+          uxDesign.preflight.findings
+            .map((finding) => finding.message)
+            .join(" "),
       );
+    }
 
-      await renderRun({
-        runDir: capture.runDir,
-        outputPath: artifactPath,
-        preset,
-        captions: job.request.captions !== false,
-        voiceoverPath,
-        brandLabel: job.request.brand ?? "VIIVERSION",
-        cta: job.request.cta,
-        designContractPath: path.join(jobDir, "design_contract.json"),
-        uxPreflightPath: path.join(jobDir, "ux_preflight.json"),
+    await this.update(job, {
+      progress: 14,
+      message: "UX & design preflight passed.",
+    });
+
+    const jobDir = path.join(this.rootDir, job.id);
+    let scenario: DemoScenario;
+    let storyboard: string;
+    let snapshot: unknown;
+
+    if (job.request.scenario) {
+      scenario = job.request.scenario;
+      storyboard = buildStoryboard(scenario);
+    } else {
+      await this.beginStage(job, {
+        status: "directing",
+        stage: "director",
+        stageLabel: "AI Director",
+        progress: 16,
+        message:
+          "Inspecting the application and building the presentation storyboard.",
+        timeoutSeconds: 180,
       });
 
-      await persistArtifact(job.id, artifactPath);
-
-      const completedAt = new Date().toISOString();
-      await this.update(job, {
-        status: "completed",
-        progress: 100,
-        message: "Presentation video is ready and durably stored.",
-        artifactPath,
-        completedAt,
-      });
-
-      await persistJobSnapshot(job.id, {
-        ...this.publicJob(job),
-        artifact_url:
-          "/v1/jobs/" + job.id + "/artifact",
-      });
-
-      void recordUsageEvent({
-        jobId: job.id,
-        outcome: "completed",
-        preset,
-        captions: job.request.captions !== false,
-        voiceover: Boolean(job.request.voiceover),
-        durationMs: Date.now() - startedMs,
-        occurredAt: completedAt,
-      }, this.rootDir).catch((meterError) => {
-        console.error("[metering]", meterError);
-      });
-    } catch (error) {
-      const completedAt = new Date().toISOString();
-      await this.update(job, {
-        status: "failed",
-        progress: 100,
-        message: "Demo generation failed.",
-        error: error instanceof Error ? error.message : String(error),
-        completedAt,
-      });
-
-      await persistJobSnapshot(job.id, this.publicJob(job)).catch(
-        (persistenceError) => {
-          console.error("[persistence]", persistenceError);
-        },
+      const directed = await planDemo(
+        job.request.url,
+        job.request.goal ?? "",
       );
+      scenario = directed.scenario;
+      storyboard = directed.storyboard;
+      snapshot = directed.snapshot;
 
-      void recordUsageEvent({
-        jobId: job.id,
-        outcome: "failed",
-        preset: job.request.preset ?? "16:9",
-        captions: job.request.captions !== false,
-        voiceover: Boolean(job.request.voiceover),
-        durationMs: Date.now() - startedMs,
-        occurredAt: completedAt,
-      }, this.rootDir).catch((meterError) => {
-        console.error("[metering]", meterError);
+      await this.update(job, {
+        progress: 26,
+        message: "Storyboard is ready.",
       });
     }
+
+    const scenarioPath = path.join(jobDir, "scenario.json");
+    const storyboardPath = path.join(jobDir, "storyboard.md");
+    const writes: Promise<unknown>[] = [
+      writeFile(
+        scenarioPath,
+        JSON.stringify(scenario, null, 2) + "\n",
+        "utf8",
+      ),
+      writeFile(storyboardPath, storyboard + "\n", "utf8"),
+    ];
+
+    if (snapshot) {
+      writes.push(
+        writeFile(
+          path.join(jobDir, "snapshot.json"),
+          JSON.stringify(snapshot, null, 2) + "\n",
+          "utf8",
+        ),
+      );
+    }
+    await Promise.all(writes);
+
+    const captureTimeout = Math.max(300, scenario.steps.length * 40);
+    await this.beginStage(job, {
+      status: "capturing",
+      stage: "capture",
+      stageLabel: "Browser capture",
+      progress: 30,
+      message: "Executing and recording the customer journey.",
+      timeoutSeconds: captureTimeout,
+    });
+    await this.update(job, {
+      scenarioPath,
+      storyboardPath,
+    });
+
+    const capture = await runScenario(scenario, {
+      artifactsRoot: path.join(jobDir, "captures"),
+    });
+
+    await this.update(job, {
+      progress: 62,
+      message: "Browser capture is complete.",
+      runDir: capture.runDir,
+    });
+
+    let voiceoverPath: string | undefined;
+    if (job.request.voiceover) {
+      const narration = narrationFor(scenario);
+      if (!narration) {
+        throw new PermanentJobError(
+          "Voiceover requested, but the scenario contains no narration.",
+        );
+      }
+
+      await this.beginStage(job, {
+        status: "voicing",
+        stage: "voiceover",
+        stageLabel: "Voiceover",
+        progress: 66,
+        message: "Generating and synchronizing narration.",
+        timeoutSeconds: 240,
+      });
+
+      voiceoverPath = path.join(jobDir, "voiceover.mp3");
+      await createVoiceover(narration, voiceoverPath, {
+        voice: job.request.voice,
+      });
+
+      await this.update(job, {
+        progress: 75,
+        message: "Narration is ready.",
+      });
+    }
+
+    await this.beginStage(job, {
+      status: "rendering",
+      stage: "render",
+      stageLabel: "Final render",
+      progress: 78,
+      message:
+        "Editor Brain, Design Brain and FFmpeg are building the final video.",
+      timeoutSeconds: 420,
+    });
+
+    const preset = job.request.preset ?? "16:9";
+    const artifactPath = path.join(
+      jobDir,
+      "final-" + preset.replace(":", "x") + ".mp4",
+    );
+
+    await renderRun({
+      runDir: capture.runDir,
+      outputPath: artifactPath,
+      preset,
+      captions: job.request.captions !== false,
+      voiceoverPath,
+      brandLabel: job.request.brand ?? "VIIVERSION",
+      cta: job.request.cta,
+      designContractPath: path.join(jobDir, "design_contract.json"),
+      uxPreflightPath: path.join(jobDir, "ux_preflight.json"),
+    });
+
+    await this.beginStage(job, {
+      status: "persisting",
+      stage: "persist",
+      stageLabel: "Saving result",
+      progress: 96,
+      message: "Saving the final MP4 to durable storage.",
+      timeoutSeconds: 120,
+    });
+
+    await persistArtifact(job.id, artifactPath);
+
+    const completedAt = new Date().toISOString();
+    await this.update(job, {
+      status: "completed",
+      stage: "complete",
+      stageLabel: "Completed",
+      stageStartedAt: completedAt,
+      stageTimeoutSeconds: 86_400,
+      progress: 100,
+      message: "Presentation video is ready.",
+      artifactPath,
+      completedAt,
+      retryReason: undefined,
+    });
+
+    void recordUsageEvent({
+      jobId: job.id,
+      outcome: "completed",
+      preset,
+      captions: job.request.captions !== false,
+      voiceover: Boolean(job.request.voiceover),
+      durationMs: Date.now() - Date.parse(job.createdAt),
+      occurredAt: completedAt,
+    }, this.rootDir).catch((meterError) => {
+      console.error("[metering]", meterError);
+    });
+  }
+
+  private async fail(job: DemoJob, error: unknown): Promise<void> {
+    const completedAt = new Date().toISOString();
+    const message = error instanceof Error ? error.message : String(error);
+
+    await this.update(job, {
+      status: "failed",
+      stage: "failed",
+      stageLabel: "Failed",
+      stageStartedAt: completedAt,
+      stageTimeoutSeconds: 86_400,
+      progress: 100,
+      message:
+        job.attempt >= job.maxAttempts
+          ? "Generation failed after all automatic recovery attempts."
+          : "Generation failed.",
+      error: message,
+      completedAt,
+    });
+
+    void recordUsageEvent({
+      jobId: job.id,
+      outcome: "failed",
+      preset: job.request.preset ?? "16:9",
+      captions: job.request.captions !== false,
+      voiceover: Boolean(job.request.voiceover),
+      durationMs: Date.now() - Date.parse(job.createdAt),
+      occurredAt: completedAt,
+    }, this.rootDir).catch((meterError) => {
+      console.error("[metering]", meterError);
+    });
   }
 }
