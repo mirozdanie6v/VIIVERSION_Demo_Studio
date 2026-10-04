@@ -1,0 +1,639 @@
+{
+  "name": "MAX TOUR — English Full Customer Journey v3",
+  "baseUrl": "https://max-tour.viiversion.com",
+  "viewport": {
+    "width": 430,
+    "height": 932
+  },
+  "defaultPauseMs": 220,
+  "presentation": {
+    "smartZoom": {
+      "scale": 1.18,
+      "mobileScale": 1.12,
+      "transitionMs": 420,
+      "settleMs": 120
+    },
+    "focusRing": {
+      "enabled": true,
+      "color": "rgba(255,255,255,0.40)",
+      "width": 2,
+      "padding": 7
+    },
+    "clickRipple": {
+      "enabled": true,
+      "color": "rgba(255,255,255,0.76)",
+      "size": 58,
+      "durationMs": 360
+    },
+    "localeOverlay": {
+      "language": "en",
+      "replacements": {
+        "Ваш лучший отдых": "Your best holiday",
+        "Выбрать тур": "Choose a tour",
+        "17 найдено": "17 found",
+        "Экскурсия в Далат «Премиум»": "Dalat Premium Tour",
+        "Далат «Премиум»": "Dalat Premium",
+        "Премиум экскурсии": "Premium tours",
+        "Экскурсия в Далат «ВИП»": "Dalat VIP Tour",
+        "Экскурсия в Далат «Стеклянный мост»": "Dalat Glass Bridge Tour",
+        "Экскурсия в провинцию Фуйен": "Phu Yen Province Tour",
+        "Дневная обзорная экскурсия по Нячангу": "Nha Trang City Tour",
+        "Нячанг": "Nha Trang",
+        "Далат": "Dalat",
+        "Фуйен": "Phu Yen",
+        "Дананг": "Da Nang",
+        "Фукуок": "Phu Quoc",
+        "Ханой": "Hanoi",
+        "Главная": "Home",
+        "Экскурсии": "Tours",
+        "Мои поездки": "My trips",
+        "Помощь": "Help",
+        "Выбрать путешествие": "Choose a tour",
+        "Премиум коллекция": "Premium collection",
+        "СОБРАНО ДЛЯ ВАС": "CURATED FOR YOU",
+        "ПРЕМИУМ ВЫБОР": "PREMIUM PICK",
+        "Открыть программу": "Open itinerary",
+        "КОЛЛЕКЦИЯ": "COLLECTION",
+        "Популярные экскурсии": "Popular tours",
+        "Смотреть все": "View all",
+        "Небольшие группы": "Small groups",
+        "Индивидуально": "Private",
+        "Индивидуальный": "Private",
+        "Групповой": "Group",
+        "Забираем из отеля": "Hotel pickup",
+        "Понятная стоимость": "Clear pricing",
+        "О МАРШРУТЕ": "ABOUT THE ROUTE",
+        "День, собранный по деталям": "A day designed around the details",
+        "Сбор": "Pickup",
+        "Возвращение": "Return",
+        "Формат": "Format",
+        "Группа / индивидуально": "Group / private",
+        "ФОТОИСТОРИЯ": "PHOTO STORY",
+        "ПРОГРАММА": "ITINERARY",
+        "По шагам": "Step by step",
+        "УЖЕ ВКЛЮЧЕНО": "INCLUDED",
+        "В поездке": "On the trip",
+        "ДОПОЛНИТЕЛЬНО": "EXTRAS",
+        "ЧТО ВЗЯТЬ": "WHAT TO BRING",
+        "Перед выездом": "Before departure",
+        "Источник программы и условий": "Source of itinerary and terms",
+        "Официальная страница MAX TOUR": "Official MAX TOUR page",
+        "Выбрать формат": "Choose format",
+        "за взрослого": "per adult",
+        "по программе": "per itinerary",
+        "Бронирование экскурсии": "Tour booking",
+        "ТУР И ФОРМАТ": "TOUR & FORMAT",
+        "Что хотите забронировать?": "What would you like to book?",
+        "Экскурсия": "Tour",
+        "Своя компания · выбранная дата · online-оплата": "Private group · selected date · online payment",
+        "Продолжить индивидуально": "Continue with private tour",
+        "СОСТАВ": "GROUP SIZE",
+        "Кто едет?": "Who is travelling?",
+        "Взрослые": "Adults",
+        "Дети": "Children",
+        "Возраст, лет": "Age",
+        "Выбрать дату": "Choose date",
+        "ДАТА И ТРАНСФЕР": "DATE & TRANSFER",
+        "Когда едем?": "When are we going?",
+        "Желаемая дата": "Preferred date",
+        "Отель": "Hotel",
+        "Трансфер считается автоматически": "Transfer is calculated automatically",
+        "Данные путешественников": "Traveller details",
+        "КОНТАКТ И УЧАСТНИКИ": "CONTACT & TRAVELLERS",
+        "Данные для подтверждения": "Confirmation details",
+        "Ваше имя": "Your name",
+        "Телефон": "Phone",
+        "ФИО": "Full name",
+        "Дата рождения": "Date of birth",
+        "Получить итоговую стоимость": "Get total price",
+        "ОПЛАТА": "PAYMENT",
+        "Перенос и отмена": "Changes & cancellation",
+        "ПОДТВЕРЖДЕНИЕ": "CONFIRMATION",
+        "Оплачено": "Paid",
+        "Осталось": "Remaining",
+        "Открыть поездку": "Open trip",
+        "ИИ-Помощник": "AI Assistant",
+        "AI-консультант": "AI Consultant",
+        "Задайте вопрос": "Ask a question",
+        "Напишите вопрос": "Type your question",
+        "Отправить": "Send",
+        "от": "from",
+        "Подробнее": "Details",
+        "Насыщенная однодневная программа по Далату с кофейными плантациями, Глиняной деревней, пагодой Линь Фуок, Датанла и канатной дорогой.": "A full-day Dalat itinerary with coffee plantations, the Clay Village, Linh Phuoc Pagoda, Datanla Waterfall and a cable car.",
+        "5:00–5:30 сбор участников из отелей": "5:00–5:30 hotel pickup",
+        "около 20:00 возвращение в Нячанг": "around 20:00 return to Nha Trang",
+        "Кофейные плантации": "Coffee plantations",
+        "Горный перевал": "Mountain pass",
+        "«Глиняная деревня»": "Clay Village",
+        "Пагода Линь Фуок": "Linh Phuoc Pagoda",
+        "Обед в ресторане": "Restaurant lunch",
+        "Водопад Датанла": "Datanla Waterfall",
+        "Кофейная ферма и зоопарк": "Coffee farm & zoo",
+        "Канатная дорога": "Cable car",
+        "Обед": "Lunch",
+        "Все входные билеты и канатная дорога": "All entrance tickets and cable car",
+        "Профессиональные русскоязычные гиды": "Professional guides",
+        "Трансфер на микроавтобусе": "Minibus transfer",
+        "Комфортная группа 14–20 человек": "Comfortable group of 14–20",
+        "Бутылка воды каждому участнику": "Bottle of water for each guest",
+        "Одежда с закрытыми коленями и плечами": "Clothing covering knees and shoulders",
+        "Завтрак": "Breakfast",
+        "Кофта": "Light jacket",
+        "Дождевик": "Raincoat",
+        "Удобная обувь": "Comfortable shoes",
+        "Деньги на мелкие расходы и сувениры в донгах": "Cash in VND for small expenses and souvenirs",
+        "Вьетнам,": "Vietnam,",
+        "который хочется": "made to be",
+        "прожить.": "experienced.",
+        "Более 150 маршрутов по стране — премиум-экскурсии, небольшие группы, индивидуальные программы, трансферы и авторские путешествия.": "More than 150 routes across Vietnam — premium tours, small groups, private programs, transfers and signature journeys.",
+        "Путешествие начинается ещё до встречи с гидом": "Your journey starts before you meet the guide",
+        "Выберите маршрут, дату и состав группы, посмотрите программу и детали, оформите бронь и пройдите демонстрационный сценарий оплаты — всё в одном интерфейсе.": "Choose a route, date and group, review the itinerary and details, then book — all in one interface.",
+        "подходящих вариантов": "matching options",
+        "Куда поедем?": "Where shall we go?",
+        "Поиск": "Search",
+        "Место": "Destination",
+        "Стиль отдыха": "Travel style",
+        "Все места": "All destinations",
+        "Подробнее →": "Details →",
+        "ONLINE READY": "ONLINE READY",
+        "Ваш лучший отдых по Вьетнаме": "Your best holiday in Vietnam",
+        "Более 150 экскурсий по всему Вьетнаму, Fast Track в аэропортах, трансферы, индивидуальные программы и авторские путешествия по Юго-Восточной Азии.": "More than 150 tours across Vietnam, airport Fast Track, transfers, private programs and signature journeys across Southeast Asia.",
+        "Быстрый выбор": "Quick choice",
+        "по направлениям": "by destination",
+        "Каталог": "Catalog",
+        "Помощник": "Assistant",
+        "Все": "All",
+        "Фильтры": "Filters",
+        "Город": "City",
+        "Все города": "All cities",
+        "Длительность": "Duration",
+        "Любая": "Any",
+        "Тип отдыха": "Travel style",
+        "Любой тип": "Any style",
+        "Бюджет, $": "Budget, $",
+        "Подходит детям": "Family friendly",
+        "Показать только семейные экскурсии": "Show family-friendly tours only",
+        "Популярные": "Popular",
+        "ИИ-консультант": "AI Consultant",
+        "Подскажите, куда и как хотите поехать. Я подберу варианты и сразу проведу до бронирования.": "Tell me where and how you'd like to travel. I'll suggest options and take you straight to booking.",
+        "Где вы сейчас или откуда планируете выезд?": "Where are you now, or where would you like to depart from?",
+        "Напишите сообщение...": "Type a message...",
+        "Напишите сообщение": "Type a message",
+        "Подбираю...": "Finding the best options...",
+        "Начать": "Start",
+        "Премиум": "Premium",
+        "Все направления": "All destinations",
+        "Все категории": "All categories",
+        "Найти": "Search",
+        "Муйне/Фантьет": "Mui Ne / Phan Thiet",
+        "ДАНАНГ": "DA NANG",
+        "НЯЧАНГ": "NHA TRANG",
+        "ФУКУОК": "PHU QUOC",
+        "ХАНОЙ": "HANOI",
+        "Далат «ВИП»": "Dalat VIP",
+        "Вьетнам": "Vietnam",
+        "Бронирование": "Booking",
+        "Оформить": "Continue",
+        "Продолжить": "Continue",
+        "Цена": "Price",
+        "Стоимость": "Price",
+        "Программа": "Itinerary",
+        "Что входит": "What's included",
+        "Включено": "Included",
+        "Отзывы": "Reviews",
+        "Описание": "Description",
+        "Назад": "Back",
+        "Выбрать": "Choose",
+        "Рассчитать": "Calculate",
+        "Итого": "Total",
+        "Дата": "Date",
+        "Участники": "Travellers",
+        "Трансфер": "Transfer",
+        "Имя": "Name",
+        "Готово": "Done",
+        "Очистить": "Clear",
+        "MAX TOUR · ОФИЦИАЛЬНЫЙ КАТАЛОГ": "MAX TOUR · OFFICIAL CATALOG",
+        "Источник": "Source",
+        "страниц туров": "tour pages",
+        "фото": "photos",
+        "Стоимость — по странице тура": "Price shown on tour page",
+        "Оплата MAX TOUR": "MAX TOUR payment",
+        "30% депозит или 100% — выбирает клиент.": "30% deposit or 100% — the customer chooses.",
+        "02 · СОСТАВ": "02 · GROUP SIZE",
+        "03 · ДАТА И ТРАНСФЕР": "03 · DATE & TRANSFER",
+        "04 · КОНТАКТ И УЧАСТНИКИ": "04 · CONTACT & TRAVELLERS",
+        "05 · ОПЛАТА": "05 · PAYMENT",
+        "Тур": "Tour",
+        "Индивидуальный тур — расчёт и выбор 30% или 100%. Групповой — отдельная система сбора выезда.": "Private tour — instant quote with 30% or 100% payment options.",
+        "DEMO · БЕЗ СПИСАНИЯ": "DEMO · NO CHARGE",
+        "Например: Amiana Resort": "For example: Amiana Resort",
+        "Рассчитываем…": "Calculating…",
+        "Итог рассчитан сервером. Выберите, сколько оплатить сейчас.": "The total is calculated instantly. Choose how much to pay now.",
+        "Депозит сейчас": "Deposit now",
+        "Полная оплата": "Full payment",
+        "Банковская карта": "Bank card",
+        "Другой способ": "Other method",
+        "через менеджера": "via manager",
+        "Заказ создан": "Booking created",
+        "Обрабатываем…": "Processing…",
+        "Бронирование создано. После успешной оплаты клиент получит подтверждение в Telegram, а заказ появится в общей CRM.": "Booking created. After payment, the customer receives confirmation and the order appears in the CRM.",
+        "БРОНИРОВАНИЕ ОФОРМЛЕНО": "BOOKING CONFIRMED",
+        "Предоплата получена": "Deposit received",
+        "Турист": "Traveller",
+        "Каталог и бронирование": "Catalog and booking"
+      }
+    }
+  },
+  "steps": [
+    {
+      "action": "goto",
+      "url": "/",
+      "label": "Home"
+    },
+    {
+      "action": "waitFor",
+      "target": {
+        "by": "css",
+        "value": "button:has-text(\"Choose a tour\"):visible, button:has-text(\"Choose a journey\"):visible"
+      },
+      "state": "visible",
+      "timeoutMs": 20000
+    },
+    {
+      "action": "wait",
+      "ms": 1200,
+      "label": "Establish home"
+    },
+    {
+      "action": "hover",
+      "target": {
+        "by": "css",
+        "value": "button:has-text(\"Choose a tour\"):visible, button:has-text(\"Choose a journey\"):visible"
+      },
+      "pauseAfterMs": 900,
+      "label": "Focus choose tour"
+    },
+    {
+      "action": "click",
+      "target": {
+        "by": "css",
+        "value": "button:has-text(\"Choose a tour\"):visible, button:has-text(\"Choose a journey\"):visible"
+      },
+      "label": "Open catalog"
+    },
+    {
+      "action": "waitFor",
+      "target": {
+        "by": "css",
+        "value": ".px-site-tour-card:visible, .px-catalog-count:visible"
+      },
+      "state": "visible",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "wait",
+      "ms": 1000,
+      "label": "Establish catalog"
+    },
+    {
+      "action": "scroll",
+      "y": 300,
+      "label": "Browse catalog",
+      "pauseAfterMs": 350
+    },
+    {
+      "action": "hover",
+      "target": {
+        "by": "css",
+        "value": "article.px-site-tour-card:has-text(\"Dalat Premium\"):visible, article:has-text(\"Dalat Premium\"):visible"
+      },
+      "pauseAfterMs": 950,
+      "label": "Focus Dalat Premium"
+    },
+    {
+      "action": "click",
+      "target": {
+        "by": "css",
+        "value": "article.px-site-tour-card:has-text(\"Dalat Premium\"):visible, article:has-text(\"Dalat Premium\"):visible"
+      },
+      "label": "Open Dalat Premium"
+    },
+    {
+      "action": "waitFor",
+      "target": {
+        "by": "css",
+        "value": ".px-detail-hero:visible, h1:has-text(\"Dalat Premium\"):visible"
+      },
+      "state": "visible",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "wait",
+      "ms": 1200,
+      "label": "Establish tour"
+    },
+    {
+      "action": "scroll",
+      "y": 420,
+      "label": "Explore tour details",
+      "pauseAfterMs": 350
+    },
+    {
+      "action": "wait",
+      "ms": 1300,
+      "label": "Read tour details"
+    },
+    {
+      "action": "click",
+      "target": {
+        "by": "css",
+        "value": "button:has-text(\"AI Assistant\"):visible, button:has-text(\"AI Consultant\"):visible"
+      },
+      "label": "Open AI consultant"
+    },
+    {
+      "action": "waitFor",
+      "target": {
+        "by": "css",
+        "value": "textarea:visible, input[placeholder*=\"message\" i]:visible, input:visible, [contenteditable=\"true\"]:visible"
+      },
+      "state": "visible",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "fill",
+      "target": {
+        "by": "css",
+        "value": "textarea:visible, input[placeholder*=\"message\" i]:visible, input:visible, [contenteditable=\"true\"]:visible"
+      },
+      "value": "We're a couple looking for a relaxed full-day excursion with nature and beautiful views. What would you recommend for us? Please answer in English.",
+      "pauseAfterMs": 700,
+      "label": "Ask a human excursion question"
+    },
+    {
+      "action": "click",
+      "target": {
+        "by": "css",
+        "value": "button:has-text(\"→\"):visible, button:has-text(\"Send\"):visible"
+      },
+      "label": "Send AI question",
+      "pauseAfterMs": 0
+    },
+    {
+      "action": "waitForContentGrowth",
+      "target": {
+        "by": "css",
+        "value": "body"
+      },
+      "minAddedChars": 90,
+      "timeoutMs": 30000,
+      "label": "Wait for actual AI answer"
+    },
+    {
+      "action": "wait",
+      "ms": 1800,
+      "label": "Read AI answer"
+    },
+    {
+      "action": "press",
+      "key": "Escape",
+      "label": "Close AI if modal"
+    },
+    {
+      "action": "waitFor",
+      "target": {
+        "by": "css",
+        "value": ".px-sticky-cta button:visible, button:has-text(\"Choose format\"):visible"
+      },
+      "state": "visible",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "hover",
+      "target": {
+        "by": "css",
+        "value": ".px-sticky-cta button:visible, button:has-text(\"Choose format\"):visible"
+      },
+      "pauseAfterMs": 750,
+      "label": "Focus booking CTA"
+    },
+    {
+      "action": "click",
+      "target": {
+        "by": "css",
+        "value": ".px-sticky-cta button:visible, button:has-text(\"Choose format\"):visible"
+      },
+      "label": "Start booking"
+    },
+    {
+      "action": "waitFor",
+      "target": {
+        "by": "css",
+        "value": ".px-commerce-flow:visible, .px-commerce-card:visible"
+      },
+      "state": "visible",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "wait",
+      "ms": 900,
+      "label": "Establish booking"
+    },
+    {
+      "action": "click",
+      "target": {
+        "by": "css",
+        "value": "button:has-text(\"Continue with private tour\"):visible, button:has-text(\"Continue privately\"):visible"
+      },
+      "label": "Continue private"
+    },
+    {
+      "action": "waitFor",
+      "target": {
+        "by": "css",
+        "value": "button:has-text(\"Choose date\"):visible"
+      },
+      "state": "visible",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "click",
+      "target": {
+        "by": "css",
+        "value": "button:has-text(\"Choose date\"):visible"
+      },
+      "label": "Continue group size"
+    },
+    {
+      "action": "waitFor",
+      "target": {
+        "by": "css",
+        "value": ".px-date-grid button:visible, input[type=\"date\"]:visible"
+      },
+      "state": "visible",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "click",
+      "target": {
+        "by": "css",
+        "value": ".px-date-grid button:visible"
+      },
+      "label": "Select available date"
+    },
+    {
+      "action": "fill",
+      "target": {
+        "by": "css",
+        "value": "label:has-text(\"Hotel\") input:visible, input[placeholder*=\"Amiana\" i]:visible"
+      },
+      "value": "Amiana Resort",
+      "label": "Enter hotel"
+    },
+    {
+      "action": "click",
+      "target": {
+        "by": "css",
+        "value": "button:has-text(\"Traveller details\"):visible"
+      },
+      "label": "Continue to traveller details"
+    },
+    {
+      "action": "waitFor",
+      "target": {
+        "by": "css",
+        "value": "label:has-text(\"Your name\") input:visible"
+      },
+      "state": "visible",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "fill",
+      "target": {
+        "by": "css",
+        "value": "label:has-text(\"Your name\") input:visible"
+      },
+      "value": "Alex Morgan",
+      "label": "Enter contact name"
+    },
+    {
+      "action": "fill",
+      "target": {
+        "by": "css",
+        "value": "label:has-text(\"Phone\") input:visible"
+      },
+      "value": "+84 901 234 567",
+      "label": "Enter phone"
+    },
+    {
+      "action": "fill",
+      "target": {
+        "by": "css",
+        "value": "div.px-participant-v2 >> nth=0 >> input >> nth=0"
+      },
+      "value": "Alex Morgan",
+      "label": "Traveller one name"
+    },
+    {
+      "action": "fill",
+      "target": {
+        "by": "css",
+        "value": "div.px-participant-v2 >> nth=0 >> input >> nth=1"
+      },
+      "value": "1990-04-12",
+      "label": "Traveller one birth date"
+    },
+    {
+      "action": "fill",
+      "target": {
+        "by": "css",
+        "value": "div.px-participant-v2 >> nth=1 >> input >> nth=0"
+      },
+      "value": "Jamie Morgan",
+      "label": "Traveller two name"
+    },
+    {
+      "action": "fill",
+      "target": {
+        "by": "css",
+        "value": "div.px-participant-v2 >> nth=1 >> input >> nth=1"
+      },
+      "value": "1992-08-23",
+      "label": "Traveller two birth date"
+    },
+    {
+      "action": "click",
+      "target": {
+        "by": "css",
+        "value": "button:has-text(\"Get total price\"):visible"
+      },
+      "label": "Calculate total"
+    },
+    {
+      "action": "waitFor",
+      "target": {
+        "by": "css",
+        "value": ".px-quote-lines:visible"
+      },
+      "state": "visible",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "wait",
+      "ms": 1000,
+      "label": "Show quote"
+    },
+    {
+      "action": "click",
+      "target": {
+        "by": "css",
+        "value": "button:has-text(\"Bank card\"):visible"
+      },
+      "label": "Choose card"
+    },
+    {
+      "action": "click",
+      "target": {
+        "by": "css",
+        "value": "button:has-text(\"MAX TOUR payment\"):visible"
+      },
+      "label": "Create booking"
+    },
+    {
+      "action": "waitFor",
+      "target": {
+        "by": "css",
+        "value": ".px-order-created:visible"
+      },
+      "state": "visible",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "wait",
+      "ms": 850,
+      "label": "Booking created"
+    },
+    {
+      "action": "click",
+      "target": {
+        "by": "css",
+        "value": "button:has-text(\"DEMO\"):visible"
+      },
+      "label": "Demo payment"
+    },
+    {
+      "action": "waitFor",
+      "target": {
+        "by": "css",
+        "value": ".px-commerce-success:visible"
+      },
+      "state": "visible",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "wait",
+      "ms": 1600,
+      "label": "Booking confirmation"
+    }
+  ]
+}
