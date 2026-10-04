@@ -1,0 +1,140 @@
+name: MAX TOUR English Complete Payment Journey v5.8
+
+on:
+  push:
+    branches:
+      - 'render/max-tour-en-v5-full-journey-20261004'
+    paths:
+      - '.github/workflows/temp-max-tour-en-v5-8.yml'
+
+concurrency:
+  group: max-tour-en-v5-8-complete-payment
+  cancel-in-progress: true
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Load approved Niki and music URLs
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin render/max-tour-en-v3-fullscreen-20261004 --depth=1
+          git show FETCH_HEAD:.github/workflows/temp-max-tour-en-v3-fullscreen.yml > /tmp/previous-render.yml
+          python3 - <<'PY'
+          from pathlib import Path
+          import re, os
+          text=Path('/tmp/previous-render.yml').read_text()
+          names=['V_HOOK','V_CATALOG','V_TOUR','V_CHOICE','V_BOOKING','V_AI','V_VALUE','V_CTA','MUSIC']
+          with open(os.environ['GITHUB_ENV'],'a') as f:
+              for name in names:
+                  m=re.search(r'^\s*'+name+r':\s*"([^"]+)"', text, re.M)
+                  if not m: raise SystemExit(f'missing {name}')
+                  f.write(f'{name}={m.group(1)}\n')
+          PY
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Install browser and media tools
+        run: |
+          npx playwright install --with-deps chromium
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg fonts-dejavu-core jq
+          python3 -m pip install --quiet pillow
+
+      - name: Capture complete English customer journey
+        env:
+          DEMO_STUDIO_ALLOWED_HOSTS: max-tour.viiversion.com
+          ALLOW_PRIVATE_TARGETS: "false"
+        run: npm run capture -- --scenario examples/max-tour-english-full-journey-v5-5.json
+
+      - name: Resolve run directory
+        id: run
+        shell: bash
+        run: echo "dir=$(find artifacts -mindepth 1 -maxdepth 1 -type d | sort | tail -n 1)" >> "$GITHUB_OUTPUT"
+
+      - name: Record approved demo checkout path
+        id: payment
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/payment-recording
+          python3 - <<'PY'
+          from pathlib import Path
+          src=Path('.github/workflows/temp-max-tour-native-en-checkout.yml').read_text()
+          marker="node --input-type=module <<'NODE'\n"
+          start=src.index(marker)+len(marker)
+          end=src.index("\n          NODE", start)
+          js=src[start:end]
+          old="const page=await browser.newPage({viewport:{width:430,height:932}});"
+          new="""const context=await browser.newContext({
+            viewport:{width:430,height:932},
+            recordVideo:{dir:'artifacts/payment-recording',size:{width:430,height:932}}
+          });
+          const page=await context.newPage();"""
+          if old not in js:
+              raise SystemExit('payment diagnostic page creation not found')
+          js=js.replace(old,new,1)
+          js=js.replace("await browser.close();","await context.close();\nawait browser.close();",1)
+          Path('payment-record.mjs').write_text(js)
+          PY
+          node payment-record.mjs
+          f="$(find artifacts/payment-recording -type f -name '*.webm' | head -n 1)"
+          test -s "$f"
+          echo "file=$f" >> "$GITHUB_OUTPUT"
+          ffprobe -v error -show_entries format=duration -of csv=p=0 "$f"
+
+      - name: Download Niki narration and music
+        shell: bash
+        run: |
+          set -euo pipefail
+          d="artifacts/english-voices-v5-5"
+          mkdir -p "$d"
+          curl -L --fail --retry 3 "$V_HOOK" -o "$d/hook.mp3"
+          curl -L --fail --retry 3 "$V_CATALOG" -o "$d/catalog.mp3"
+          curl -L --fail --retry 3 "$V_TOUR" -o "$d/tour.mp3"
+          curl -L --fail --retry 3 "$V_CHOICE" -o "$d/choice.mp3"
+          curl -L --fail --retry 3 "$V_BOOKING" -o "$d/booking.mp3"
+          curl -L --fail --retry 3 "$V_AI" -o "$d/ai.mp3"
+          curl -L --fail --retry 3 "$V_VALUE" -o "$d/value.mp3"
+          curl -L --fail --retry 3 "$V_CTA" -o "$d/cta.mp3"
+          curl -L --fail --retry 3 "$MUSIC" -o "artifacts/english-music-v5-5.mp3"
+
+      - name: Render smooth fullscreen journey
+        run: |
+          python3 scripts/render_max_tour_en_full_journey_v4_payment.py             --run "${{ steps.run.outputs.dir }}"             --voices artifacts/english-voices-v5-5             --music artifacts/english-music-v5-5.mp3             --payment-video "${{ steps.payment.outputs.file }}"             --out artifacts/max-tour-english-v5-8
+
+      - name: Verify final output and full path
+        shell: bash
+        run: |
+          set -euo pipefail
+          f="artifacts/max-tour-english-v5-8/MAX_TOUR_English_Full_Journey_v5_8_FINAL.mp4"
+          test -s "$f"
+          duration=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$f")
+          echo "FINAL_DURATION=$duration"
+          awk -v d="$duration" 'BEGIN { exit !(d >= 82 && d <= 115) }'
+          run_dir="${{ steps.run.outputs.dir }}"
+          jq -e '.success == true' "$run_dir/run.json" >/dev/null
+          jq -e '[.timeline[] | select(.label == "Wait for actual AI answer" and .success == true)] | length == 1' "$run_dir/run.json" >/dev/null
+          jq -e '[.timeline[] | select(.label == "Booking confirmation" and .success == true)] | length == 1' "$run_dir/run.json" >/dev/null
+          test -s "${{ steps.payment.outputs.file }}"
+          p_duration=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "${{ steps.payment.outputs.file }}")
+          echo "PAYMENT_CAPTURE_DURATION=$p_duration"
+          awk -v d="$p_duration" 'BEGIN { exit !(d >= 4) }'
+          ffprobe -v error -show_entries stream=codec_type,width,height -of json "$f"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: max-tour-english-v5-8-complete-payment-final
+          path: artifacts/max-tour-english-v5-8/
+          if-no-files-found: error
