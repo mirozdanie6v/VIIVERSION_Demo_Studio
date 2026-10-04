@@ -1,4 +1,5 @@
 import { DurableObject } from "cloudflare:workers";
+import { evaluateJobWatchdog } from "./watchdog-policy.js";
 
 const PUBLIC_HOST = "demostudio.viiversion.com";
 const CONTAINER_PORT = 8080;
@@ -758,16 +759,23 @@ export class DemoStudioContainer extends DurableObject {
           continue;
         }
 
-        const stageStarted = Date.parse(
-          snapshot.stageStartedAt ?? snapshot.updatedAt ?? snapshot.createdAt,
+        const decision = evaluateJobWatchdog(
+          snapshot,
+          Date.now(),
+          JOB_WATCHDOG_GRACE_MS,
         );
-        const timeoutMs =
-          Math.max(30, Number(snapshot.stageTimeoutSeconds ?? 300)) * 1000;
 
-        if (
-          Number.isFinite(stageStarted) &&
-          Date.now() - stageStarted <= timeoutMs + JOB_WATCHDOG_GRACE_MS
-        ) {
+        if (decision.action === "ignore") {
+          await this.clearActiveJob(id);
+          continue;
+        }
+        if (decision.action === "wait") continue;
+        if (decision.action === "fail") {
+          await this.failStalledJob(
+            id,
+            snapshot,
+            "The job stopped making progress and reached the automatic recovery limit.",
+          );
           continue;
         }
 
