@@ -231,7 +231,7 @@ export class DemoJobManager {
       updatedAt: now,
       heartbeatAt: now,
       stageStartedAt: now,
-      stageTimeoutSeconds: 120,
+      stageTimeoutSeconds: 900,
       attempt: 1,
       maxAttempts: this.maxAttempts,
       history: [],
