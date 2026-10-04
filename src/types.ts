@@ -89,6 +89,11 @@ export type DemoStep =
       waitUntil?: "load" | "domcontentloaded" | "networkidle";
       timeoutMs?: number;
     })
+  | (BaseStep & TargetStep & {
+      action: "waitForContentGrowth";
+      minAddedChars?: number;
+      timeoutMs?: number;
+    })
   | (BaseStep & {
       action: "assert";
       target: Target;
