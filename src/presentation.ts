@@ -21,8 +21,16 @@ const DEFAULTS = {
 } as const;
 
 export function chooseZoomScale(viewportWidth: number, config?: PresentationConfig): number {
-  if (config?.enabled === false || config?.smartZoom?.enabled === false) return 1;
+  if (config?.enabled === false) return 1;
 
+  if (config?.semanticCamera?.enabled) {
+    const requested = viewportWidth <= 640
+      ? config.semanticCamera.mobileFocusScale ?? 1.1
+      : config.semanticCamera.focusScale ?? 1.1;
+    return Math.max(1, Math.min(requested, viewportWidth <= 640 ? 1.12 : 1.18));
+  }
+
+  if (config?.smartZoom?.enabled === false) return 1;
   const requested = viewportWidth <= 640
     ? config?.smartZoom?.mobileScale ?? DEFAULTS.mobileScale
     : config?.smartZoom?.scale ?? DEFAULTS.desktopScale;
@@ -33,9 +41,10 @@ export function chooseZoomScale(viewportWidth: number, config?: PresentationConf
 async function ensureOverlay(page: Page, config?: PresentationConfig) {
   const cursor = config?.cursor;
   const focus = config?.focusRing;
+  const cursorEnabled = cursor?.enabled !== false;
 
   await page.evaluate(
-    ({ cursorConfig, focusConfig, defaults }) => {
+    ({ cursorConfig, focusConfig, cursorEnabled, defaults }) => {
       let style = document.getElementById("viiversion-demo-style") as HTMLStyleElement | null;
       if (!style) {
         style = document.createElement("style");
@@ -101,7 +110,10 @@ async function ensureOverlay(page: Page, config?: PresentationConfig) {
         }
       `;
 
-      if (!document.getElementById("viiversion-demo-pointer")) {
+      const existingPointer = document.getElementById("viiversion-demo-pointer");
+      if (!cursorEnabled) {
+        existingPointer?.remove();
+      } else if (!existingPointer) {
         const pointer = document.createElement("div");
         pointer.id = "viiversion-demo-pointer";
         document.documentElement.appendChild(pointer);
@@ -116,6 +128,7 @@ async function ensureOverlay(page: Page, config?: PresentationConfig) {
     {
       cursorConfig: cursor,
       focusConfig: focus,
+      cursorEnabled,
       defaults: {
         cursorSize: DEFAULTS.cursorSize,
         cursorFill: DEFAULTS.cursorFill,
@@ -146,8 +159,12 @@ export async function focusTarget(
   const locator = resolveTarget(page, target);
   await centerTarget(page, target);
 
-  const transitionMs = config?.smartZoom?.transitionMs ?? DEFAULTS.transitionMs;
-  const settleMs = config?.smartZoom?.settleMs ?? DEFAULTS.settleMs;
+  const transitionMs = config?.semanticCamera?.enabled
+    ? config.semanticCamera.focusTransitionMs ?? 260
+    : config?.smartZoom?.transitionMs ?? DEFAULTS.transitionMs;
+  const settleMs = config?.semanticCamera?.enabled
+    ? 90
+    : config?.smartZoom?.settleMs ?? DEFAULTS.settleMs;
   await page.waitForTimeout(Math.min(transitionMs, 450));
 
   const initialBox = await locator.boundingBox();
@@ -220,8 +237,28 @@ export async function focusTarget(
   };
 }
 
-export async function animateClick(page: Page, config?: PresentationConfig) {
+export async function animateClick(page: Page, target: Target, config?: PresentationConfig) {
   if (config?.enabled === false) return;
+
+  if (config?.tactilePress?.enabled !== false && config?.semanticCamera?.enabled) {
+    const locator = resolveTarget(page, target);
+    const scale = config?.tactilePress?.scale ?? 0.985;
+    const durationMs = config?.tactilePress?.durationMs ?? 190;
+    const glowColor = config?.tactilePress?.glowColor ?? "rgba(255,151,72,.32)";
+    await locator.evaluate((element, values) => {
+      const node = element as HTMLElement;
+      node.animate(
+        [
+          { transform: "scale(1)", filter: "brightness(1)", boxShadow: "0 0 0 rgba(0,0,0,0)" },
+          { transform: `scale(${values.scale})`, filter: "brightness(1.06)", boxShadow: `0 0 0 5px ${values.glowColor}` },
+          { transform: "scale(1)", filter: "brightness(1)", boxShadow: "0 0 0 rgba(0,0,0,0)" },
+        ],
+        { duration: values.durationMs, easing: "cubic-bezier(.2,.8,.2,1)" },
+      );
+    }, { scale, durationMs, glowColor });
+    await page.waitForTimeout(Math.min(durationMs, 220));
+    return;
+  }
 
   const ripple = config?.clickRipple;
   const durationMs = ripple?.durationMs ?? DEFAULTS.rippleDurationMs;
@@ -266,7 +303,9 @@ export async function animateClick(page: Page, config?: PresentationConfig) {
 export async function resetPresentation(page: Page, config?: PresentationConfig) {
   if (page.isClosed()) return;
 
-  const transitionMs = config?.smartZoom?.transitionMs ?? DEFAULTS.transitionMs;
+  const transitionMs = config?.semanticCamera?.enabled
+    ? config.semanticCamera.resolveTransitionMs ?? 300
+    : config?.smartZoom?.transitionMs ?? DEFAULTS.transitionMs;
 
   await page.evaluate(
     ({ duration }) => {
