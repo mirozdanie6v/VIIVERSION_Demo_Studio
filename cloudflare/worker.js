@@ -443,7 +443,32 @@ export class DemoStudioContainer extends DurableObject {
 
     if (!object) return undefined;
 
-    return new Response(object.body, {
+    const snapshot = JSON.parse(await object.text());
+    const now = Date.now();
+    const stageStarted = Date.parse(
+      snapshot.stageStartedAt ?? snapshot.updatedAt ?? snapshot.createdAt,
+    );
+    const heartbeatAt = Date.parse(
+      snapshot.heartbeatAt ?? snapshot.updatedAt ?? snapshot.createdAt,
+    );
+    const stageElapsedSeconds = Number.isFinite(stageStarted)
+      ? Math.max(0, Math.floor((now - stageStarted) / 1000))
+      : 0;
+    const heartbeatAgeSeconds = Number.isFinite(heartbeatAt)
+      ? Math.max(0, Math.floor((now - heartbeatAt) / 1000))
+      : 0;
+    const timeout = Math.max(
+      30,
+      Number(snapshot.stageTimeoutSeconds ?? 300),
+    );
+    const terminal =
+      snapshot.status === "completed" || snapshot.status === "failed";
+
+    snapshot.stageElapsedSeconds = stageElapsedSeconds;
+    snapshot.heartbeatAgeSeconds = heartbeatAgeSeconds;
+    snapshot.stalled = !terminal && stageElapsedSeconds > timeout;
+
+    return new Response(JSON.stringify(snapshot), {
       status: 200,
       headers: {
         "Content-Type": "application/json; charset=utf-8",
