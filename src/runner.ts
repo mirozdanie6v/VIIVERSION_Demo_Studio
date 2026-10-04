@@ -217,6 +217,40 @@ async function runStep(
         timeout: step.timeoutMs ?? 15_000,
       });
       return {};
+    case "waitForContentGrowth": {
+      const raw = normalizeLegacyTarget(step) ?? ({ by: "css", value: "body" } as Target);
+      const target = interpolateTarget(raw, variables);
+      const resolved = await resolveTargetWithRecovery(page, target, {
+        primaryTimeoutMs: 5_000,
+      });
+      const baseline = ((await resolved.locator.innerText().catch(() => "")) ?? "").trim();
+      const minAddedChars = Math.max(1, step.minAddedChars ?? 80);
+      const timeoutMs = step.timeoutMs ?? 30_000;
+      await page.waitForFunction(
+        ({ baseline, minAddedChars, selector }) => {
+          const el = document.querySelector(selector);
+          if (!el) return false;
+          const current = (el.textContent ?? "").trim();
+          return current.length >= baseline.length + minAddedChars;
+        },
+        {
+          baseline,
+          minAddedChars,
+          selector:
+            typeof resolved.target === "string"
+              ? resolved.target
+              : resolved.target.by === "css"
+                ? resolved.target.value
+                : "body",
+        },
+        { timeout: timeoutMs },
+      );
+      return {
+        recovery: resolved.recovered
+          ? { original: target, resolved: resolved.target }
+          : undefined,
+      };
+    }
     case "assert":
       await runAssertion(page, step, scenario);
       return {};
