@@ -7,6 +7,9 @@ const ACTIVE_IMAGE_KEY = "active-container-image";
 const INTERNAL_TOKEN_KEY = "internal-storage-token";
 const GENERATION_DAILY_LIMIT = 10;
 const INSPECTION_DAILY_LIMIT = 30;
+const ACTIVE_JOB_PREFIX = "active-job:";
+const JOB_WATCHDOG_INTERVAL_MS = 30 * 1000;
+const JOB_WATCHDOG_GRACE_MS = 15 * 1000;
 
 function staticPage(title, body) {
   const html = `<!doctype html>
@@ -297,6 +300,19 @@ export class DemoStudioContainer extends DurableObject {
     return bearerToken(request) === configured;
   }
 
+  async scheduleWatchdog() {
+    const existing = await this.ctx.storage.getAlarm();
+    const target = Date.now() + JOB_WATCHDOG_INTERVAL_MS;
+    if (!existing || existing > target) {
+      await this.ctx.storage.setAlarm(target);
+    }
+  }
+
+  async clearActiveJob(id) {
+    await this.ctx.storage.delete(ACTIVE_JOB_PREFIX + id);
+    await this.env.DEMO_STUDIO_ARTIFACTS.delete("recovery/" + id + ".json");
+  }
+
   async handleInternalRequest(request, url) {
     const artifactMatch = url.pathname.match(
       /^\/__internal\/artifacts\/([0-9a-f-]{36})$/i,
@@ -304,8 +320,11 @@ export class DemoStudioContainer extends DurableObject {
     const jobMatch = url.pathname.match(
       /^\/__internal\/jobs\/([0-9a-f-]{36})$/i,
     );
+    const recoveryMatch = url.pathname.match(
+      /^\/__internal\/recovery\/([0-9a-f-]{36})$/i,
+    );
 
-    if (!artifactMatch && !jobMatch) return undefined;
+    if (!artifactMatch && !jobMatch && !recoveryMatch) return undefined;
 
     const expected = await this.getInternalToken();
     if (bearerToken(request) !== expected) {
@@ -330,9 +349,32 @@ export class DemoStudioContainer extends DurableObject {
       return new Response(null, { status: 204 });
     }
 
+    if (recoveryMatch) {
+      const id = recoveryMatch[1];
+      const source = await request.text();
+      JSON.parse(source);
+      await this.env.DEMO_STUDIO_ARTIFACTS.put(
+        "recovery/" + id + ".json",
+        source,
+        {
+          httpMetadata: {
+            contentType: "application/json; charset=utf-8",
+            cacheControl: "no-store",
+          },
+        },
+      );
+      await this.ctx.storage.put(ACTIVE_JOB_PREFIX + id, { id });
+      await this.scheduleWatchdog();
+      return new Response(null, { status: 204 });
+    }
+
+    const id = jobMatch[1];
+    const source = await request.text();
+    const snapshot = JSON.parse(source);
+
     await this.env.DEMO_STUDIO_ARTIFACTS.put(
-      "jobs/" + jobMatch[1] + ".json",
-      request.body,
+      "jobs/" + id + ".json",
+      source,
       {
         httpMetadata: {
           contentType: "application/json; charset=utf-8",
@@ -340,6 +382,14 @@ export class DemoStudioContainer extends DurableObject {
         },
       },
     );
+
+    if (snapshot.status === "completed" || snapshot.status === "failed") {
+      await this.clearActiveJob(id);
+    } else {
+      await this.ctx.storage.put(ACTIVE_JOB_PREFIX + id, { id });
+      await this.scheduleWatchdog();
+    }
+
     return new Response(null, { status: 204 });
   }
 
@@ -401,6 +451,241 @@ export class DemoStudioContainer extends DurableObject {
         ETag: object.httpEtag,
       },
     });
+  }
+
+  async failStalledJob(id, snapshot, reason) {
+    const now = new Date().toISOString();
+    const history = Array.isArray(snapshot.history)
+      ? snapshot.history.slice(-19)
+      : [];
+    history.push({
+      at: now,
+      status: "failed",
+      stage: "failed",
+      progress: 100,
+      message: reason,
+      attempt: Number(snapshot.attempt ?? 1),
+    });
+
+    const failed = {
+      ...snapshot,
+      status: "failed",
+      stage: "failed",
+      stageLabel: "Failed",
+      progress: 100,
+      message: reason,
+      error: reason,
+      updatedAt: now,
+      heartbeatAt: now,
+      stageStartedAt: now,
+      stageTimeoutSeconds: 86400,
+      completedAt: now,
+      stalled: false,
+      history,
+    };
+
+    await this.env.DEMO_STUDIO_ARTIFACTS.put(
+      "jobs/" + id + ".json",
+      JSON.stringify(failed),
+      {
+        httpMetadata: {
+          contentType: "application/json; charset=utf-8",
+          cacheControl: "no-store",
+        },
+      },
+    );
+    await this.clearActiveJob(id);
+  }
+
+  async restartStalledJob(id, snapshot, recovery) {
+    const currentAttempt = Number(snapshot.attempt ?? recovery.attempt ?? 1);
+    const maxAttempts = Number(snapshot.maxAttempts ?? recovery.maxAttempts ?? 3);
+
+    if (currentAttempt >= maxAttempts) {
+      await this.failStalledJob(
+        id,
+        snapshot,
+        "The job stopped making progress and reached the automatic recovery limit.",
+      );
+      return;
+    }
+
+    const nextAttempt = currentAttempt + 1;
+    const now = new Date().toISOString();
+    const reason =
+      "Watchdog detected that stage " +
+      String(snapshot.stage ?? snapshot.status ?? "unknown") +
+      " exceeded its timeout.";
+
+    const history = Array.isArray(snapshot.history)
+      ? snapshot.history.slice(-19)
+      : [];
+    history.push({
+      at: now,
+      status: "retrying",
+      stage: "retry_wait",
+      progress: Math.min(Number(snapshot.progress ?? 0), 95),
+      message:
+        "Automatic watchdog recovery is restarting the job (attempt " +
+        nextAttempt +
+        "/" +
+        maxAttempts +
+        ").",
+      attempt: nextAttempt,
+    });
+
+    const retrySnapshot = {
+      ...snapshot,
+      status: "retrying",
+      stage: "retry_wait",
+      stageLabel: "Automatic recovery",
+      progress: Math.min(Number(snapshot.progress ?? 0), 95),
+      message:
+        "The current stage stopped progressing. Demo Studio is restarting it automatically.",
+      updatedAt: now,
+      heartbeatAt: now,
+      stageStartedAt: now,
+      stageTimeoutSeconds: 90,
+      attempt: nextAttempt,
+      maxAttempts,
+      retryReason: reason,
+      stalled: false,
+      history,
+      error: undefined,
+      completedAt: undefined,
+    };
+
+    const nextRecovery = {
+      ...recovery,
+      attempt: nextAttempt,
+      maxAttempts,
+      history,
+    };
+
+    await Promise.all([
+      this.env.DEMO_STUDIO_ARTIFACTS.put(
+        "jobs/" + id + ".json",
+        JSON.stringify(retrySnapshot),
+        {
+          httpMetadata: {
+            contentType: "application/json; charset=utf-8",
+            cacheControl: "no-store",
+          },
+        },
+      ),
+      this.env.DEMO_STUDIO_ARTIFACTS.put(
+        "recovery/" + id + ".json",
+        JSON.stringify(nextRecovery),
+        {
+          httpMetadata: {
+            contentType: "application/json; charset=utf-8",
+            cacheControl: "no-store",
+          },
+        },
+      ),
+    ]);
+
+    const container = this.ctx.container;
+    if (container?.running) {
+      await container.destroy(
+        "Restarting stalled Demo Studio generation job " + id,
+      );
+    }
+
+    this.starting = undefined;
+    await this.startAndWaitForPort();
+
+    const token = await this.getInternalToken();
+    const response = await this.ctx.container
+      .getTcpPort(CONTAINER_PORT)
+      .fetch("http://container/__internal/retry/" + id, {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + token,
+          "Content-Type": "application/json",
+          "x-forwarded-host": PUBLIC_HOST,
+          "x-forwarded-proto": "https",
+        },
+        body: JSON.stringify({
+          recovery: nextRecovery,
+          reason,
+        }),
+        signal: AbortSignal.timeout(30_000),
+      });
+
+    if (!response.ok) {
+      const detail = await response.text();
+      throw new Error(
+        "Container recovery returned HTTP " +
+          response.status +
+          ": " +
+          detail,
+      );
+    }
+    await response.body?.cancel();
+  }
+
+  async alarm() {
+    try {
+      const active = await this.ctx.storage.list({
+        prefix: ACTIVE_JOB_PREFIX,
+      });
+
+      for (const key of active.keys()) {
+        const id = key.slice(ACTIVE_JOB_PREFIX.length);
+        const jobObject = await this.env.DEMO_STUDIO_ARTIFACTS.get(
+          "jobs/" + id + ".json",
+        );
+
+        if (!jobObject) continue;
+
+        const snapshot = JSON.parse(await jobObject.text());
+        if (snapshot.status === "completed" || snapshot.status === "failed") {
+          await this.clearActiveJob(id);
+          continue;
+        }
+
+        const stageStarted = Date.parse(
+          snapshot.stageStartedAt ?? snapshot.updatedAt ?? snapshot.createdAt,
+        );
+        const timeoutMs =
+          Math.max(30, Number(snapshot.stageTimeoutSeconds ?? 300)) * 1000;
+
+        if (
+          Number.isFinite(stageStarted) &&
+          Date.now() - stageStarted <= timeoutMs + JOB_WATCHDOG_GRACE_MS
+        ) {
+          continue;
+        }
+
+        const recoveryObject =
+          await this.env.DEMO_STUDIO_ARTIFACTS.get(
+            "recovery/" + id + ".json",
+          );
+        if (!recoveryObject) {
+          await this.failStalledJob(
+            id,
+            snapshot,
+            "The job stalled and no private recovery record was available.",
+          );
+          continue;
+        }
+
+        const recovery = JSON.parse(await recoveryObject.text());
+        await this.restartStalledJob(id, snapshot, recovery);
+      }
+    } catch (error) {
+      console.error("[watchdog]", error);
+    } finally {
+      const remaining = await this.ctx.storage.list({
+        prefix: ACTIVE_JOB_PREFIX,
+      });
+      if (remaining.size > 0) {
+        await this.ctx.storage.setAlarm(
+          Date.now() + JOB_WATCHDOG_INTERVAL_MS,
+        );
+      }
+    }
   }
 
   async fetch(request) {
@@ -467,6 +752,8 @@ export class DemoStudioContainer extends DurableObject {
         DEMO_STUDIO_ALLOWED_ORIGINS: "https://" + PUBLIC_HOST,
         DEMO_STUDIO_MAX_CONCURRENT_JOBS: "1",
         DEMO_STUDIO_DAILY_JOB_LIMIT: "10",
+        DEMO_STUDIO_MAX_JOB_ATTEMPTS: "3",
+        DEMO_STUDIO_HEARTBEAT_MS: "10000",
         DEMO_STUDIO_STORAGE_ROOT: "/data/jobs",
         DEMO_STUDIO_INTERNAL_TOKEN: internalToken,
         ALLOW_PRIVATE_TARGETS: "false",
