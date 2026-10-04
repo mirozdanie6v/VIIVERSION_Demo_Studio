@@ -11,6 +11,12 @@ import {
   resolveUrl,
 } from "./scenario.js";
 import type { CameraFrame, DemoScenario, DemoStep, RunResult, Target } from "./types.js";
+import {
+  inspectVisualState,
+  reviewVisualState,
+  summarizeVisualQa,
+  type VisualQaIssue,
+} from "./visual-qa.js";
 
 const DEFAULT_VIEWPORT = { width: 1440, height: 900 };
 
@@ -381,6 +387,7 @@ export async function runScenario(
   }> = [];
 
   let runError: unknown;
+  const visualQaIssues: VisualQaIssue[] = [];
 
   try {
     for (let index = 0; index < scenario.steps.length; index += 1) {
@@ -403,6 +410,17 @@ export async function runScenario(
         await applyLocaleOverlayNow(page, scenario).catch(() => undefined);
         await page.waitForTimeout(40);
         await applyLocaleOverlayNow(page, scenario).catch(() => undefined);
+
+        const qaSnapshot = await inspectVisualState(page, scenario).catch(() => undefined);
+        if (qaSnapshot) {
+          visualQaIssues.push(...reviewVisualState({
+            scenario,
+            camera: execution.camera,
+            snapshot: qaSnapshot,
+            stepIndex: index,
+            stepLabel: step.label ?? `${step.action} #${index + 1}`,
+          }));
+        }
 
         timeline.push({
           index,
@@ -448,6 +466,13 @@ export async function runScenario(
   const finishedAt = new Date().toISOString();
   const success = runError === undefined;
 
+  const visualQa = summarizeVisualQa(visualQaIssues);
+  await writeFile(
+    path.join(runDir, "visual-qa.json"),
+    JSON.stringify({ summary: visualQa, issues: visualQaIssues }, null, 2),
+    "utf8",
+  );
+
   await writeFile(
     path.join(runDir, "run.json"),
     JSON.stringify({
@@ -457,6 +482,8 @@ export async function runScenario(
       finishedAt,
       videoPath,
       success,
+      visualQa,
+      visualQaIssues,
       error: runError instanceof Error ? runError.message : runError ? String(runError) : undefined,
     }, null, 2),
     "utf8",
