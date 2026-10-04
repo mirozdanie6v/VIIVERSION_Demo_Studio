@@ -5,7 +5,8 @@ import { toNodeHandler } from "@modelcontextprotocol/node";
 import { authenticateBearer } from "./auth.js";
 import { assertTrustedHttpRequest } from "./http-security.js";
 import { FAVICON_SVG, LANDING_PAGE } from "./landing.js";
-import type { DemoJobRequest } from "./job-manager.js";
+import type { DemoJobRecovery, DemoJobRequest } from "./job-manager.js";
+import { buildJobStatusPage } from "./job-status-page.js";
 import { createDemoStudioMcpHandler } from "./mcp-server.js";
 import { buildOpenApiDocument } from "./openapi.js";
 import { DemoStudioService } from "./service.js";
@@ -143,6 +144,23 @@ function matchJobPath(pathname: string):
   return { id: match[1], artifact: Boolean(match[2]) };
 }
 
+function matchStatusPage(pathname: string): string | undefined {
+  return pathname.match(/^\/jobs\/([0-9a-f-]{36})$/i)?.[1];
+}
+
+function matchInternalRetry(pathname: string): string | undefined {
+  return pathname.match(
+    /^\/__internal\/retry\/([0-9a-f-]{36})$/i,
+  )?.[1];
+}
+
+function internalAuthorized(request: IncomingMessage): boolean {
+  const expected = process.env.DEMO_STUDIO_INTERNAL_TOKEN?.trim();
+  if (!expected) return false;
+  const header = request.headers.authorization ?? "";
+  return header === "Bearer " + expected;
+}
+
 export function createDemoStudioHttpServer(
   service = new DemoStudioService(),
 ) {
@@ -185,6 +203,42 @@ export function createDemoStudioHttpServer(
         return;
       }
 
+      const statusPageJobId = matchStatusPage(pathname);
+      if (request.method === "GET" && statusPageJobId) {
+        response.writeHead(200, {
+          "Content-Type": "text/html; charset=utf-8",
+          "Cache-Control": "no-store",
+          "X-Content-Type-Options": "nosniff",
+        });
+        response.end(buildJobStatusPage(statusPageJobId));
+        return;
+      }
+
+      const retryJobId = matchInternalRetry(pathname);
+      if (request.method === "POST" && retryJobId) {
+        if (!internalAuthorized(request)) {
+          sendJson(response, 401, { error: "Unauthorized internal request." });
+          return;
+        }
+
+        const payload = await readJson(request);
+        if (!isRecord(payload) || !isRecord(payload.recovery)) {
+          throw new Error("Internal retry payload is invalid.");
+        }
+
+        const reason =
+          typeof payload.reason === "string"
+            ? payload.reason
+            : "Cloud watchdog requested recovery.";
+        const resumed = await service.resumeJob(
+          retryJobId,
+          payload.recovery as unknown as DemoJobRecovery,
+          reason,
+        );
+        sendJson(response, 202, resumed);
+        return;
+      }
+
       if (request.method === "GET" && pathname === "/health") {
         sendJson(response, 200, {
           ok: true,
@@ -215,6 +269,7 @@ export function createDemoStudioHttpServer(
           job: created.job,
           quota: created.quota,
           status_url: "/v1/jobs/" + created.job.id,
+          status_page_url: "/jobs/" + created.job.id,
         });
         return;
       }
