@@ -135,8 +135,12 @@ async function runStep(
       const target = requiredTarget(step, scenario);
       const resolved = await resolveTargetWithRecovery(page, target);
       const camera = await focusTarget(page, resolved.target, scenario.presentation);
-      await animateClick(page, scenario.presentation);
+      await animateClick(page, resolved.target, scenario.presentation);
       await resolved.locator.click();
+      if (scenario.presentation?.semanticCamera?.enabled) {
+        await page.waitForTimeout(90);
+        await resetPresentation(page, scenario.presentation);
+      }
       return {
         camera,
         recovery: resolved.recovered
@@ -188,6 +192,9 @@ async function runStep(
       return {};
     }
     case "scroll":
+      if (scenario.presentation?.semanticCamera?.enabled) {
+        await resetPresentation(page, scenario.presentation);
+      }
       await page.mouse.wheel(step.x ?? 0, step.y);
       return {};
     case "wait":
@@ -389,7 +396,7 @@ export async function runScenario(
           await page.waitForTimeout(pause);
         }
 
-        if (execution.camera) {
+        if (execution.camera && !scenario.presentation?.semanticCamera?.enabled) {
           await resetPresentation(page, scenario.presentation);
         }
 
