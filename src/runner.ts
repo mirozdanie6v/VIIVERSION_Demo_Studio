@@ -7,7 +7,6 @@ import { animateClick, focusTarget, resetPresentation } from "./presentation.js"
 import { attachNetworkGuard } from "./security.js";
 import {
   captureHybridKeyframe,
-  hybridCaptureEnabled,
   hybridScenarioForExecution,
   planHybridCapture,
   resolvedStepPauseMs,
@@ -277,7 +276,7 @@ export async function runScenario(
   const runDir = path.resolve(options.artifactsRoot ?? "artifacts", runId);
   await mkdir(runDir, { recursive: true });
 
-  const hybrid = options.hybrid ?? hybridCaptureEnabled();
+  const hybrid = options.hybrid ?? false;
   const hybridPlan = hybrid ? planHybridCapture(scenario) : [];
   const hybridKeyframes: HybridKeyframe[] = [];
   const executionScenario = hybrid ? hybridScenarioForExecution(scenario) : scenario;
