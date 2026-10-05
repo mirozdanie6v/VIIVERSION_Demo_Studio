@@ -128,3 +128,51 @@ test("prefers enabled local Hugging Face TTS before paid providers", () => {
 
   assert.equal(router.inspect(request).selected, "huggingface");
 });
+
+
+test("prefers premium ElevenLabs presenter for Russian in auto mode", () => {
+  const router = new VoiceRouter({
+    providers: [
+      new FakeProvider("huggingface", false, true, ["ru-RU"]),
+      new FakeProvider("elevenlabs", true, true, ["*"]),
+      new FakeProvider("openai", false, true, ["*"]),
+    ],
+    context: { env: {} },
+  });
+
+  assert.equal(
+    router.inspect({ ...request, locale: "ru-RU", persona: "viiversion-presenter" }).selected,
+    "elevenlabs",
+  );
+});
+
+test("prefers premium ElevenLabs presenter for English in auto mode", () => {
+  const router = new VoiceRouter({
+    providers: [
+      new FakeProvider("huggingface", false, true, ["en-US"]),
+      new FakeProvider("elevenlabs", true, true, ["*"]),
+      new FakeProvider("openai", false, true, ["*"]),
+    ],
+    context: { env: {} },
+  });
+
+  assert.equal(
+    router.inspect({ ...request, locale: "en-US", persona: "viiversion-presenter" }).selected,
+    "elevenlabs",
+  );
+});
+
+test("premium locale preference does not override an explicit provider", () => {
+  const router = new VoiceRouter({
+    providers: [
+      new FakeProvider("huggingface", false, true, ["ru-RU"]),
+      new FakeProvider("elevenlabs", true, true, ["*"]),
+    ],
+    context: { env: {} },
+  });
+
+  assert.equal(
+    router.inspect({ ...request, locale: "ru-RU", provider: "huggingface" }).selected,
+    "huggingface",
+  );
+});
