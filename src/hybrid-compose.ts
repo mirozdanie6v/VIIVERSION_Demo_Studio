@@ -109,14 +109,7 @@ function requestedHoldSeconds(
   defaultPauseMs: number | undefined,
 ): number {
   const requestedMs = step?.pauseAfterMs ?? defaultPauseMs ?? 650;
-  const narrationWords = step?.narration?.trim()
-    ? step.narration.trim().split(/\s+/).length
-    : 0;
-  const narrationFloor = narrationWords > 0
-    ? Math.min(4, narrationWords / 2.8 + 0.18)
-    : 0;
-
-  return Math.max(0.45, requestedMs / 1000 + 0.12, narrationFloor);
+  return Math.max(0.45, requestedMs / 1000 + 0.12);
 }
 
 export function buildHybridCompositionPlan(
