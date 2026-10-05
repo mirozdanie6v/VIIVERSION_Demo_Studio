@@ -1,0 +1,26 @@
+name: Main Branch Protection Audit
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 2 * * *'
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify main is protected
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS             -H "Accept: application/vnd.github+json"             -H "Authorization: Bearer ${GH_TOKEN}"             "https://api.github.com/repos/${REPOSITORY}/branches/main"             > /tmp/main-branch.json
+
+          jq '{name, protected}' /tmp/main-branch.json
+          jq -e '.name == "main" and .protected == true' /tmp/main-branch.json >/dev/null
+          echo "main branch protection is enabled."
