@@ -4,6 +4,10 @@ on:
   pull_request:
     paths:
       - 'src/job-manager.ts'
+      - 'src/browser-pool.ts'
+      - 'src/runner.ts'
+      - 'src/inspector.ts'
+      - 'src/ux-design-brain.ts'
       - 'src/job-status-page.ts'
       - 'src/persistence.ts'
       - 'src/api-server.ts'
@@ -16,6 +20,10 @@ on:
     branches: [main]
     paths:
       - 'src/job-manager.ts'
+      - 'src/browser-pool.ts'
+      - 'src/runner.ts'
+      - 'src/inspector.ts'
+      - 'src/ux-design-brain.ts'
       - 'src/job-status-page.ts'
       - 'src/persistence.ts'
       - 'src/api-server.ts'
