@@ -1,6 +1,14 @@
 name: Recording Smoke Test
 
 on:
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'examples/smoke.json'
+      - 'fixtures/smoke.html'
+      - 'package.json'
+      - 'tsconfig.json'
+      - '.github/workflows/smoke-recording.yml'
   push:
     branches: [main]
     paths:
