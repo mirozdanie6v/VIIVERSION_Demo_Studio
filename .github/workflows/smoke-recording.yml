@@ -63,6 +63,12 @@ jobs:
           cat /tmp/demo-studio-http.log
           exit 1
 
+      - name: Verify integrated Chromium process reuse
+        env:
+          ALLOW_PRIVATE_TARGETS: "true"
+          DEMO_STUDIO_REUSE_BROWSER: "true"
+        run: npx tsx scripts/smoke_browser_reuse.ts http://127.0.0.1:4173/fixtures/smoke.html
+
       - name: Verify UX audit cache re-materialization
         env:
           ALLOW_PRIVATE_TARGETS: "true"
