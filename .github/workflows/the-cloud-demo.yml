@@ -34,6 +34,7 @@ jobs:
           npx playwright install --with-deps chromium
           sudo apt-get update
           sudo apt-get install -y ffmpeg espeak-ng
+          python3 -m pip install --quiet torch torchaudio --index-url https://download.pytorch.org/whl/cpu
           python3 -m pip install --quiet numpy -r requirements-tts-chatterbox.txt
 
       - name: Capture The Cloud guest journey
