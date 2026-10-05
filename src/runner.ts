@@ -5,6 +5,15 @@ import { acquireBrowser } from "./browser-pool.js";
 import { settleAfterNavigation } from "./performance.js";
 import { animateClick, focusTarget, resetPresentation } from "./presentation.js";
 import { attachNetworkGuard } from "./security.js";
+import {
+  captureHybridKeyframe,
+  hybridCaptureEnabled,
+  hybridScenarioForExecution,
+  planHybridCapture,
+  resolvedStepPauseMs,
+  writeHybridCaptureManifest,
+  type HybridKeyframe,
+} from "./hybrid-capture.js";
 import { describeTarget, resolveTarget, resolveTargetWithRecovery } from "./targets.js";
 import {
   interpolate,
@@ -261,19 +270,24 @@ async function runStep(
 
 export async function runScenario(
   scenario: DemoScenario,
-  options: { headed?: boolean; artifactsRoot?: string } = {},
+  options: { headed?: boolean; artifactsRoot?: string; hybrid?: boolean } = {},
 ): Promise<RunResult> {
   const startedAt = new Date().toISOString();
   const runId = makeRunId(scenario.name);
   const runDir = path.resolve(options.artifactsRoot ?? "artifacts", runId);
   await mkdir(runDir, { recursive: true });
 
+  const hybrid = options.hybrid ?? hybridCaptureEnabled();
+  const hybridPlan = hybrid ? planHybridCapture(scenario) : [];
+  const hybridKeyframes: HybridKeyframe[] = [];
+  const executionScenario = hybrid ? hybridScenarioForExecution(scenario) : scenario;
+
   const viewport = scenario.viewport ?? DEFAULT_VIEWPORT;
   const lease = await acquireBrowser({ headless: !options.headed });
   const browser = lease.browser;
   const context = await browser.newContext({
     viewport,
-    recordVideo: { dir: runDir, size: viewport },
+    ...(hybrid ? {} : { recordVideo: { dir: runDir, size: viewport } }),
   }).catch(async (error) => {
     await lease.release();
     throw error;
@@ -387,10 +401,13 @@ export async function runScenario(
       const stepStartedAt = new Date().toISOString();
 
       try {
-        await applyLocaleOverlayNow(page, scenario).catch(() => undefined);
-        const execution = await runStep(page, step, scenario);
+        await applyLocaleOverlayNow(page, executionScenario).catch(() => undefined);
+        const execution = await runStep(page, step, executionScenario);
 
-        const pause = step.pauseAfterMs ?? scenario.defaultPauseMs ?? 650;
+        const planItem = hybrid ? hybridPlan[index] : undefined;
+        const pause = hybrid
+          ? resolvedStepPauseMs(step, scenario, planItem)
+          : step.pauseAfterMs ?? scenario.defaultPauseMs ?? 650;
         if (!["wait", "waitFor", "waitForNavigation"].includes(step.action) && pause > 0) {
           await page.waitForTimeout(pause);
         }
@@ -399,9 +416,14 @@ export async function runScenario(
           await resetPresentation(page, scenario.presentation);
         }
 
-        await applyLocaleOverlayNow(page, scenario).catch(() => undefined);
+        await applyLocaleOverlayNow(page, executionScenario).catch(() => undefined);
         await page.waitForTimeout(40);
-        await applyLocaleOverlayNow(page, scenario).catch(() => undefined);
+        await applyLocaleOverlayNow(page, executionScenario).catch(() => undefined);
+
+        if (hybrid && planItem) {
+          const keyframe = await captureHybridKeyframe(page, runDir, planItem);
+          if (keyframe) hybridKeyframes.push(keyframe);
+        }
 
         timeline.push({
           index,
@@ -446,6 +468,16 @@ export async function runScenario(
 
   const finishedAt = new Date().toISOString();
   const success = runError === undefined;
+  const hybridManifestPath = hybrid
+    ? await writeHybridCaptureManifest(
+        runDir,
+        scenario,
+        hybridPlan,
+        hybridKeyframes,
+        startedAt,
+        finishedAt,
+      )
+    : undefined;
 
   await writeFile(
     path.join(runDir, "run.json"),
@@ -455,6 +487,8 @@ export async function runScenario(
       startedAt,
       finishedAt,
       videoPath,
+      captureMode: hybrid ? "hybrid-prototype" : "standard",
+      hybridManifestPath,
       browserSource: lease.source,
       success,
       error: runError instanceof Error ? runError.message : runError ? String(runError) : undefined,
@@ -463,5 +497,14 @@ export async function runScenario(
   );
 
   if (runError) throw runError;
-  return { runId, runDir, videoPath, startedAt, finishedAt, success };
+  return {
+    runId,
+    runDir,
+    videoPath,
+    startedAt,
+    finishedAt,
+    success,
+    captureMode: hybrid ? "hybrid-prototype" : "standard",
+    hybridManifestPath,
+  };
 }
