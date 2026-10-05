@@ -944,6 +944,8 @@ export class DemoStudioContainer extends DurableObject {
           PUBLIC_HOST + ",container,localhost,127.0.0.1",
         DEMO_STUDIO_ALLOWED_ORIGINS: "https://" + PUBLIC_HOST,
         DEMO_STUDIO_REUSE_BROWSER: "true",
+        DEMO_STUDIO_FFMPEG_PRESET:
+          this.env.DEMO_STUDIO_FFMPEG_PRESET ?? "veryfast",
         DEMO_STUDIO_MAX_CONCURRENT_JOBS: "1",
         DEMO_STUDIO_DAILY_JOB_LIMIT: "10",
         DEMO_STUDIO_MAX_JOB_ATTEMPTS: "3",

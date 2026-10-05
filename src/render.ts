@@ -18,6 +18,24 @@ import type {
 } from "./scenes.js";
 
 export type RenderPreset = "16:9" | "9:16" | "1:1";
+export type RenderEncoderPreset = "fast" | "faster" | "veryfast";
+
+const RENDER_ENCODER_PRESETS = new Set<RenderEncoderPreset>([
+  "fast",
+  "faster",
+  "veryfast",
+]);
+
+export function resolveRenderEncoderPreset(
+  explicit?: RenderEncoderPreset,
+  env: NodeJS.ProcessEnv = process.env,
+): RenderEncoderPreset {
+  if (explicit) return explicit;
+  const configured = env.DEMO_STUDIO_FFMPEG_PRESET?.trim().toLowerCase();
+  return RENDER_ENCODER_PRESETS.has(configured as RenderEncoderPreset)
+    ? configured as RenderEncoderPreset
+    : "veryfast";
+}
 
 export type RenderOptions = {
   runDir: string;
@@ -41,6 +59,7 @@ export type RenderOptions = {
   introSeconds?: number;
   outroSeconds?: number;
   ffmpegPath?: string;
+  encoderPreset?: RenderEncoderPreset;
 };
 
 type Manifest = SceneManifest & {
@@ -524,7 +543,7 @@ export async function renderRun(options: RenderOptions): Promise<string> {
     "-c:v",
     "libx264",
     "-preset",
-    "fast",
+    resolveRenderEncoderPreset(options.encoderPreset),
     "-crf",
     "20",
     "-pix_fmt",
