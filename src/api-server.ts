@@ -10,6 +10,7 @@ import { buildJobStatusPage } from "./job-status-page.js";
 import { createDemoStudioMcpHandler } from "./mcp-server.js";
 import { buildOpenApiDocument } from "./openapi.js";
 import { DemoStudioService } from "./service.js";
+import { DEMO_STUDIO_VERSION, demoStudioGenerationMode } from "./version.js";
 
 const MAX_JSON_BYTES = 64 * 1024;
 
@@ -243,7 +244,8 @@ export function createDemoStudioHttpServer(
         sendJson(response, 200, {
           ok: true,
           service: "viiversion-demo-studio",
-          version: "0.13.0",
+          version: DEMO_STUDIO_VERSION,
+          generationMode: demoStudioGenerationMode(),
         });
         return;
       }
