@@ -71,21 +71,36 @@ jobs:
           sudo rm -rf /var/lib/apt/lists/* || true
           df -h
 
-      - name: Prepare narration segments
+      - name: Prepare narration segments with Russian stress lexicon
         shell: bash
         env:
           RUN_DIR: ${{ steps.run.outputs.dir }}
         run: |
           mkdir -p "${RUN_DIR}/voices"
-          node --input-type=module <<'NODE'
+          node --import tsx --input-type=module <<'NODE'
           import fs from 'node:fs';
           import path from 'node:path';
-          const scenario = JSON.parse(fs.readFileSync('examples/ave-dental-russian-demo.json', 'utf8'));
+          import { applyPronunciation } from './src/voice-director.ts';
+          import { applyDefaultLocalePronunciation } from './src/russian-pronunciation.ts';
+
+          const scenario = JSON.parse(
+            fs.readFileSync('examples/ave-dental-russian-demo.json', 'utf8'),
+          );
+          const locale = scenario.voice?.locale || 'ru-RU';
+          const pronunciation = scenario.voice?.pronunciation || {};
+
           for (let i = 0; i < scenario.steps.length; i += 1) {
             const step = scenario.steps[i];
             if (!step.narration?.trim()) continue;
-            const spoken = (step.voiceText || step.narration).trim();
-            fs.writeFileSync(path.join(process.env.RUN_DIR, 'voices', `text-${i}.txt`), spoken + '\n');
+
+            const source = (step.voiceText || step.narration).trim();
+            const custom = applyPronunciation(source, pronunciation);
+            const spoken = applyDefaultLocalePronunciation(custom, locale);
+
+            fs.writeFileSync(
+              path.join(process.env.RUN_DIR, 'voices', `text-${i}.txt`),
+              spoken + '\n',
+            );
           }
           NODE
 
