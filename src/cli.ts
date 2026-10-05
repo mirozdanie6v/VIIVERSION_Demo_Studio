@@ -20,6 +20,7 @@ async function main() {
 
   const result = await runScenario(scenario, {
     headed: process.argv.includes("--headed"),
+    hybrid: process.argv.includes("--hybrid") ? true : undefined,
   });
 
   console.log(JSON.stringify(result, null, 2));
