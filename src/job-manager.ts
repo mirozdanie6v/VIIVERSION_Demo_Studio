@@ -324,6 +324,7 @@ export class DemoJobManager {
       maxAttempts: recovery.maxAttempts,
       retryReason: reason,
       history: recovery.history.slice(-20),
+      checkpoint: recovery.checkpoint,
     };
     this.pushEvent(job);
 
@@ -391,6 +392,7 @@ export class DemoJobManager {
       | "storyboardPath"
       | "runDir"
       | "artifactPath"
+      | "checkpoint"
       | "error"
       | "completedAt"
     >>,
@@ -457,6 +459,7 @@ export class DemoJobManager {
       attempt: job.attempt,
       maxAttempts: job.maxAttempts,
       history: job.history.slice(-20),
+      checkpoint: job.checkpoint,
     };
   }
 
