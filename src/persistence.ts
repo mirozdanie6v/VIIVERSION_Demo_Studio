@@ -95,6 +95,7 @@ export const CHECKPOINT_FILE_NAMES = [
   "ux_preflight.json",
   "run.json",
   "capture.webm",
+  "hybrid-capture.bundle.json",
   "voiceover.mp3",
 ] as const;
 
