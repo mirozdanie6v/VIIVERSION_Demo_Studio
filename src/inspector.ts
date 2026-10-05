@@ -64,6 +64,9 @@ export async function inspectApplication(
   const page = await context.newPage();
 
   try {
+    await page.addInitScript(
+      "globalThis.__name = globalThis.__name || ((target) => target);",
+    );
     await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30_000 });
     await page.waitForLoadState("networkidle", { timeout: 8_000 }).catch(() => undefined);
 
