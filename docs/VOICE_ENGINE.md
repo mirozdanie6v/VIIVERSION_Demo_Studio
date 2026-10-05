@@ -35,10 +35,13 @@ Subtitle / edit synchronization
 
 ## Default VIIVERSION presenter voices
 
-For Demo Video Presenter, the approved default voice pair is:
+For Russian and English Demo Video Presenter output, the default is the premium presenter path:
 
-1. **Niki v3** — primary presenter voice.
-2. **Leslie v3** — fallback/alternate presenter voice.
+1. **ElevenLabs v3 locale-specific voice** — preferred whenever the corresponding Russian or English voice is configured.
+2. **Chatterbox Multilingual V3 / OpenAI** — automatic fallback when the paid premium voice is unavailable.
+3. **Niki v3 / Leslie v3** remain the approved presenter casting references.
+
+When a scenario omits the locale, narration text is classified automatically: Cyrillic-dominant narration defaults to `ru-RU`; otherwise it defaults to `en-US`.
 
 Default casting direction: bright, warm, confident, natural human rhythm, medium energetic pace, short organic pauses. Avoid grave/dark delivery, trailer voice, radio-announcer cadence and synthetic monotone pacing.
 
