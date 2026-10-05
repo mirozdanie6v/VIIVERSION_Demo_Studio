@@ -328,10 +328,16 @@
       "label": "Start booking"
     },
     {
+      "action": "scroll",
+      "y": 900,
+      "label": "Scroll to private booking CTA",
+      "pauseAfterMs": 250
+    },
+    {
       "action": "waitFor",
       "target": {
         "by": "css",
-        "value": "*:has-text(\"What would you like to book?\"):visible, *:has-text(\"Что хотите забронировать?\"):visible"
+        "value": "button:has-text(\"Continue with private tour\"):visible, button:has-text(\"Продолжить индивидуально\"):visible"
       },
       "state": "visible",
       "timeoutMs": 15000,
