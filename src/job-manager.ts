@@ -781,7 +781,7 @@ export class DemoJobManager {
         progress: 64,
         message:
           "Browser capture restored. Generating only the missing narration.",
-        timeoutSeconds: 180,
+        timeoutSeconds: 600,
       });
     } else {
       await this.update(job, {
