@@ -31,6 +31,21 @@ export class ExpiringPromiseCache<T> {
   >();
   private readonly inflight = new Map<string, Promise<T>>();
 
+  constructor(private readonly maxEntries = 8) {}
+
+  private prune(now = Date.now()): void {
+    for (const [key, entry] of this.values) {
+      if (entry.expiresAt <= now) this.values.delete(key);
+    }
+
+    const limit = Math.max(1, this.maxEntries);
+    while (this.values.size > limit) {
+      const oldest = this.values.keys().next().value as string | undefined;
+      if (!oldest) break;
+      this.values.delete(oldest);
+    }
+  }
+
   async getOrCreate(
     key: string,
     ttlMs: number,
@@ -38,6 +53,7 @@ export class ExpiringPromiseCache<T> {
     shouldCache: (value: T) => boolean = () => true,
   ): Promise<CacheResult<T>> {
     const now = Date.now();
+    this.prune(now);
     const existing = this.values.get(key);
 
     if (ttlMs > 0 && existing && existing.expiresAt > now) {
@@ -57,10 +73,12 @@ export class ExpiringPromiseCache<T> {
     try {
       const value = await task;
       if (ttlMs > 0 && shouldCache(value)) {
+        this.values.delete(key);
         this.values.set(key, {
           value,
           expiresAt: Date.now() + ttlMs,
         });
+        this.prune();
       }
       return { value, source: "fresh" };
     } finally {
