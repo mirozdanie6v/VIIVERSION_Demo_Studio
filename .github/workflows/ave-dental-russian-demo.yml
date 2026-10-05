@@ -29,14 +29,19 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
       - name: Install Chromium, media tools and premium Russian TTS
         run: |
           npx playwright install --with-deps chromium
           sudo apt-get update
           sudo apt-get install -y ffmpeg espeak-ng
-          python3 -m pip install --quiet numpy
-          python3 -m pip install --quiet torch torchaudio --index-url https://download.pytorch.org/whl/cpu
-          python3 -m pip install --quiet -r requirements-tts-chatterbox.txt
+          python -m pip install --quiet --upgrade pip
+          python -m pip install --quiet torch==2.6.0 torchaudio==2.6.0 --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install --quiet "git+https://github.com/resemble-ai/chatterbox.git@master"
 
       - name: Capture AVE Dental patient journey
         env:
@@ -82,7 +87,7 @@ jobs:
           RUN_DIR: ${{ steps.run.outputs.dir }}
         run: |
           set -euo pipefail
-          python3 - <<'PY'
+          python - <<'PY'
           import os
           from pathlib import Path
 
@@ -139,7 +144,7 @@ jobs:
         env:
           RUN_DIR: ${{ steps.run.outputs.dir }}
         run: |
-          python3 - <<'PY'
+          python - <<'PY'
           import os, wave
           import numpy as np
 
