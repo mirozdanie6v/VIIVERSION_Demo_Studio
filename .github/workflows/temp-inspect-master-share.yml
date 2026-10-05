@@ -19,3 +19,7 @@ jobs:
           echo SIZE=$(wc -c </tmp/page.html)
           grep -Eo 'https?://[^"[:space:]]+' /tmp/page.html | head -n 80 || true
           grep -Eo 'href="[^"]+"' /tmp/page.html | head -n 120 || true
+          echo '--- MATCHES ---'
+          grep -ioE '.{0,180}(download|api|file|share|publicId|1rbBOe8XwccUxsBv|pf1BP-8uDHLb).{0,220}' /tmp/page.html | head -n 120 || true
+          echo '--- NEXT DATA ---'
+          grep -o '<script id="__NEXT_DATA__"[^>]*>.*</script>' /tmp/page.html | head -c 20000 || true
