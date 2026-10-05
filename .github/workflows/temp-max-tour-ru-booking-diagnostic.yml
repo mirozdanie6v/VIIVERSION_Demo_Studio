@@ -39,6 +39,9 @@ jobs:
           const join=page.locator('button:has-text("Индивидуальный от $420"):visible');
           console.log('JOIN_VISIBLE=',await join.count());
           if(await join.count()){ await join.first().click(); await page.waitForTimeout(900); }
+          const book=page.locator('button:has-text("Забронировать"):visible');
+          console.log('BOOK_VISIBLE=',await book.count());
+          if(await book.count()){ await book.click(); await page.waitForTimeout(1000); }
           await dump('BOOKING RU');
           await browser.close();
           NODE
