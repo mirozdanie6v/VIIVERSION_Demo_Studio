@@ -11,6 +11,15 @@ const INSPECTION_DAILY_LIMIT = 30;
 const ACTIVE_JOB_PREFIX = "active-job:";
 const JOB_WATCHDOG_INTERVAL_MS = 30 * 1000;
 const JOB_WATCHDOG_GRACE_MS = 15 * 1000;
+const CHECKPOINT_FILE_NAMES = new Set([
+  "scenario.json",
+  "storyboard.md",
+  "design_contract.json",
+  "ux_preflight.json",
+  "run.json",
+  "capture.webm",
+  "voiceover.mp3",
+]);
 
 function staticPage(title, body) {
   const html = `<!doctype html>
@@ -398,8 +407,15 @@ export class DemoStudioContainer extends DurableObject {
   }
 
   async clearActiveJob(id) {
-    await this.ctx.storage.delete(ACTIVE_JOB_PREFIX + id);
-    await this.env.DEMO_STUDIO_ARTIFACTS.delete("recovery/" + id + ".json");
+    await Promise.all([
+      this.ctx.storage.delete(ACTIVE_JOB_PREFIX + id),
+      this.env.DEMO_STUDIO_ARTIFACTS.delete([
+        "recovery/" + id + ".json",
+        ...Array.from(CHECKPOINT_FILE_NAMES, (name) =>
+          "checkpoints/" + id + "/" + name
+        ),
+      ]),
+    ]);
   }
 
   async handleInternalRequest(request, url) {
@@ -412,16 +428,72 @@ export class DemoStudioContainer extends DurableObject {
     const recoveryMatch = url.pathname.match(
       /^\/__internal\/recovery\/([0-9a-f-]{36})$/i,
     );
+    const checkpointMatch = url.pathname.match(
+      /^\/__internal\/checkpoints\/([0-9a-f-]{36})\/([a-z0-9._-]+)$/i,
+    );
 
-    if (!artifactMatch && !jobMatch && !recoveryMatch) return undefined;
+    if (
+      !artifactMatch &&
+      !jobMatch &&
+      !recoveryMatch &&
+      !checkpointMatch
+    ) {
+      return undefined;
+    }
 
     const expected = await this.getInternalToken();
     if (bearerToken(request) !== expected) {
       return new Response("Unauthorized", { status: 401 });
     }
 
+    if (checkpointMatch && request.method === "GET") {
+      const id = checkpointMatch[1];
+      const name = checkpointMatch[2];
+      if (!CHECKPOINT_FILE_NAMES.has(name)) {
+        return new Response("Checkpoint file is not allowed", { status: 400 });
+      }
+
+      const object = await this.env.DEMO_STUDIO_ARTIFACTS.get(
+        "checkpoints/" + id + "/" + name,
+      );
+      if (!object) return new Response("Not found", { status: 404 });
+
+      return new Response(object.body, {
+        status: 200,
+        headers: {
+          "Content-Type":
+            object.httpMetadata?.contentType ?? "application/octet-stream",
+          "Content-Length": String(object.size),
+          "Cache-Control": "no-store",
+          ETag: object.httpEtag,
+        },
+      });
+    }
+
     if (request.method !== "PUT") {
       return new Response("Method not allowed", { status: 405 });
+    }
+
+    if (checkpointMatch) {
+      const id = checkpointMatch[1];
+      const name = checkpointMatch[2];
+      if (!CHECKPOINT_FILE_NAMES.has(name)) {
+        return new Response("Checkpoint file is not allowed", { status: 400 });
+      }
+
+      await this.env.DEMO_STUDIO_ARTIFACTS.put(
+        "checkpoints/" + id + "/" + name,
+        request.body,
+        {
+          httpMetadata: {
+            contentType:
+              request.headers.get("content-type") ??
+              "application/octet-stream",
+            cacheControl: "no-store",
+          },
+        },
+      );
+      return new Response(null, { status: 204 });
     }
 
     if (artifactMatch) {
