@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildCaptions, buildNarration } from "../src/render.js";
+import {
+  buildCaptions,
+  buildNarration,
+  resolveRenderEncoderPreset,
+} from "../src/render.js";
 import { buildScenePlan } from "../src/scenes.js";
 
 const manifest = {
@@ -64,4 +68,21 @@ test("builds sequential SRT captions against edited scenes", () => {
 
   assert.equal(ranges.length, 2);
   assert.ok(ranges[0].end < ranges[1].start);
+});
+
+
+test("render encoder preset keeps fast as fallback and allows measured overrides", () => {
+  assert.equal(resolveRenderEncoderPreset(undefined, {}), "fast");
+  assert.equal(
+    resolveRenderEncoderPreset(undefined, { DEMO_STUDIO_FFMPEG_PRESET: "veryfast" }),
+    "veryfast",
+  );
+  assert.equal(
+    resolveRenderEncoderPreset(undefined, { DEMO_STUDIO_FFMPEG_PRESET: "invalid" }),
+    "fast",
+  );
+  assert.equal(
+    resolveRenderEncoderPreset("faster", { DEMO_STUDIO_FFMPEG_PRESET: "veryfast" }),
+    "faster",
+  );
 });
