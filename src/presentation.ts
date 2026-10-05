@@ -130,12 +130,19 @@ async function ensureOverlay(page: Page, config?: PresentationConfig) {
   );
 }
 
-async function centerTarget(page: Page, target: Target) {
+async function centerTarget(
+  page: Page,
+  target: Target,
+  instant = false,
+) {
   const locator = resolveTarget(page, target);
   await locator.waitFor({ state: "visible", timeout: 10_000 });
-  await locator.evaluate((element) => {
-    element.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
-  });
+  await locator.evaluate(
+    (element, behavior) => {
+      element.scrollIntoView({ behavior, block: "center", inline: "center" });
+    },
+    instant ? "auto" : "smooth",
+  );
 }
 
 export async function focusTarget(
@@ -144,7 +151,7 @@ export async function focusTarget(
   config?: PresentationConfig,
 ): Promise<CameraFrame> {
   const locator = resolveTarget(page, target);
-  await centerTarget(page, target);
+  await centerTarget(page, target, config?.enabled === false);
 
   const transitionMs = config?.smartZoom?.transitionMs ?? DEFAULTS.transitionMs;
   const settleMs = config?.smartZoom?.settleMs ?? DEFAULTS.settleMs;
