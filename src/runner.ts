@@ -1,7 +1,8 @@
 import { chromium, type Page } from "playwright";
 import { mkdir, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { settleAfterNavigation } from "./performance.js";\nimport { animateClick, focusTarget, resetPresentation } from "./presentation.js";
+import { settleAfterNavigation } from "./performance.js";
+import { animateClick, focusTarget, resetPresentation } from "./presentation.js";
 import { attachNetworkGuard } from "./security.js";
 import { describeTarget, resolveTarget, resolveTargetWithRecovery } from "./targets.js";
 import {
