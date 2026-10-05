@@ -164,9 +164,10 @@
     {
       "action": "hover",
       "target": {
-        "by": "text",
-        "value": "Rooftop View",
-        "exact": true
+        "by": "role",
+        "value": "button",
+        "name": "Rooftop View",
+        "exact": false
       },
       "pauseAfterMs": 7500,
       "narration": "Следующий шаг связывает бронирование с выбранной атмосферой. Так гость понимает, что именно он резервирует, а интерфейс сохраняет контекст выбора."
