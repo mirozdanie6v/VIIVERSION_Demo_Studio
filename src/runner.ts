@@ -412,7 +412,7 @@ export async function runScenario(
         }
 
         if (execution.camera) {
-          await resetPresentation(page, scenario.presentation);
+          await resetPresentation(page, executionScenario.presentation);
         }
 
         await applyLocaleOverlayNow(page, executionScenario).catch(() => undefined);
@@ -435,7 +435,7 @@ export async function runScenario(
           recovery: execution.recovery,
         });
       } catch (error) {
-        await resetPresentation(page, scenario.presentation).catch(() => undefined);
+        await resetPresentation(page, executionScenario.presentation).catch(() => undefined);
 
         timeline.push({
           index,
