@@ -439,6 +439,19 @@ export async function runScenario(
       } catch (error) {
         await resetPresentation(page, stepScenario.presentation).catch(() => undefined);
 
+        await Promise.allSettled([
+          page
+            .content()
+            .then((html) =>
+              writeFile(path.join(runDir, "failure.html"), html, "utf8"),
+            ),
+          page.screenshot({
+            path: path.join(runDir, "failure.png"),
+            fullPage: true,
+          }),
+          writeFile(path.join(runDir, "failure-url.txt"), page.url() + "\n", "utf8"),
+        ]);
+
         timeline.push({
           index,
           label: step.label ?? `${step.action} #${index + 1}`,
