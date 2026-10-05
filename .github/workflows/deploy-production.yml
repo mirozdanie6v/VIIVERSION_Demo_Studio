@@ -1,4 +1,5 @@
 name: Deploy Demo Studio Production
+# release-trigger: 0.14.1-premium-voice
 
 on:
   workflow_dispatch:
