@@ -12,6 +12,10 @@ concurrency:
   group: ave-dental-english-demo
   cancel-in-progress: true
 
+permissions:
+  contents: write
+  actions: read
+
 jobs:
   render:
     runs-on: ubuntu-latest
@@ -179,6 +183,7 @@ jobs:
           duration=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "${run_dir}/final-9x16.mp4")
           awk -v d="$duration" 'BEGIN { exit !(d >= 55 && d <= 210) }'
           echo "FINAL_DURATION=$duration"
+          echo "FINAL_DURATION=$duration" >> "$GITHUB_ENV"
 
           ffmpeg -y -ss 3 -i "${run_dir}/final-9x16.mp4" -frames:v 1 "${run_dir}/qa-intro.png"
           ffmpeg -y -ss 45 -i "${run_dir}/final-9x16.mp4" -frames:v 1 "${run_dir}/qa-booking.png"
@@ -191,3 +196,37 @@ jobs:
           name: ave-dental-english-demo
           path: artifacts/
           if-no-files-found: error
+
+      - name: Publish render status
+        if: always()
+        env:
+          RUN_STATUS: ${{ job.status }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          HEAD_SHA: ${{ github.sha }}
+          FINAL_DURATION: ${{ env.FINAL_DURATION }}
+        shell: bash
+        run: |
+          mkdir -p status
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const payload = {
+            workflow: "AVE Dental English Demo",
+            status: process.env.RUN_STATUS,
+            runId: Number(process.env.RUN_ID),
+            runAttempt: Number(process.env.RUN_ATTEMPT),
+            headSha: process.env.HEAD_SHA,
+            durationSeconds: process.env.FINAL_DURATION ? Number(process.env.FINAL_DURATION) : null,
+            artifact: process.env.RUN_STATUS === "success" ? "ave-dental-english-demo" : null,
+            runUrl: `https://github.com/mirozdanie6v/VIIVERSION_Demo_Studio/actions/runs/${process.env.RUN_ID}`,
+            updatedAt: new Date().toISOString()
+          };
+          fs.writeFileSync('status/ave-dental-english-latest.json', JSON.stringify(payload, null, 2) + '\n');
+          NODE
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git pull --rebase origin main
+          git add status/ave-dental-english-latest.json
+          git commit -m "Update AVE Dental English render status" || exit 0
+          git push origin HEAD:main
