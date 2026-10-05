@@ -135,7 +135,16 @@ def main() -> int:
 
     engine = resolve_engine(args.engine, args.language)
     if engine == "chatterbox":
-        synthesize_chatterbox(args, text)
+        try:
+            synthesize_chatterbox(args, text)
+        except Exception as exc:
+            if args.engine != "auto":
+                raise
+            print(
+                f"Chatterbox failed in auto mode ({exc}); falling back to Supertonic.",
+                file=sys.stderr,
+            )
+            synthesize_supertonic(args, text)
     else:
         synthesize_supertonic(args, text)
 
