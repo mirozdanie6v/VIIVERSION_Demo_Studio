@@ -189,12 +189,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             cur=nxt
     events.append(f"Dialogue: 3,{ass_time(payment_start)},{ass_time(payment_start+1.55)},Headline,,0,0,0,,{{\\fad(160,280)}}Payment confirmed.")
 
-    a=outro_start
-    events.append(f"Dialogue: 4,{ass_time(a+0.35)},{ass_time(a+2.35)},OutcomeOrange,,0,0,0,,{{\\pos(72,520)\\fad(180,260)}}PAYMENT CONFIRMED")
-    events.append(f"Dialogue: 4,{ass_time(a+1.0)},{ass_time(a+3.2)},Outcome,,0,0,0,,{{\\pos(72,640)\\fad(180,260)}}Faster decisions.")
-    events.append(f"Dialogue: 4,{ass_time(a+2.0)},{ass_time(a+4.2)},Outcome,,0,0,0,,{{\\pos(72,720)\\fad(180,260)}}Cleaner bookings.")
-    events.append(f"Dialogue: 4,{ass_time(a+3.0)},{ass_time(a+5.2)},Outcome,,0,0,0,,{{\\pos(72,800)\\fad(180,260)}}More customers ready to buy.")
-    events.append(f"Dialogue: 4,{ass_time(a+4.25)},{ass_time(a+outro_dur)},CTA,,0,0,0,,{{\\pos(72,930)\\fad(180,320)}}Build your version with VIIVERSION.")
+    # Outro copy is baked into the designed final frame; keep ASS overlays off it to avoid duplicate text.
     Path(path).write_text(header+"\n".join(events)+"\n",encoding="utf-8")
 
 def build_voiceover(voices,starts,out):
