@@ -1,0 +1,54 @@
+name: MAX TOUR RU Flow Diagnostic
+
+on:
+  push:
+    branches:
+      - 'feature/max-tour-russian-v9'
+    paths:
+      - '.github/workflows/temp-max-tour-ru-flow-diagnostic.yml'
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npx playwright install --with-deps chromium
+      - name: Inspect Russian tour and checkout
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import { chromium } from 'playwright';
+          const browser=await chromium.launch({headless:true});
+          const page=await browser.newPage({viewport:{width:430,height:932}});
+          const dump=async(label)=>{
+            console.log('===',label,'===');
+            console.log('TEXT=',JSON.stringify((await page.locator('body').innerText()).slice(-12000)));
+            console.log('BUTTONS=',JSON.stringify(await page.locator('button').evaluateAll(els=>els.map((e,i)=>({i,text:(e.textContent||'').replace(/\s+/g,' ').trim(),cls:String(e.className||'')})).filter(x=>x.text))));
+            console.log('INPUTS=',JSON.stringify(await page.locator('input,textarea').evaluateAll(els=>els.map((e,i)=>({i,type:e.getAttribute('type'),placeholder:e.getAttribute('placeholder'),value:e.value,cls:String(e.className||'')})))));
+          };
+          await page.goto('https://max-tour.viiversion.com/',{waitUntil:'domcontentloaded',timeout:30000});
+          await page.waitForTimeout(1500);
+          const ru=page.getByRole('button',{name:'RU',exact:true}); if(await ru.count()) await ru.click();
+          await page.locator('button.nav-btn').nth(1).click(); await page.waitForTimeout(700);
+          const t=page.getByText('Далат «Премиум»',{exact:false});
+          console.log('TOUR_COUNT=',await t.count());
+          if(await t.count()){ await t.first().click(); await page.waitForTimeout(800); }
+          await dump('TOUR RU');
+          const aiNav=page.locator('button.nav-btn:has-text("ИИ-Помощник"):visible');
+          if(await aiNav.count()){ await aiNav.click(); await page.waitForTimeout(500); await dump('AI RU'); }
+          const catNav=page.locator('button.nav-btn:has-text("Каталог"):visible');
+          if(await catNav.count()){ await catNav.click(); await page.waitForTimeout(500); }
+          const t2=page.getByText('Далат «Премиум»',{exact:false});
+          if(await t2.count()){ await t2.first().click(); await page.waitForTimeout(500); }
+          const buttons=page.locator('button');
+          console.log('TOUR_BUTTON_TEXTS=',JSON.stringify(await buttons.allTextContents()));
+          const possible=buttons.filter({hasText:/заброн|выбрать|формат|присоедин|оформ/i});
+          console.log('POSSIBLE_COUNT=',await possible.count());
+          if(await possible.count()){ await possible.first().click(); await page.waitForTimeout(800); await dump('BOOKING RU'); }
+          await browser.close();
+          NODE
