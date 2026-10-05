@@ -12,6 +12,10 @@ import {
 import { runScenario } from "./runner.js";
 import { assertSafeHttpUrl } from "./security.js";
 import type { DemoScenario } from "./types.js";
+import {
+  parallelVoiceoverEnabled,
+  runCaptureWithOptionalVoiceover,
+} from "./concurrent-media.js";
 import { createVoiceover } from "./voiceover.js";
 import { auditUxDesign } from "./ux-design-brain.js";
 
@@ -636,44 +640,47 @@ export class DemoJobManager {
       storyboardPath,
     });
 
-    const capture = await runScenario(scenario, {
-      artifactsRoot: path.join(jobDir, "captures"),
-    });
+    let narration: string | undefined;
+    let plannedVoiceoverPath: string | undefined;
 
-    await this.update(job, {
-      progress: 62,
-      message: "Browser capture is complete.",
-      runDir: capture.runDir,
-    });
-
-    let voiceoverPath: string | undefined;
     if (job.request.voiceover) {
-      const narration = narrationFor(scenario);
+      narration = narrationFor(scenario);
       if (!narration) {
         throw new PermanentJobError(
           "Voiceover requested, but the scenario contains no narration.",
         );
       }
-
-      await this.beginStage(job, {
-        status: "voicing",
-        stage: "voiceover",
-        stageLabel: "Voiceover",
-        progress: 66,
-        message: "Generating and synchronizing narration.",
-        timeoutSeconds: 240,
-      });
-
-      voiceoverPath = path.join(jobDir, "voiceover.mp3");
-      await createVoiceover(narration, voiceoverPath, {
-        voice: job.request.voice,
-      });
-
-      await this.update(job, {
-        progress: 75,
-        message: "Narration is ready.",
-      });
+      plannedVoiceoverPath = path.join(jobDir, "voiceover.mp3");
     }
+
+    const media = await runCaptureWithOptionalVoiceover({
+      parallel: parallelVoiceoverEnabled(),
+      capture: () =>
+        runScenario(scenario, {
+          artifactsRoot: path.join(jobDir, "captures"),
+        }),
+      voiceover:
+        narration && plannedVoiceoverPath
+          ? async () => {
+              await createVoiceover(narration, plannedVoiceoverPath, {
+                voice: job.request.voice,
+              });
+              return plannedVoiceoverPath;
+            }
+          : undefined,
+    });
+
+    const capture = media.capture;
+    const voiceoverPath = media.voiceoverPath;
+
+    await this.update(job, {
+      progress: voiceoverPath ? 75 : 62,
+      message: voiceoverPath
+        ? "Browser capture and narration are complete."
+        : "Browser capture is complete.",
+      runDir: capture.runDir,
+    });
+
 
     await this.beginStage(job, {
       status: "rendering",
