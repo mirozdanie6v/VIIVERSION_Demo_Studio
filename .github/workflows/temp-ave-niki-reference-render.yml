@@ -1,0 +1,172 @@
+name: TEMP AVE Niki Reference Render
+
+on:
+  push:
+    branches: [temp-ave-niki-render]
+    paths:
+      - '.github/workflows/temp-ave-niki-reference-render.yml'
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install render and voice dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          python -m pip install --quiet --upgrade pip
+          python -m pip install --quiet torch==2.6.0 torchaudio==2.6.0 --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install --quiet "git+https://github.com/resemble-ai/chatterbox.git@master"
+
+      - name: Download approved AVE visual master
+        uses: actions/download-artifact@v4
+        with:
+          name: ave-dental-russian-premium-b2b
+          path: artifacts/ave
+          github-token: ${{ github.token }}
+          run-id: 37345202478
+
+      - name: Download approved MAX TOUR Niki reference
+        uses: actions/download-artifact@v4
+        with:
+          name: max-tour-premium-russian-v9-final
+          path: artifacts/max-tour
+          github-token: ${{ github.token }}
+          run-id: 37353860935
+
+      - name: Resolve AVE run and prepare Niki reference
+        id: run
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_dir="$(dirname "$(find artifacts/ave -type f -name capture.webm -print -quit)")"
+          test -n "$run_dir"
+          test -s artifacts/max-tour/voiceover_ru.wav
+          echo "dir=$run_dir" >> "$GITHUB_OUTPUT"
+          ffmpeg -y -i artifacts/max-tour/voiceover_ru.wav -t 8.8 \
+            -af "highpass=f=70,lowpass=f=11500,loudnorm=I=-17:TP=-2:LRA=8" \
+            -ar 24000 -ac 1 artifacts/niki-reference.wav
+          test -s artifacts/niki-reference.wav
+
+      - name: Synthesize AVE narration from MAX TOUR Niki reference
+        shell: bash
+        env:
+          RUN_DIR: ${{ steps.run.outputs.dir }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUN_DIR/voices"
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          import torch
+          import torchaudio as ta
+          import perth
+
+          if not callable(getattr(perth, "PerthImplicitWatermarker", None)):
+              perth.PerthImplicitWatermarker = perth.DummyWatermarker
+
+          from chatterbox.mtl_tts import ChatterboxMultilingualTTS
+
+          run_dir = Path(os.environ["RUN_DIR"])
+          run = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+          steps = run["scenario"]["steps"]
+          indices = [2, 5, 8, 12, 15, 19, 23, 26, 29, 32, 34, 35]
+          reference = str(Path("artifacts/niki-reference.wav").resolve())
+
+          device = "cuda" if torch.cuda.is_available() else "cpu"
+          torch.manual_seed(31)
+
+          try:
+              model = ChatterboxMultilingualTTS.from_pretrained(device=device, t3_model="v3")
+          except TypeError:
+              model = ChatterboxMultilingualTTS.from_pretrained(device=device)
+
+          for idx in indices:
+              step = steps[idx]
+              text = (step.get("voiceText") or step.get("narration") or "").strip()
+              if not text:
+                  raise RuntimeError(f"Missing narration for step {idx}")
+              wav = model.generate(text, language_id="ru", audio_prompt_path=reference)
+              ta.save(str(run_dir / "voices" / f"raw-{idx}.wav"), wav, model.sr)
+
+          print(f"NIKI_REFERENCE_DEVICE={device}")
+          print(f"NIKI_REFERENCE_SEGMENTS={len(indices)}")
+          PY
+
+          for raw in "$RUN_DIR"/voices/raw-*.wav; do
+            base=$(basename "$raw" .wav)
+            idx=${base#raw-}
+            out="$RUN_DIR/voices/step-${idx}.mp3"
+            if [ "$idx" = "35" ]; then
+              filter="atempo=1.02,highpass=f=70,lowpass=f=11500,acompressor=threshold=-18dB:ratio=1.55:attack=18:release=220,loudnorm=I=-16:TP=-1.5:LRA=8"
+            else
+              filter="highpass=f=70,lowpass=f=11500,acompressor=threshold=-18dB:ratio=1.55:attack=18:release=220,loudnorm=I=-16:TP=-1.5:LRA=8"
+            fi
+            ffmpeg -y -i "$raw" -af "$filter" -c:a libmp3lame -b:a 224k "$out"
+          done
+
+      - name: Synchronize Niki narration and captions
+        run: |
+          npx tsx src/narration-sync-cli.ts \
+            --run "${{ steps.run.outputs.dir }}" \
+            --bpm 96
+
+      - name: Render AVE Niki premium B2B film
+        run: |
+          npm run render -- \
+            --run "${{ steps.run.outputs.dir }}" \
+            --preset 9:16 \
+            --voiceover "${{ steps.run.outputs.dir }}/voiceover.mp3" \
+            --captions-file "${{ steps.run.outputs.dir }}/synced-captions.ass" \
+            --music "${{ steps.run.outputs.dir }}/background.m4a" \
+            --music-volume 0.07 \
+            --music-bpm 96 \
+            --brand "VIIVERSION" \
+            --title "Запись клиентов + AI-консультант" \
+            --intro-seconds 3.4 \
+            --outro-seconds 6.5 \
+            --cta "Свяжитесь с VIIVERSION" \
+            --cta-secondary "Запись 24/7 · AI-консультант · автоматизация"
+
+      - name: Verify final and make QA frames
+        shell: bash
+        env:
+          RUN_DIR: ${{ steps.run.outputs.dir }}
+        run: |
+          set -euo pipefail
+          f="$RUN_DIR/final-9x16.mp4"
+          test -s "$f"
+          duration=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$f")
+          echo "FINAL_DURATION=$duration"
+          awk -v d="$duration" 'BEGIN { exit !(d >= 140 && d <= 210) }'
+          ffmpeg -y -ss 1.6 -i "$f" -frames:v 1 "$RUN_DIR/qa-niki-intro.png"
+          ffmpeg -y -ss 55 -i "$f" -frames:v 1 "$RUN_DIR/qa-niki-booking.png"
+          ffmpeg -y -sseof -11 -i "$f" -frames:v 1 "$RUN_DIR/qa-niki-ai.png"
+          ffmpeg -y -sseof -3 -i "$f" -frames:v 1 "$RUN_DIR/qa-niki-outro.png"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ave-dental-russian-niki-reference-premium-b2b
+          path: ${{ steps.run.outputs.dir }}/
+          if-no-files-found: error
