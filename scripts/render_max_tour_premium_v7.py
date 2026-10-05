@@ -62,6 +62,19 @@ def make_bg(path):
     )
     base.save(path)
 
+def make_clean_edge_bg():
+    base=Image.new("RGBA",(W,H),GRAPHITE)
+    glow=Image.new("RGBA",(W,H),(0,0,0,0))
+    gd=ImageDraw.Draw(glow)
+    gd.ellipse((-260,180,900,1380),fill=(255,128,52,38))
+    gd.ellipse((430,1150,1210,2100),fill=(255,180,108,22))
+    glow=glow.filter(ImageFilter.GaussianBlur(180))
+    base=Image.alpha_composite(base,glow)
+    noise=Image.effect_noise((W,H),16).convert("L")
+    grain=Image.new("RGBA",(W,H),(255,255,255,0))
+    grain.putalpha(noise.point(lambda p:max(0,min(14,int((p-128)*0.06+5)))))
+    return Image.alpha_composite(base,grain)
+
 def paste_phone(canvas, screenshot, box, radius=48):
     x,y,w,h=box
     d=ImageDraw.Draw(canvas)
@@ -78,29 +91,29 @@ def paste_phone(canvas, screenshot, box, radius=48):
     d.rounded_rectangle((x+w//2-50,y+18,x+w//2+50,y+36),radius=10,fill=(3,3,4,245))
 
 def make_intro(path, screenshot):
-    canvas=Image.open(Path(path).parent/"bg.png").convert("RGBA")
+    canvas=make_clean_edge_bg()
     d=ImageDraw.Draw(canvas)
-    d.text((72,338),"VIIVERSION  /  PRODUCT FILM",font=font(FONT_BOLD,18),fill=(255,255,255,145))
-    d.text((72,410),"MAX TOUR",font=font(FONT_BOLD,70),fill="white")
-    d.text((72,500),"One journey.",font=font(FONT_BOLD,44),fill=(245,245,245,242))
-    d.text((72,556),"From discovery to confirmed payment.",font=font(FONT_BOLD,36),fill=(255,174,104,255))
-    d.text((72,632),"Tours  ·  AI assistant  ·  Booking  ·  Payment",font=font(FONT_REG,24),fill=(225,225,228,185))
-    paste_phone(canvas,screenshot,(340,790,400,866),48)
-    d.text((72,1810),"MAX TOUR × VIIVERSION",font=font(FONT_BOLD,20),fill=(255,255,255,125))
+    d.text((72,112),"VIIVERSION  /  PRODUCT FILM",font=font(FONT_BOLD,18),fill=(255,255,255,145))
+    d.text((72,250),"MAX TOUR",font=font(FONT_BOLD,72),fill="white")
+    d.text((72,345),"One journey.",font=font(FONT_BOLD,46),fill=(245,245,245,244))
+    d.text((72,405),"From discovery to confirmed payment.",font=font(FONT_BOLD,38),fill=(255,174,104,255))
+    d.text((72,495),"Tours  ·  AI assistant  ·  Booking  ·  Payment",font=font(FONT_REG,25),fill=(225,225,228,188))
+    paste_phone(canvas,screenshot,(335,690,410,888),48)
+    d.text((72,1805),"MAX TOUR × VIIVERSION",font=font(FONT_BOLD,20),fill=(255,255,255,125))
     canvas.save(path)
 
 def make_outro(path, screenshot):
-    canvas=Image.open(Path(path).parent/"bg.png").convert("RGBA")
+    canvas=make_clean_edge_bg()
     d=ImageDraw.Draw(canvas)
-    d.text((72,338),"VIIVERSION  /  RESULT",font=font(FONT_BOLD,18),fill=(255,255,255,145))
-    d.rounded_rectangle((72,410,300,466),radius=28,fill=(255,147,70,34),outline=(255,166,92,90),width=1)
-    d.text((186,438),"PAYMENT CONFIRMED",font=font(FONT_BOLD,19),fill=(255,174,104,255),anchor="mm")
-    d.text((72,540),"Faster decisions.",font=font(FONT_BOLD,42),fill="white")
-    d.text((72,600),"Cleaner bookings.",font=font(FONT_BOLD,42),fill="white")
-    d.text((72,660),"More customers ready to buy.",font=font(FONT_BOLD,36),fill=(255,174,104,255))
-    d.text((72,748),"Build your version with VIIVERSION.",font=font(FONT_REG,26),fill=(225,225,228,185))
-    paste_phone(canvas,screenshot,(550,900,330,715),42)
-    d.text((72,1778),"MAX TOUR × VIIVERSION",font=font(FONT_BOLD,20),fill=(255,255,255,120))
+    d.text((72,112),"VIIVERSION  /  RESULT",font=font(FONT_BOLD,18),fill=(255,255,255,145))
+    d.rounded_rectangle((72,220,322,278),radius=28,fill=(255,147,70,245),outline=(255,183,118,255),width=1)
+    d.text((197,249),"PAYMENT CONFIRMED",font=font(FONT_BOLD,18),fill=(255,255,255,255),anchor="mm")
+    d.text((72,365),"Faster decisions.",font=font(FONT_BOLD,44),fill="white")
+    d.text((72,430),"Cleaner bookings.",font=font(FONT_BOLD,44),fill="white")
+    d.text((72,495),"More customers ready to buy.",font=font(FONT_BOLD,37),fill=(255,174,104,255))
+    d.text((72,585),"Build your version with VIIVERSION.",font=font(FONT_REG,26),fill=(225,225,228,188))
+    paste_phone(canvas,screenshot,(585,760,350,758),46)
+    d.text((72,1805),"MAX TOUR × VIIVERSION",font=font(FONT_BOLD,20),fill=(255,255,255,125))
     canvas.save(path)
 
 def extract_frame(video, time_s, out):
