@@ -1,11 +1,11 @@
 {
   "workflow": "AVE Dental English Demo",
-  "status": "in_progress",
+  "status": "success",
   "runId": 37329705505,
   "runAttempt": 1,
   "headSha": "e35c88f09ea1ba671962a3dc3c8b46fee06d4bcb",
-  "durationSeconds": null,
-  "artifact": null,
+  "durationSeconds": 167.833333,
+  "artifact": "ave-dental-english-demo",
   "runUrl": "https://github.com/mirozdanie6v/VIIVERSION_Demo_Studio/actions/runs/37329705505",
-  "updatedAt": "2026-10-05T15:03:41.165Z"
+  "updatedAt": "2026-10-05T15:09:02.673Z"
 }
