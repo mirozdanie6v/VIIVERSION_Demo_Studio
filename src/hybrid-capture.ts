@@ -166,6 +166,7 @@ export async function writeHybridCaptureManifest(
   keyframes: HybridKeyframe[],
   startedAt: string,
   finishedAt: string,
+  realtimeSourceVideoPath?: string,
 ): Promise<string> {
   const manifestPath = path.join(runDir, "hybrid_capture.json");
   await writeFile(
@@ -177,6 +178,7 @@ export async function writeHybridCaptureManifest(
         scenarioName: scenario.name,
         startedAt,
         finishedAt,
+        realtimeSourceVideoPath,
         plan,
         keyframes,
         counts: {
