@@ -16,7 +16,7 @@ async function main() {
   const runArg = arg("--run");
   if (!runArg) {
     throw new Error(
-      "Usage: npm run render -- --run artifacts/<run-id> [--preset 16:9|9:16|1:1] [--tts] [--music file.mp3] [--music-bpm 120]",
+      "Usage: npm run render -- --run artifacts/<run-id> [--preset 16:9|9:16|1:1] [--tts] [--music file.mp3] [--music-bpm 120] [--hybrid]",
     );
   }
 
@@ -87,6 +87,8 @@ async function main() {
     outro: !has("--no-outro"),
     introSeconds: arg("--intro-seconds") ? Number(arg("--intro-seconds")) : undefined,
     outroSeconds: arg("--outro-seconds") ? Number(arg("--outro-seconds")) : undefined,
+    hybrid: has("--hybrid") ? true : undefined,
+    hybridStrict: has("--hybrid-strict") ? true : undefined,
   });
 
   console.log(output);
