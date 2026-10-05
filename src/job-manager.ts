@@ -11,7 +11,16 @@ import {
 } from "./persistence.js";
 import { runScenario } from "./runner.js";
 import { assertSafeHttpUrl } from "./security.js";
-import type { DemoScenario } from "./types.js";
+import type { DemoScenario, RunResult } from "./types.js";
+import {
+  persistCaptureCheckpoint,
+  persistScenarioCheckpoint,
+  persistVoiceoverCheckpoint,
+  restoreCaptureCheckpoint,
+  restoreScenarioCheckpoint,
+  restoreVoiceoverCheckpoint,
+  type DemoJobCheckpoint,
+} from "./checkpoints.js";
 import {
   parallelVoiceoverEnabled,
   runCaptureWithOptionalVoiceover,
