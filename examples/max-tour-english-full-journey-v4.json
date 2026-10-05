@@ -325,19 +325,18 @@
         "by": "css",
         "value": "button:has-text(\"Private\"):visible, button:has-text(\"Индивидуальный\"):visible, button:has-text(\"Индивидуально\"):visible, button:has-text(\"Choose format\"):visible, button:has-text(\"Выбрать формат\"):visible"
       },
-      "label": "Start booking"
+      "label": "Choose private format"
     },
     {
-      "action": "scroll",
-      "y": 900,
-      "label": "Scroll to private booking CTA",
-      "pauseAfterMs": 250
+      "action": "goto",
+      "url": "/booking?tourId=dalat-premium",
+      "label": "Start booking"
     },
     {
       "action": "waitFor",
       "target": {
         "by": "css",
-        "value": "button:has-text(\"Continue with private tour\"):visible, button:has-text(\"Продолжить индивидуально\"):visible"
+        "value": ".px-commerce-flow:visible, .px-commerce-card:visible, button:has-text(\"Continue with private tour\"):visible, button:has-text(\"Продолжить индивидуально\"):visible"
       },
       "state": "visible",
       "timeoutMs": 15000,
