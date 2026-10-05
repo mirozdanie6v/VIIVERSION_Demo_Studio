@@ -5,6 +5,7 @@ on:
   pull_request:
     paths:
       - 'scripts/benchmark_max_tour_hybrid.ts'
+      - 'examples/max-tour-english-full-journey-v4.json'
       - '.github/workflows/max-tour-hybrid-promotion-gate.yml'
 
 concurrency:
