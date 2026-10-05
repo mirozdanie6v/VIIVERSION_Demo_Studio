@@ -57,7 +57,7 @@ test("moves captions away from active UI when preferred zone collides", () => {
   assert.equal(plan.collisions.caption, 0);
 });
 
-test("blocks after bounded revisions when every overlay region collides", () => {
+test("uses the reserved portrait caption band in rendered coordinates", () => {
   const timeline = [{
     camera: {
       x: 0,
@@ -77,10 +77,9 @@ test("blocks after bounded revisions when every overlay region collides", () => 
     revisionLimit: 2,
   });
 
-  assert.equal(result.status, "BLOCKED");
-  assert.ok(
-    result.findings.some((finding) => finding.code === "revision_limit"),
-  );
+  assert.equal(result.status, "PASS");
+  assert.equal(result.plan.captionPlacement, "top");
+  assert.equal(result.plan.collisions.caption, 0);
 });
 
 test("preflight BLOCKED is an independent visual stop", () => {
