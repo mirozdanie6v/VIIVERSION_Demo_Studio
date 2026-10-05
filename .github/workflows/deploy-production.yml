@@ -23,6 +23,13 @@ jobs:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+      ELEVENLABS_VOICE_ID: ${{ secrets.ELEVENLABS_VOICE_ID }}
+      ELEVENLABS_VOICE_ID_RU: ${{ secrets.ELEVENLABS_VOICE_ID_RU }}
+      ELEVENLABS_VOICE_ID_RU_RU: ${{ secrets.ELEVENLABS_VOICE_ID_RU_RU }}
+      ELEVENLABS_VOICE_ID_EN: ${{ secrets.ELEVENLABS_VOICE_ID_EN }}
+      ELEVENLABS_VOICE_ID_EN_US: ${{ secrets.ELEVENLABS_VOICE_ID_EN_US }}
+      ELEVENLABS_MODEL: ${{ vars.ELEVENLABS_MODEL || 'eleven_v3' }}
       DEMO_STUDIO_API_KEY: ${{ secrets.DEMO_STUDIO_API_KEY }}
       DEMO_STUDIO_PRODUCTION_HYBRID: ${{ vars.DEMO_STUDIO_PRODUCTION_HYBRID }}
       TARGET_DOMAIN: demostudio.viiversion.com
@@ -194,6 +201,21 @@ jobs:
           if [ -n "${OPENAI_API_KEY:-}" ]; then
             printf '%s' "${OPENAI_API_KEY}" | npx wrangler secret put OPENAI_API_KEY --config wrangler.jsonc
           fi
+
+          for key in \
+            ELEVENLABS_API_KEY \
+            ELEVENLABS_VOICE_ID \
+            ELEVENLABS_VOICE_ID_RU \
+            ELEVENLABS_VOICE_ID_RU_RU \
+            ELEVENLABS_VOICE_ID_EN \
+            ELEVENLABS_VOICE_ID_EN_US \
+            ELEVENLABS_MODEL; do
+            value="${!key:-}"
+            if [ -n "${value}" ]; then
+              printf '%s' "${value}" | npx wrangler secret put "${key}" --config wrangler.jsonc
+            fi
+          done
+
           if [ -n "${DEMO_STUDIO_API_KEY:-}" ]; then
             printf '%s' "${DEMO_STUDIO_API_KEY}" | npx wrangler secret put DEMO_STUDIO_API_KEY --config wrangler.jsonc
           fi

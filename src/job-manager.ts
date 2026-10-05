@@ -814,11 +814,19 @@ export class DemoJobManager {
             ? restoredVoiceoverPath
               ? async () => restoredVoiceoverPath as string
               : async () => {
+                  const scenarioVoice = activeScenario.voice;
                   await createVoiceover(
                     narration as string,
                     plannedVoiceoverPath as string,
                     {
-                      voice: job.request.voice,
+                      locale: scenarioVoice?.locale,
+                      provider: scenarioVoice?.provider,
+                      voice: job.request.voice ?? scenarioVoice?.voiceId,
+                      model: scenarioVoice?.model,
+                      persona: scenarioVoice?.persona ?? "viiversion-presenter",
+                      instructions: scenarioVoice?.instructions,
+                      pronunciation: scenarioVoice?.pronunciation,
+                      requireNativeTimings: scenarioVoice?.requireNativeTimings,
                     },
                   );
                   return plannedVoiceoverPath as string;

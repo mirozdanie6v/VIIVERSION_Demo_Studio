@@ -5,6 +5,12 @@ import type {
 } from "./voice-engine-types.js";
 import { synthesizeVoice } from "./voice-router.js";
 
+export function defaultPresentationLocale(text: string): "ru-RU" | "en-US" {
+  const cyrillic = (text.match(/[А-Яа-яЁё]/g) ?? []).length;
+  const latin = (text.match(/[A-Za-z]/g) ?? []).length;
+  return cyrillic > latin ? "ru-RU" : "en-US";
+}
+
 export type VoiceoverOptions = {
   apiKey?: string;
   model?: string;
@@ -36,7 +42,7 @@ export async function createVoiceoverResult(
     {
       text,
       outputPath,
-      locale: options.locale ?? "en-US",
+      locale: options.locale ?? defaultPresentationLocale(text),
       provider: options.provider ?? "auto",
       model: options.model,
       voiceId: options.voice,
