@@ -15,7 +15,7 @@ concurrency:
 jobs:
   render:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 50
 
     steps:
       - name: Checkout
@@ -34,7 +34,7 @@ jobs:
           npx playwright install --with-deps chromium
           sudo apt-get update
           sudo apt-get install -y ffmpeg espeak-ng
-          python3 -m pip install --quiet numpy piper-tts
+          python3 -m pip install --quiet numpy -r requirements-tts-chatterbox.txt
 
       - name: Capture The Cloud guest journey
         env:
@@ -65,25 +65,53 @@ jobs:
           }
           NODE
 
-      - name: Synthesize Russian presenter voice
+      - name: Synthesize premium Russian presenter voice
         shell: bash
+        env:
+          RUN_DIR: ${{ steps.run.outputs.dir }}
         run: |
           set -euo pipefail
+          python3 - <<'PY'
+          import glob
+          import os
+          from pathlib import Path
+
+          import torchaudio as ta
+          import perth
+
+          if not callable(getattr(perth, "PerthImplicitWatermarker", None)):
+              perth.PerthImplicitWatermarker = perth.DummyWatermarker
+
+          from chatterbox.mtl_tts import ChatterboxMultilingualTTS
+
+          run_dir = Path(os.environ["RUN_DIR"])
+          try:
+              model = ChatterboxMultilingualTTS.from_pretrained(device="cpu", t3_model="v3")
+          except TypeError:
+              model = ChatterboxMultilingualTTS.from_pretrained(device="cpu")
+
+          for txt_path in sorted(glob.glob(str(run_dir / "voices" / "text-*.txt"))):
+              txt = Path(txt_path)
+              idx = txt.stem.split("-")[-1]
+              text = txt.read_text(encoding="utf-8").strip()
+              wav = model.generate(text, language_id="ru")
+              ta.save(str(run_dir / "voices" / f"raw-{idx}.wav"), wav, model.sr)
+          PY
+
           run_dir="${{ steps.run.outputs.dir }}"
-          python3 -m piper.download_voices --download-dir "${run_dir}/voices" ru_RU-irina-medium
-          model="${run_dir}/voices/ru_RU-irina-medium.onnx"
-          for txt in "${run_dir}"/voices/text-*.txt; do
-            base=$(basename "$txt" .txt)
-            idx=${base#text-}
-            raw="${run_dir}/voices/raw-${idx}.wav"
+          for raw in "${run_dir}"/voices/raw-*.wav; do
+            base=$(basename "$raw" .wav)
+            idx=${base#raw-}
             out="${run_dir}/voices/step-${idx}.mp3"
-            cat "$txt" | piper --model "$model" --output_file "$raw"
-            ffmpeg -y -i "$raw"               -af "atempo=1.03,volume=0.96,highpass=f=72,lowpass=f=10500,acompressor=threshold=-19dB:ratio=1.8:attack=22:release=210,loudnorm=I=-16:TP=-1.5:LRA=7"               -c:a libmp3lame -b:a 192k "$out"
+            ffmpeg -y -i "$raw" \
+              -af "volume=0.98,highpass=f=65,lowpass=f=12000,acompressor=threshold=-20dB:ratio=1.5:attack=18:release=180,loudnorm=I=-16:TP=-1.5:LRA=9" \
+              -c:a libmp3lame -b:a 224k "$out"
           done
 
       - name: Synchronize narration and captions
         run: |
           npx tsx src/narration-sync-cli.ts             --run "${{ steps.run.outputs.dir }}"             --bpm 98
+          sed -i 's/Style: Default,DejaVu Sans,28,/Style: Default,DejaVu Sans,56,/' "${{ steps.run.outputs.dir }}/synced-captions.ass"
 
       - name: Generate subtle background music
         shell: bash
