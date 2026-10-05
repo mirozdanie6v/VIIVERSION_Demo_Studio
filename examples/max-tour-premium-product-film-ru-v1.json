@@ -107,8 +107,9 @@
     {
       "action": "waitFor",
       "target": {
-        "by": "css",
-        "value": "article.tour-card:has-text(\"Далат «Премиум»\"):visible"
+        "by": "text",
+        "value": "Далат «Премиум»",
+        "exact": false
       },
       "state": "visible",
       "timeoutMs": 15000,
@@ -128,8 +129,9 @@
     {
       "action": "hover",
       "target": {
-        "by": "css",
-        "value": "article.tour-card:has-text(\"Далат «Премиум»\"):visible"
+        "by": "text",
+        "value": "Далат «Премиум»",
+        "exact": false
       },
       "pauseAfterMs": 900,
       "label": "Focus Dalat Premium"
@@ -137,8 +139,9 @@
     {
       "action": "click",
       "target": {
-        "by": "css",
-        "value": "article.tour-card:has-text(\"Далат «Премиум»\"):visible"
+        "by": "text",
+        "value": "Далат «Премиум»",
+        "exact": false
       },
       "pauseAfterMs": 600,
       "label": "Open Dalat Premium"
@@ -233,8 +236,9 @@
     {
       "action": "waitFor",
       "target": {
-        "by": "css",
-        "value": "article.tour-card:has-text(\"Далат «Премиум»\"):visible"
+        "by": "text",
+        "value": "Далат «Премиум»",
+        "exact": false
       },
       "state": "visible",
       "timeoutMs": 15000,
@@ -243,8 +247,9 @@
     {
       "action": "click",
       "target": {
-        "by": "css",
-        "value": "article.tour-card:has-text(\"Далат «Премиум»\"):visible"
+        "by": "text",
+        "value": "Далат «Премиум»",
+        "exact": false
       },
       "pauseAfterMs": 550,
       "label": "Return to Dalat"
