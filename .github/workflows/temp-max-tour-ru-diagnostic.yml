@@ -1,0 +1,48 @@
+name: MAX TOUR RU UI Diagnostic
+
+on:
+  push:
+    branches:
+      - 'feature/max-tour-russian-v9'
+    paths:
+      - '.github/workflows/temp-max-tour-ru-diagnostic.yml'
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npx playwright install --with-deps chromium
+      - name: Inspect Russian UI
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import { chromium } from 'playwright';
+          const browser=await chromium.launch({headless:true});
+          const page=await browser.newPage({viewport:{width:430,height:932}});
+          await page.goto('https://max-tour.viiversion.com/',{waitUntil:'domcontentloaded',timeout:30000});
+          await page.waitForTimeout(1800);
+          const dump=async(label)=>{
+            console.log('===',label,'===');
+            console.log('TEXT=',JSON.stringify((await page.locator('body').innerText()).slice(0,12000)));
+            console.log('BUTTONS=',JSON.stringify(await page.locator('button').evaluateAll(els=>els.map((e,i)=>({i,text:(e.textContent||'').replace(/\s+/g,' ').trim(),cls:String(e.className||'')})).filter(x=>x.text))));
+            console.log('LINKS=',JSON.stringify(await page.locator('a').evaluateAll(els=>els.map((e,i)=>({i,text:(e.textContent||'').replace(/\s+/g,' ').trim(),href:e.getAttribute('href'),cls:String(e.className||'')})).filter(x=>x.text))));
+          };
+          await dump('HOME DEFAULT');
+          const ru=page.getByRole('button',{name:'RU',exact:true});
+          if(await ru.count()) { await ru.click(); await page.waitForTimeout(600); }
+          await dump('HOME RU');
+          const nav=page.locator('button.nav-btn:visible');
+          console.log('NAV=',JSON.stringify(await nav.allTextContents()));
+          if(await nav.count()>=2){ await nav.nth(1).click(); await page.waitForTimeout(800); }
+          await dump('CATALOG RU');
+          const dalat=page.getByText(/Da Lat/i);
+          console.log('DALAT_COUNT=',await dalat.count());
+          if(await dalat.count()){ await dalat.first().click(); await page.waitForTimeout(800); await dump('TOUR RU'); }
+          await browser.close();
+          NODE
