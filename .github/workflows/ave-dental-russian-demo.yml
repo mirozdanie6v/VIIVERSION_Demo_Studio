@@ -15,7 +15,7 @@ concurrency:
 jobs:
   render:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 55
 
     steps:
       - name: Checkout
@@ -24,17 +24,18 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Install Chromium and media tools
+      - name: Install Chromium, media tools and premium Russian TTS
         run: |
           npx playwright install --with-deps chromium
           sudo apt-get update
           sudo apt-get install -y ffmpeg espeak-ng
-          python3 -m pip install --quiet numpy piper-tts
+          python3 -m pip install --quiet numpy
+          python3 -m pip install --quiet -r requirements-tts-chatterbox.txt
 
       - name: Capture AVE Dental patient journey
         env:
@@ -46,6 +47,15 @@ jobs:
         id: run
         shell: bash
         run: echo "dir=$(find artifacts -mindepth 1 -maxdepth 1 -type d | sort | tail -n 1)" >> "$GITHUB_OUTPUT"
+
+      - name: Free browser cache before premium voice synthesis
+        shell: bash
+        run: |
+          rm -rf ~/.cache/ms-playwright || true
+          rm -rf ~/.npm/_cacache || true
+          sudo apt-get clean || true
+          sudo rm -rf /var/lib/apt/lists/* || true
+          df -h
 
       - name: Prepare narration segments
         shell: bash
@@ -65,35 +75,65 @@ jobs:
           }
           NODE
 
-      - name: Synthesize Russian presenter voice
+      - name: Synthesize premium Russian voice with Chatterbox V3
         shell: bash
+        env:
+          RUN_DIR: ${{ steps.run.outputs.dir }}
         run: |
           set -euo pipefail
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          import torch
+          import torchaudio as ta
+          import perth
+
+          if not callable(getattr(perth, "PerthImplicitWatermarker", None)):
+              perth.PerthImplicitWatermarker = perth.DummyWatermarker
+
+          from chatterbox.mtl_tts import ChatterboxMultilingualTTS
+
+          run_dir = Path(os.environ["RUN_DIR"])
+          voices = run_dir / "voices"
+          device = "cuda" if torch.cuda.is_available() else "cpu"
+
+          try:
+              model = ChatterboxMultilingualTTS.from_pretrained(device=device, t3_model="v3")
+          except TypeError:
+              model = ChatterboxMultilingualTTS.from_pretrained(device=device)
+
+          text_files = sorted(
+              voices.glob("text-*.txt"),
+              key=lambda p: int(p.stem.split("-")[-1]),
+          )
+
+          for txt in text_files:
+              idx = txt.stem.split("-")[-1]
+              text = txt.read_text(encoding="utf-8").strip()
+              if not text:
+                  continue
+              wav = model.generate(text, language_id="ru")
+              ta.save(str(voices / f"raw-{idx}.wav"), wav, model.sr)
+
+          print(f"PREMIUM_VOICE_DEVICE={device}")
+          print(f"PREMIUM_VOICE_SEGMENTS={len(text_files)}")
+          PY
+
           run_dir="${{ steps.run.outputs.dir }}"
-          python3 -m piper.download_voices --download-dir "${run_dir}/voices" ru_RU-irina-medium
-          model="${run_dir}/voices/ru_RU-irina-medium.onnx"
-
-          for txt in "${run_dir}"/voices/text-*.txt; do
-            base=$(basename "$txt" .txt)
-            idx=${base#text-}
-            raw="${run_dir}/voices/raw-${idx}.wav"
+          for raw in "${run_dir}"/voices/raw-*.wav; do
+            base=$(basename "$raw" .wav)
+            idx=${base#raw-}
             out="${run_dir}/voices/step-${idx}.mp3"
-
-            cat "$txt" | piper --model "$model" --output_file "$raw"
-
-            ffmpeg -y -i "$raw" \
-              -af "volume=0.94,highpass=f=72,lowpass=f=10500,acompressor=threshold=-19dB:ratio=1.8:attack=22:release=210,loudnorm=I=-16:TP=-1.5:LRA=7" \
-              -c:a libmp3lame -b:a 192k "$out"
+            ffmpeg -y -i "$raw"               -af "highpass=f=70,lowpass=f=11500,acompressor=threshold=-18dB:ratio=1.65:attack=20:release=220,loudnorm=I=-16:TP=-1.5:LRA=8"               -c:a libmp3lame -b:a 224k "$out"
           done
 
       - name: Synchronize narration and captions
         shell: bash
         run: |
-          npx tsx src/narration-sync-cli.ts \
-            --run "${{ steps.run.outputs.dir }}" \
-            --bpm 96
+          npx tsx src/narration-sync-cli.ts             --run "${{ steps.run.outputs.dir }}"             --bpm 96
 
-      - name: Generate subtle background music
+      - name: Generate subtle premium background music
         shell: bash
         env:
           RUN_DIR: ${{ steps.run.outputs.dir }}
@@ -103,7 +143,7 @@ jobs:
           import numpy as np
 
           sr = 44100
-          duration = 120.0
+          duration = 150.0
           n = int(duration * sr)
           t = np.arange(n, dtype=np.float64) / sr
           left = np.zeros(n, dtype=np.float64)
@@ -123,16 +163,16 @@ jobs:
               tt = np.arange(end - start, dtype=np.float64) / sr
               fade = np.minimum(1, tt / 2.0) * np.minimum(1, (chord_len - tt) / 2.0)
               for j, f in enumerate(chord):
-                  amp = 0.025 / (j + 1)
+                  amp = 0.024 / (j + 1)
                   left[start:end] += amp * np.sin(2*np.pi*f*tt + 0.13*j) * fade
                   right[start:end] += amp * np.sin(2*np.pi*f*tt + 0.21*j) * fade
 
-          pulse = 0.0025 * np.sin(2*np.pi*49*t) * (0.55 + 0.45*np.sin(2*np.pi*(96/60/2)*t)**2)
+          pulse = 0.0022 * np.sin(2*np.pi*49*t) * (0.55 + 0.45*np.sin(2*np.pi*(96/60/2)*t)**2)
           left += pulse
           right += pulse
 
           peak = max(np.max(np.abs(left)), np.max(np.abs(right)), 1e-9)
-          stereo = np.stack([left/peak*0.55, right/peak*0.55], axis=1)
+          stereo = np.stack([left/peak*0.52, right/peak*0.52], axis=1)
           pcm = (np.clip(stereo, -1, 1) * 32767).astype(np.int16)
 
           out = os.path.join(os.environ['RUN_DIR'], 'background.wav')
@@ -144,28 +184,13 @@ jobs:
           PY
 
           run_dir="${{ steps.run.outputs.dir }}"
-          ffmpeg -y -i "${run_dir}/background.wav" \
-            -af "highpass=f=70,lowpass=f=8500,loudnorm=I=-28:TP=-7:LRA=6" \
-            -c:a aac -b:a 160k "${run_dir}/background.m4a"
+          ffmpeg -y -i "${run_dir}/background.wav"             -af "highpass=f=70,lowpass=f=9000,loudnorm=I=-29:TP=-7:LRA=7"             -c:a aac -b:a 192k "${run_dir}/background.m4a"
 
-      - name: Render final Russian presentation
+      - name: Render premium B2B Russian presentation
         run: |
-          npm run render -- \
-            --run "${{ steps.run.outputs.dir }}" \
-            --preset 9:16 \
-            --voiceover "${{ steps.run.outputs.dir }}/voiceover.mp3" \
-            --captions-file "${{ steps.run.outputs.dir }}/synced-captions.ass" \
-            --music "${{ steps.run.outputs.dir }}/background.m4a" \
-            --music-volume 0.08 \
-            --music-bpm 96 \
-            --brand "AVE DENTAL CLINIC" \
-            --title "Мини-приложение для пациента" \
-            --intro-seconds 2.2 \
-            --outro-seconds 4.8 \
-            --cta "Услуги, запись и ИИ-консультант — в одном приложении" \
-            --cta-secondary "AVE Dental Clinic · Nha Trang"
+          npm run render --             --run "${{ steps.run.outputs.dir }}"             --preset 9:16             --voiceover "${{ steps.run.outputs.dir }}/voiceover.mp3"             --captions-file "${{ steps.run.outputs.dir }}/synced-captions.ass"             --music "${{ steps.run.outputs.dir }}/background.m4a"             --music-volume 0.07             --music-bpm 96             --brand "VIIVERSION"             --title "Запись клиентов + AI-консультант"             --intro-seconds 3.4             --outro-seconds 6.5             --cta "Свяжитесь с VIIVERSION"             --cta-secondary "Запись 24/7 · AI-консультант · автоматизация"
 
-      - name: Verify final video and make QA frames
+      - name: Verify final video and create QA frames
         shell: bash
         env:
           RUN_DIR: ${{ steps.run.outputs.dir }}
@@ -178,17 +203,17 @@ jobs:
           test -s "${run_dir}/final-9x16.mp4"
 
           duration=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "${run_dir}/final-9x16.mp4")
-          awk -v d="$duration" 'BEGIN { exit !(d >= 55 && d <= 210) }'
+          awk -v d="$duration" 'BEGIN { exit !(d >= 70 && d <= 230) }'
           echo "FINAL_DURATION=$duration"
 
-          ffmpeg -y -ss 3 -i "${run_dir}/final-9x16.mp4" -frames:v 1 "${run_dir}/qa-intro.png"
-          ffmpeg -y -ss 45 -i "${run_dir}/final-9x16.mp4" -frames:v 1 "${run_dir}/qa-booking.png"
-          ffmpeg -y -sseof -8 -i "${run_dir}/final-9x16.mp4" -frames:v 1 "${run_dir}/qa-ai.png"
-          ffmpeg -y -sseof -2 -i "${run_dir}/final-9x16.mp4" -frames:v 1 "${run_dir}/qa-outro.png"
+          ffmpeg -y -ss 1.6 -i "${run_dir}/final-9x16.mp4" -frames:v 1 "${run_dir}/qa-intro.png"
+          ffmpeg -y -ss 52 -i "${run_dir}/final-9x16.mp4" -frames:v 1 "${run_dir}/qa-booking.png"
+          ffmpeg -y -sseof -12 -i "${run_dir}/final-9x16.mp4" -frames:v 1 "${run_dir}/qa-ai.png"
+          ffmpeg -y -sseof -3 -i "${run_dir}/final-9x16.mp4" -frames:v 1 "${run_dir}/qa-outro.png"
 
-      - name: Upload AVE Dental presentation
+      - name: Upload AVE Dental premium Russian presentation
         uses: actions/upload-artifact@v4
         with:
-          name: ave-dental-russian-demo
+          name: ave-dental-russian-premium-b2b
           path: artifacts/
           if-no-files-found: error
