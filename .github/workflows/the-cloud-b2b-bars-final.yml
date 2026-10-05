@@ -58,7 +58,7 @@ jobs:
 
       - name: Create premium B2B intro and outro artwork
         run: |
-          cat > /tmp/screens.mjs <<'NODE'
+          cat > screens-temp.mjs <<'NODE'
           import { chromium } from 'playwright';
           const browser = await chromium.launch({headless:true});
           const page = await browser.newPage({viewport:{width:1080,height:1920}, deviceScaleFactor:1});
@@ -128,7 +128,7 @@ jobs:
           await page.screenshot({path:'/tmp/outro.png'});
           await browser.close();
           NODE
-          node /tmp/screens.mjs
+          node screens-temp.mjs
           test -s /tmp/intro.png
           test -s /tmp/outro.png
 
