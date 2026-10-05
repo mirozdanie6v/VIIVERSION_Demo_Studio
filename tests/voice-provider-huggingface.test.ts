@@ -53,7 +53,7 @@ test("automatic local engine exposes the union needed for Chatterbox-first fallb
 });
 
 
-test("premium-local default auto-enables only Russian and English presenter voices", () => {
+test("premium-local default does not auto-enable the rejected Russian local presenter", () => {
   const provider = new HuggingFaceVoiceProvider();
   const context = { env: { HF_TTS_PREMIUM_DEFAULT: "1" } };
 
@@ -63,7 +63,7 @@ test("premium-local default auto-enables only Russian and English presenter voic
   );
   assert.equal(
     provider.isConfigured({ ...baseRequest, locale: "ru-RU" }, context),
-    true,
+    false,
   );
   assert.equal(
     provider.isConfigured({ ...baseRequest, locale: "vi-VN" }, context),
