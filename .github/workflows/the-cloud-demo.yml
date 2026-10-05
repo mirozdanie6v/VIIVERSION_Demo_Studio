@@ -1,88 +1,153 @@
-name: The Cloud Flow Probe
+name: The Cloud Russian Demo
 
 on:
   workflow_dispatch:
   push:
     branches: [main]
     paths:
+      - 'examples/the-cloud-russian-demo.json'
       - '.github/workflows/the-cloud-demo.yml'
 
+concurrency:
+  group: the-cloud-russian-demo
+  cancel-in-progress: true
+
 jobs:
-  probe:
+  render:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 35
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
-          node-version: 20
-      - run: npm ci
-      - run: npx playwright install --with-deps chromium
-      - name: Probe booking and AI
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Chromium and media tools
+        run: |
+          npx playwright install --with-deps chromium
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg espeak-ng
+          python3 -m pip install --quiet numpy piper-tts
+
+      - name: Capture The Cloud guest journey
+        env:
+          DEMO_STUDIO_ALLOWED_HOSTS: thecloud.viiversion.com
+          ALLOW_PRIVATE_TARGETS: "false"
+        run: npm run capture -- --scenario examples/the-cloud-russian-demo.json
+
+      - name: Resolve run directory
+        id: run
+        shell: bash
+        run: echo "dir=$(find artifacts -mindepth 1 -maxdepth 1 -type d | sort | tail -n 1)" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare narration segments
+        shell: bash
+        env:
+          RUN_DIR: ${{ steps.run.outputs.dir }}
+        run: |
+          mkdir -p "${RUN_DIR}/voices"
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import path from 'node:path';
+          const scenario = JSON.parse(fs.readFileSync('examples/the-cloud-russian-demo.json', 'utf8'));
+          for (let i = 0; i < scenario.steps.length; i += 1) {
+            const step = scenario.steps[i];
+            if (!step.narration?.trim()) continue;
+            const spoken = (step.voiceText || step.narration).trim();
+            fs.writeFileSync(path.join(process.env.RUN_DIR, 'voices', `text-${i}.txt`), spoken + '\n');
+          }
+          NODE
+
+      - name: Synthesize Russian presenter voice
         shell: bash
         run: |
-          node --input-type=module <<'NODE'
-          import { chromium } from 'playwright';
-          const browser = await chromium.launch({headless:true});
-          const page = await browser.newPage({viewport:{width:430,height:932}});
-          const dump=async(label)=>{
-            await page.waitForTimeout(900);
-            console.log('\n===== '+label+' =====');
-            console.log((await page.locator('body').innerText()).slice(0,18000));
-            console.log('BUTTONS',JSON.stringify(await page.getByRole('button').allTextContents()));
-            console.log('INPUTS',JSON.stringify(await page.locator('input,textarea,select').evaluateAll(els=>els.map(e=>({
-              tag:e.tagName,type:e.getAttribute('type'),name:e.getAttribute('name'),placeholder:e.getAttribute('placeholder'),value:e.value
-            })))));
-          };
-          await page.goto('https://thecloud.viiversion.com/',{waitUntil:'domcontentloaded',timeout:45000});
-          await page.waitForTimeout(2500);
-          await page.getByRole('button',{name:'Бронировать',exact:true}).last().click();
-          await dump('BOOK-1');
-          await page.getByRole('button',{name:'Далее',exact:true}).click();
-          await dump('BOOK-2');
+          set -euo pipefail
+          run_dir="${{ steps.run.outputs.dir }}"
+          python3 -m piper.download_voices --download-dir "${run_dir}/voices" ru_RU-irina-medium
+          model="${run_dir}/voices/ru_RU-irina-medium.onnx"
+          for txt in "${run_dir}"/voices/text-*.txt; do
+            base=$(basename "$txt" .txt)
+            idx=${base#text-}
+            raw="${run_dir}/voices/raw-${idx}.wav"
+            out="${run_dir}/voices/step-${idx}.mp3"
+            cat "$txt" | piper --model "$model" --output_file "$raw"
+            ffmpeg -y -i "$raw"               -af "volume=0.96,highpass=f=72,lowpass=f=10500,acompressor=threshold=-19dB:ratio=1.8:attack=22:release=210,loudnorm=I=-16:TP=-1.5:LRA=7"               -c:a libmp3lame -b:a 192k "$out"
+          done
 
-          let buttons=await page.getByRole('button').allTextContents();
-          console.log('STEP2 CANDIDATES',JSON.stringify(buttons));
-          for(const n of ['Rooftop View','Sunset Line','Выбрать позицию']){
-            const b=page.getByRole('button',{name:n,exact:n!=='Выбрать позицию'}).first();
-            if(await b.count()){ try{await b.click(); break;}catch{} }
-          }
-          if(await page.getByRole('button',{name:'Далее',exact:true}).count()) await page.getByRole('button',{name:'Далее',exact:true}).click();
-          await dump('BOOK-3');
+      - name: Synchronize narration and captions
+        run: |
+          npx tsx src/narration-sync-cli.ts             --run "${{ steps.run.outputs.dir }}"             --bpm 98
 
-          buttons=await page.getByRole('button').allTextContents();
-          const excludes=new Set(['Админ','RU','EN','VI','1. Детали','2. Позиция','3. Стол','4. Данные','5. Оплата','Назад','Далее','Главная','Позиции','Бронировать','AI','Брони']);
-          const candidate=buttons.find(x=>x.trim()&&!excludes.has(x.trim()));
-          console.log('STEP3 PICK',candidate||'NONE');
-          if(candidate){
-            const b=page.getByRole('button',{name:candidate,exact:true}).first();
-            if(await b.count()) try{await b.click();}catch{}
-          }
-          if(await page.getByRole('button',{name:'Далее',exact:true}).count()) try{await page.getByRole('button',{name:'Далее',exact:true}).click();}catch{}
-          await dump('BOOK-4');
+      - name: Generate subtle background music
+        shell: bash
+        env:
+          RUN_DIR: ${{ steps.run.outputs.dir }}
+        run: |
+          python3 - <<'PY'
+          import os, wave
+          import numpy as np
+          sr=44100
+          duration=120.0
+          n=int(duration*sr)
+          t=np.arange(n,dtype=np.float64)/sr
+          left=np.zeros(n,dtype=np.float64)
+          right=np.zeros(n,dtype=np.float64)
+          chords=[(196.0,246.94,293.66),(174.61,220.0,261.63),(220.0,261.63,329.63),(164.81,196.0,246.94)]
+          chord_len=15.0
+          for ci in range(int(duration/chord_len)):
+              chord=chords[ci%len(chords)]
+              start=int(ci*chord_len*sr); end=min(n,int((ci+1)*chord_len*sr))
+              tt=np.arange(end-start,dtype=np.float64)/sr
+              fade=np.minimum(1,tt/2.0)*np.minimum(1,(chord_len-tt)/2.0)
+              for j,f in enumerate(chord):
+                  amp=0.025/(j+1)
+                  left[start:end]+=amp*np.sin(2*np.pi*f*tt+0.13*j)*fade
+                  right[start:end]+=amp*np.sin(2*np.pi*f*tt+0.21*j)*fade
+          pulse=0.0022*np.sin(2*np.pi*49*t)*(0.55+0.45*np.sin(2*np.pi*(98/60/2)*t)**2)
+          left+=pulse; right+=pulse
+          peak=max(np.max(np.abs(left)),np.max(np.abs(right)),1e-9)
+          stereo=np.stack([left/peak*0.5,right/peak*0.5],axis=1)
+          pcm=(np.clip(stereo,-1,1)*32767).astype(np.int16)
+          out=os.path.join(os.environ['RUN_DIR'],'background.wav')
+          with wave.open(out,'wb') as w:
+              w.setnchannels(2); w.setsampwidth(2); w.setframerate(sr); w.writeframes(pcm.tobytes())
+          PY
+          run_dir="${{ steps.run.outputs.dir }}"
+          ffmpeg -y -i "${run_dir}/background.wav"             -af "highpass=f=70,lowpass=f=8500,loudnorm=I=-28:TP=-7:LRA=6"             -c:a aac -b:a 160k "${run_dir}/background.m4a"
 
-          const inputs=page.locator('input,textarea');
-          const count=await inputs.count();
-          for(let i=0;i<count;i++){
-            const el=inputs.nth(i);
-            const type=await el.getAttribute('type');
-            if(['time','number','date','hidden'].includes(type||'')) continue;
-            const ph=(await el.getAttribute('placeholder'))||'';
-            const nm=(await el.getAttribute('name'))||'';
-            let v='Demo';
-            if(/phone|тел/i.test(ph+' '+nm)) v='+84 90 555 12 34';
-            else if(/email/i.test(ph+' '+nm)) v='demo@example.com';
-            else if(/name|имя/i.test(ph+' '+nm)) v='Анна';
-            try{await el.fill(v);}catch{}
-          }
-          if(await page.getByRole('button',{name:'Далее',exact:true}).count()) try{await page.getByRole('button',{name:'Далее',exact:true}).click();}catch{}
-          await dump('BOOK-5');
+      - name: Render final Russian presentation
+        run: |
+          npm run render --             --run "${{ steps.run.outputs.dir }}"             --preset 9:16             --voiceover "${{ steps.run.outputs.dir }}/voiceover.mp3"             --captions-file "${{ steps.run.outputs.dir }}/synced-captions.ass"             --music "${{ steps.run.outputs.dir }}/background.m4a"             --music-volume 0.08             --music-bpm 98             --brand "THE CLOUD"             --title "Мини-приложение гостя"             --intro-seconds 2.0             --outro-seconds 4.6             --cta "Выбор атмосферы, бронирование и AI — в одном приложении"             --cta-secondary "The Cloud · Nha Trang"
 
-          await page.goto('https://thecloud.viiversion.com/',{waitUntil:'domcontentloaded',timeout:45000});
-          await page.waitForTimeout(2000);
-          await page.getByRole('button',{name:'AI',exact:true}).last().click();
-          await page.getByRole('button',{name:'Где лучше на закат?',exact:true}).click();
-          await page.waitForTimeout(6000);
-          await dump('AI-ANSWER');
-          await browser.close();
-          NODE
+      - name: Verify final video and create QA frames
+        shell: bash
+        env:
+          RUN_DIR: ${{ steps.run.outputs.dir }}
+        run: |
+          set -euo pipefail
+          run_dir="${RUN_DIR}"
+          test -s "${run_dir}/capture.webm"
+          test -s "${run_dir}/voiceover.mp3"
+          test -s "${run_dir}/synced-captions.ass"
+          test -s "${run_dir}/final-9x16.mp4"
+          duration=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "${run_dir}/final-9x16.mp4")
+          echo "FINAL_DURATION=${duration}"
+          awk -v d="$duration" 'BEGIN { exit !(d >= 45 && d <= 180) }'
+          ffmpeg -y -ss 3 -i "${run_dir}/final-9x16.mp4" -frames:v 1 "${run_dir}/qa-intro.png"
+          ffmpeg -y -ss 25 -i "${run_dir}/final-9x16.mp4" -frames:v 1 "${run_dir}/qa-booking.png"
+          ffmpeg -y -sseof -15 -i "${run_dir}/final-9x16.mp4" -frames:v 1 "${run_dir}/qa-ai.png"
+          ffmpeg -y -sseof -2 -i "${run_dir}/final-9x16.mp4" -frames:v 1 "${run_dir}/qa-outro.png"
+
+      - name: Upload The Cloud presentation
+        uses: actions/upload-artifact@v4
+        with:
+          name: the-cloud-russian-demo
+          path: artifacts/
+          if-no-files-found: error
