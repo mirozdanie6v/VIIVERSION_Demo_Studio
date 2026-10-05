@@ -1,0 +1,50 @@
+name: MAX TOUR RU Diagnostic
+
+on:
+  push:
+    branches:
+      - 'feature/max-tour-premium-ru-v1'
+    paths:
+      - '.github/workflows/temp-max-tour-ru-diagnostic.yml'
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npx playwright install --with-deps chromium
+      - name: Inspect Russian customer flow
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import { chromium } from 'playwright';
+          const browser=await chromium.launch({headless:true});
+          const page=await browser.newPage({viewport:{width:430,height:932}});
+          const dump=async(label)=>{
+            console.log('\n=== '+label+' ===');
+            console.log('TEXT=',JSON.stringify((await page.locator('body').innerText()).slice(0,12000)));
+            console.log('BUTTONS=',JSON.stringify(await page.locator('button').evaluateAll(els=>els.map((e,i)=>({i,text:(e.textContent||'').replace(/\s+/g,' ').trim(),cls:String(e.className||''),aria:e.getAttribute('aria-label')})).filter(x=>x.text||x.aria))));
+            console.log('INPUTS=',JSON.stringify(await page.locator('input,textarea').evaluateAll(els=>els.map((e,i)=>({i,type:e.getAttribute('type'),placeholder:e.getAttribute('placeholder'),value:e.value})))));
+          };
+          await page.goto('https://max-tour.viiversion.com/',{waitUntil:'domcontentloaded',timeout:30000});
+          await page.waitForTimeout(1800);
+          await page.getByRole('button',{name:'RU',exact:true}).click();
+          await page.waitForTimeout(700);
+          await dump('HOME RU');
+          const nav=page.locator('button.nav-btn:visible');
+          console.log('NAV_COUNT=',await nav.count());
+          if(await nav.count()>=2){await nav.nth(1).click(); await page.waitForTimeout(700);}
+          await dump('CATALOG RU');
+          const dalat=page.getByText('Da Lat “Premium”',{exact:false}).first();
+          if(await dalat.count()){await dalat.click(); await page.waitForTimeout(700);}
+          await dump('TOUR RU');
+          const ai=page.locator('button.nav-btn:visible').last();
+          if(await ai.count()){await ai.click(); await page.waitForTimeout(700);}
+          await dump('AI RU');
+          await browser.close();
+          NODE
