@@ -8,6 +8,13 @@ import {
 } from "./caption-brain.js";
 import { buildEditorBrainPlan } from "./editor-brain.js";
 import { reviewEditorPlan } from "./editor-critic.js";
+import {
+  hybridRenderEnabled,
+  hybridRenderStrictEnabled,
+  planHybridComposition,
+  type HybridCompositionPlan,
+  type HybridRenderManifest,
+} from "./hybrid-compose.js";
 import { alignScenesToBeatGrid } from "./music-brain.js";
 import { resolvePresentationDesign } from "./presentation-design-brain.js";
 import type { DesignContract, UxPreflight } from "./ux-design-brain.js";
@@ -60,6 +67,8 @@ export type RenderOptions = {
   outroSeconds?: number;
   ffmpegPath?: string;
   encoderPreset?: RenderEncoderPreset;
+  hybrid?: boolean;
+  hybridStrict?: boolean;
 };
 
 type Manifest = SceneManifest & {
@@ -69,6 +78,8 @@ type Manifest = SceneManifest & {
   timeline: SceneTimelineEntry[];
   videoPath?: string;
   success: boolean;
+  captureMode?: "standard" | "hybrid-prototype";
+  hybridManifestPath?: string;
 };
 
 const PRESETS: Record<RenderPreset, { width: number; height: number }> = {
@@ -132,6 +143,7 @@ function buildMainVideoFilters(
   width: number,
   height: number,
   scenes: EditScene[],
+  sourceLabel = "0:v",
 ): string[] {
   const filters: string[] = [];
   const vertical = width < height;
@@ -144,14 +156,14 @@ function buildMainVideoFilters(
       "setsar=1,fps=30,settb=AVTB";
 
   if (scenes.length === 0) {
-    filters.push(`[0:v]${base}[mainraw]`);
+    filters.push(`[${sourceLabel}]${base}[mainraw]`);
     return filters;
   }
 
   if (scenes.length === 1) {
     const scene = scenes[0];
     filters.push(
-      `[0:v]${base},trim=start=${number(scene.sourceStart)}:end=${number(scene.sourceEnd)},setpts=PTS-STARTPTS[mainraw]`,
+      `[${sourceLabel}]${base},trim=start=${number(scene.sourceStart)}:end=${number(scene.sourceEnd)},setpts=PTS-STARTPTS[mainraw]`,
     );
     return filters;
   }
@@ -160,7 +172,7 @@ function buildMainVideoFilters(
     .map((_, index) => `[source${index}]`)
     .join("");
   filters.push(
-    `[0:v]${base},split=${scenes.length}${splitLabels}`,
+    `[${sourceLabel}]${base},split=${scenes.length}${splitLabels}`,
   );
 
   scenes.forEach((scene, index) => {
@@ -179,10 +191,68 @@ function buildMainVideoFilters(
   return filters;
 }
 
+function buildHybridSourceFilters(
+  plan: HybridCompositionPlan,
+  imageInputIndexes: Map<string, number>,
+): string[] {
+  const filters: string[] = [];
+  const realtimeIndexes = plan.segments.flatMap((segment, index) =>
+    segment.kind === "realtime" ? [index] : [],
+  );
+  const realtimeSources = new Map<number, string>();
+
+  if (realtimeIndexes.length === 1) {
+    realtimeSources.set(realtimeIndexes[0], "0:v");
+  } else if (realtimeIndexes.length > 1) {
+    const labels = realtimeIndexes
+      .map((_, index) => `[hybridrt${index}]`)
+      .join("");
+    filters.push(`[0:v]split=${realtimeIndexes.length}${labels}`);
+    realtimeIndexes.forEach((segmentIndex, splitIndex) => {
+      realtimeSources.set(segmentIndex, `hybridrt${splitIndex}`);
+    });
+  }
+
+  plan.segments.forEach((segment, index) => {
+    if (segment.kind === "realtime") {
+      const source = realtimeSources.get(index);
+      if (!source) {
+        throw new Error(
+          `Hybrid realtime segment ${index} has no FFmpeg source label.`,
+        );
+      }
+      filters.push(
+        `[${source}]trim=start=${number(segment.sourceStart)}:end=${number(segment.sourceEnd)},` +
+          `setpts=PTS-STARTPTS,fps=30,setsar=1,format=yuv420p,settb=AVTB[hyseg${index}]`,
+      );
+      return;
+    }
+
+    const inputIndex = imageInputIndexes.get(segment.path);
+    if (inputIndex === undefined) {
+      throw new Error(
+        `Hybrid keyframe segment ${index} has no FFmpeg image input.`,
+      );
+    }
+    filters.push(
+      `[${inputIndex}:v]trim=duration=${number(segment.duration)},` +
+        `setpts=PTS-STARTPTS,fps=30,setsar=1,format=yuv420p,settb=AVTB[hyseg${index}]`,
+    );
+  });
+
+  const segmentInputs = plan.segments
+    .map((_, index) => `[hyseg${index}]`)
+    .join("");
+  filters.push(
+    `${segmentInputs}concat=n=${plan.segments.length}:v=1:a=0[hybridsrc]`,
+  );
+  return filters;
+}
+
 export async function renderRun(options: RenderOptions): Promise<string> {
   const runDir = path.resolve(options.runDir);
   const manifestPath = path.join(runDir, "run.json");
-  const manifest = JSON.parse(
+  let manifest = JSON.parse(
     await readFile(manifestPath, "utf8"),
   ) as Manifest;
 
@@ -190,9 +260,58 @@ export async function renderRun(options: RenderOptions): Promise<string> {
     throw new Error("Cannot render an unsuccessful capture run.");
   }
 
-  const capturePath = manifest.videoPath
+  const standardCapturePath = manifest.videoPath
     ? path.resolve(manifest.videoPath)
     : path.join(runDir, "capture.webm");
+  const hybridRequested = options.hybrid ?? hybridRenderEnabled();
+  const hybridStrict = options.hybridStrict ?? hybridRenderStrictEnabled();
+  let hybridComposition: HybridCompositionPlan | undefined;
+
+  if (hybridRequested && manifest.captureMode === "hybrid-prototype") {
+    try {
+      hybridComposition = await planHybridComposition(
+        runDir,
+        manifest as HybridRenderManifest,
+      );
+      manifest = hybridComposition.manifest as Manifest;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      await writeFile(
+        path.join(runDir, "hybrid_composition_fallback.json"),
+        JSON.stringify(
+          {
+            version: "hybrid-composition-fallback-v1",
+            reason: message,
+            fallback: "standard",
+          },
+          null,
+          2,
+        ) + "\n",
+        "utf8",
+      );
+      if (hybridStrict) throw error;
+    }
+  } else if (hybridRequested) {
+    const message =
+      "Hybrid render requested for a run that is not hybrid-prototype.";
+    await writeFile(
+      path.join(runDir, "hybrid_composition_fallback.json"),
+      JSON.stringify(
+        {
+          version: "hybrid-composition-fallback-v1",
+          reason: message,
+          fallback: "standard",
+        },
+        null,
+        2,
+      ) + "\n",
+      "utf8",
+    );
+    if (hybridStrict) throw new Error(message);
+  }
+
+  const capturePath =
+    hybridComposition?.sourceVideoPath ?? standardCapturePath;
 
   const preset = options.preset ?? "16:9";
   const { width, height } = PRESETS[preset];
@@ -333,9 +452,21 @@ export async function renderRun(options: RenderOptions): Promise<string> {
   }
 
   const args: string[] = ["-y", "-i", capturePath];
+  let inputCount = 1;
+  const hybridImageInputIndexes = new Map<string, number>();
+
+  if (hybridComposition) {
+    for (const segment of hybridComposition.segments) {
+      if (segment.kind !== "keyframe") continue;
+      if (hybridImageInputIndexes.has(segment.path)) continue;
+      hybridImageInputIndexes.set(segment.path, inputCount);
+      inputCount += 1;
+      args.push("-loop", "1", "-framerate", "30", "-i", segment.path);
+    }
+  }
+
   let voiceIndex: number | undefined;
   let musicIndex: number | undefined;
-  let inputCount = 1;
 
   if (options.voiceoverPath) {
     voiceIndex = inputCount;
@@ -354,7 +485,20 @@ export async function renderRun(options: RenderOptions): Promise<string> {
     );
   }
 
-  const filterParts = buildMainVideoFilters(width, height, scenes);
+  const filterParts = [
+    ...(hybridComposition
+      ? buildHybridSourceFilters(
+          hybridComposition,
+          hybridImageInputIndexes,
+        )
+      : []),
+    ...buildMainVideoFilters(
+      width,
+      height,
+      scenes,
+      hybridComposition ? "hybridsrc" : "0:v",
+    ),
+  ];
   const mainDecor: string[] = [];
   const captionPlacement = visualCritic.plan.captionPlacement;
   const captionStyle = {
