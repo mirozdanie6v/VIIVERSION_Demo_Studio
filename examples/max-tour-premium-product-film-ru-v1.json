@@ -107,9 +107,8 @@
     {
       "action": "waitFor",
       "target": {
-        "by": "text",
-        "value": "Далат «Премиум»",
-        "exact": false
+        "by": "css",
+        "value": "input[placeholder=\"Поиск: Далат, море, Ханой...\"]:visible"
       },
       "state": "visible",
       "timeoutMs": 15000,
@@ -117,31 +116,54 @@
     },
     {
       "action": "wait",
-      "ms": 1000,
+      "ms": 900,
       "label": "Establish catalog"
     },
     {
-      "action": "scroll",
-      "y": 320,
-      "label": "Browse catalog",
-      "pauseAfterMs": 350
+      "action": "fill",
+      "target": {
+        "by": "css",
+        "value": "input[placeholder=\"Поиск: Далат, море, Ханой...\"]:visible"
+      },
+      "value": "Далат",
+      "pauseAfterMs": 350,
+      "label": "Search Dalat"
+    },
+    {
+      "action": "click",
+      "target": {
+        "by": "role",
+        "value": "button",
+        "name": "Показать",
+        "exact": true
+      },
+      "pauseAfterMs": 700,
+      "label": "Apply catalog search"
+    },
+    {
+      "action": "waitFor",
+      "target": {
+        "by": "css",
+        "value": "article.tour-card"
+      },
+      "state": "visible",
+      "timeoutMs": 15000,
+      "label": "Wait Dalat results"
     },
     {
       "action": "hover",
       "target": {
-        "by": "text",
-        "value": "Далат «Премиум»",
-        "exact": false
+        "by": "css",
+        "value": "article.tour-card"
       },
-      "pauseAfterMs": 900,
+      "pauseAfterMs": 850,
       "label": "Focus Dalat Premium"
     },
     {
       "action": "click",
       "target": {
-        "by": "text",
-        "value": "Далат «Премиум»",
-        "exact": false
+        "by": "css",
+        "value": "article.tour-card"
       },
       "pauseAfterMs": 600,
       "label": "Open Dalat Premium"
@@ -236,20 +258,49 @@
     {
       "action": "waitFor",
       "target": {
-        "by": "text",
-        "value": "Далат «Премиум»",
-        "exact": false
+        "by": "css",
+        "value": "input[placeholder=\"Поиск: Далат, море, Ханой...\"]:visible"
       },
       "state": "visible",
       "timeoutMs": 15000,
       "label": "Return to catalog"
     },
     {
+      "action": "fill",
+      "target": {
+        "by": "css",
+        "value": "input[placeholder=\"Поиск: Далат, море, Ханой...\"]:visible"
+      },
+      "value": "Далат",
+      "pauseAfterMs": 250,
+      "label": "Search Dalat again"
+    },
+    {
       "action": "click",
       "target": {
-        "by": "text",
-        "value": "Далат «Премиум»",
-        "exact": false
+        "by": "role",
+        "value": "button",
+        "name": "Показать",
+        "exact": true
+      },
+      "pauseAfterMs": 650,
+      "label": "Apply Dalat search again"
+    },
+    {
+      "action": "waitFor",
+      "target": {
+        "by": "css",
+        "value": "article.tour-card"
+      },
+      "state": "visible",
+      "timeoutMs": 15000,
+      "label": "Wait Dalat again"
+    },
+    {
+      "action": "click",
+      "target": {
+        "by": "css",
+        "value": "article.tour-card"
       },
       "pauseAfterMs": 550,
       "label": "Return to Dalat"
