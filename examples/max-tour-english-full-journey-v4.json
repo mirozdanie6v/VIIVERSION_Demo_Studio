@@ -106,7 +106,26 @@
         "Итого": "Total",
         "Дата": "Date",
         "Участники": "Travellers",
-        "Трансфер": "Transfer"
+        "Трансфер": "Transfer",
+        "Забронировать": "Book now",
+        "Оформление поездки": "Booking",
+        "Кто едет": "Who is travelling?",
+        "Малыши": "Infants",
+        "Отель / район": "Hotel / area",
+        "Данные участников": "Traveller details",
+        "Фамилия Имя": "Full name",
+        "Стоимость": "Total",
+        "Сейчас": "Pay now",
+        "Остаток": "Remaining",
+        "Депозит 30%": "30% deposit",
+        "Оплата 100%": "Pay 100%",
+        "Способ оплаты": "Payment method",
+        "Перейти к оплате": "Continue to payment",
+        "Оплата": "Payment",
+        "Оплата выполнена": "Payment completed",
+        "Забронированные": "Booked",
+        "Внесено": "Paid",
+        "Личный кабинет": "Profile"
       }
     }
   },
@@ -304,7 +323,7 @@
       "action": "waitFor",
       "target": {
         "by": "css",
-        "value": "button:has-text(\"Private\"):visible, button:has-text(\"Индивидуальный\"):visible, button:has-text(\"Индивидуально\"):visible, button:has-text(\"Choose format\"):visible, button:has-text(\"Выбрать формат\"):visible"
+        "value": "button:has-text(\"Private\"):visible, button:has-text(\"Индивидуальный\"):visible, button:has-text(\"Индивидуально\"):visible"
       },
       "state": "visible",
       "timeoutMs": 15000,
@@ -314,29 +333,51 @@
       "action": "hover",
       "target": {
         "by": "css",
-        "value": "button:has-text(\"Private\"):visible, button:has-text(\"Индивидуальный\"):visible, button:has-text(\"Индивидуально\"):visible, button:has-text(\"Choose format\"):visible, button:has-text(\"Выбрать формат\"):visible"
+        "value": "button:has-text(\"Private\"):visible, button:has-text(\"Индивидуальный\"):visible, button:has-text(\"Индивидуально\"):visible"
       },
-      "pauseAfterMs": 750,
+      "pauseAfterMs": 650,
       "label": "Focus booking CTA"
     },
     {
       "action": "click",
       "target": {
         "by": "css",
-        "value": "button:has-text(\"Private\"):visible, button:has-text(\"Индивидуальный\"):visible, button:has-text(\"Индивидуально\"):visible, button:has-text(\"Choose format\"):visible, button:has-text(\"Выбрать формат\"):visible"
+        "value": "button:has-text(\"Private\"):visible, button:has-text(\"Индивидуальный\"):visible, button:has-text(\"Индивидуально\"):visible"
       },
       "label": "Choose private format"
     },
     {
-      "action": "goto",
-      "url": "/booking?tourId=dalat-premium",
+      "action": "waitFor",
+      "target": {
+        "by": "css",
+        "value": "#tourScreen button.primary.wide-primary:visible, #tourScreen button:has-text(\"Book now\"):visible, #tourScreen button:has-text(\"Забронировать\"):visible"
+      },
+      "state": "visible",
+      "timeoutMs": 15000,
+      "label": "Wait private booking action"
+    },
+    {
+      "action": "hover",
+      "target": {
+        "by": "css",
+        "value": "#tourScreen button.primary.wide-primary:visible, #tourScreen button:has-text(\"Book now\"):visible, #tourScreen button:has-text(\"Забронировать\"):visible"
+      },
+      "pauseAfterMs": 650,
+      "label": "Focus private booking action"
+    },
+    {
+      "action": "click",
+      "target": {
+        "by": "css",
+        "value": "#tourScreen button.primary.wide-primary:visible, #tourScreen button:has-text(\"Book now\"):visible, #tourScreen button:has-text(\"Забронировать\"):visible"
+      },
       "label": "Start booking"
     },
     {
       "action": "waitFor",
       "target": {
         "by": "css",
-        "value": ".px-commerce-flow:visible, .px-commerce-card:visible, button:has-text(\"Continue with private tour\"):visible, button:has-text(\"Продолжить индивидуально\"):visible"
+        "value": "#bookingScreen.active:visible, #bookingScreen h2:has-text(\"Booking\"):visible, #bookingScreen h2:has-text(\"Оформление поездки\"):visible"
       },
       "state": "visible",
       "timeoutMs": 15000,
@@ -344,103 +385,32 @@
     },
     {
       "action": "wait",
-      "ms": 900,
+      "ms": 800,
       "label": "Establish booking"
     },
     {
-      "action": "click",
+      "action": "fill",
       "target": {
         "by": "css",
-        "value": "button:has-text(\"Continue with private tour\"):visible, button:has-text(\"Продолжить индивидуально\"):visible"
+        "value": "#bookingScreen input[type=\"date\"]:visible"
       },
-      "label": "Continue private"
-    },
-    {
-      "action": "waitFor",
-      "target": {
-        "by": "css",
-        "value": "*:has-text(\"Who is travelling?\"):visible, *:has-text(\"Кто едет?\"):visible"
-      },
-      "state": "visible",
-      "timeoutMs": 10000,
-      "label": "Wait group size"
-    },
-    {
-      "action": "click",
-      "target": {
-        "by": "css",
-        "value": "button:has-text(\"Choose date\"):visible, button:has-text(\"Выбрать дату\"):visible"
-      },
-      "label": "Continue group size"
-    },
-    {
-      "action": "waitFor",
-      "target": {
-        "by": "css",
-        "value": "*:has-text(\"When are we going?\"):visible, *:has-text(\"Когда едем?\"):visible, input[type=\"date\"]:visible"
-      },
-      "state": "visible",
-      "timeoutMs": 10000,
-      "label": "Wait date"
-    },
-    {
-      "action": "click",
-      "target": {
-        "by": "css",
-        "value": ".px-date-grid button:visible"
-      },
+      "value": "2026-10-20",
       "label": "Select available date"
     },
     {
       "action": "fill",
       "target": {
         "by": "css",
-        "value": "input[placeholder*=\"Amiana\" i]:visible, label:has-text(\"Hotel\") input:visible, label:has-text(\"Отель\") input:visible"
+        "value": "#bookingScreen input[placeholder*=\"Sunrise\" i]:visible"
       },
       "value": "Amiana Resort",
       "label": "Enter hotel"
     },
     {
-      "action": "click",
-      "target": {
-        "by": "css",
-        "value": ".px-commerce-card button.px-button-primary:visible, .px-commerce-card button.px-block:visible"
-      },
-      "label": "Continue to traveller details"
-    },
-    {
-      "action": "waitFor",
-      "target": {
-        "by": "css",
-        "value": ".px-participant-v2:visible"
-      },
-      "state": "visible",
-      "timeoutMs": 10000,
-      "label": "Wait traveller details"
-    },
-    {
       "action": "fill",
       "target": {
         "by": "css",
-        "value": "label:has-text(\"Your name\") input:visible, label:has-text(\"Ваше имя\") input:visible"
-      },
-      "value": "Demo Guest",
-      "label": "Enter contact name"
-    },
-    {
-      "action": "fill",
-      "target": {
-        "by": "css",
-        "value": "label:has-text(\"Phone\") input:visible, label:has-text(\"Телефон\") input:visible"
-      },
-      "value": "0000000000",
-      "label": "Enter phone"
-    },
-    {
-      "action": "fill",
-      "target": {
-        "by": "css",
-        "value": "div.px-participant-v2 >> nth=0 >> input >> nth=0"
+        "value": "#bookingScreen .traveler-card >> nth=0 >> input >> nth=0"
       },
       "value": "Demo Guest One",
       "label": "Traveller one name"
@@ -449,16 +419,16 @@
       "action": "fill",
       "target": {
         "by": "css",
-        "value": "div.px-participant-v2 >> nth=0 >> input >> nth=1"
+        "value": "#bookingScreen .traveler-card >> nth=0 >> input >> nth=1"
       },
-      "value": "2000-01-01",
+      "value": "1990-01-01",
       "label": "Traveller one birth date"
     },
     {
       "action": "fill",
       "target": {
         "by": "css",
-        "value": "div.px-participant-v2 >> nth=1 >> input >> nth=0"
+        "value": "#bookingScreen .traveler-card >> nth=1 >> input >> nth=0"
       },
       "value": "Demo Guest Two",
       "label": "Traveller two name"
@@ -467,39 +437,43 @@
       "action": "fill",
       "target": {
         "by": "css",
-        "value": "div.px-participant-v2 >> nth=1 >> input >> nth=1"
+        "value": "#bookingScreen .traveler-card >> nth=1 >> input >> nth=1"
       },
-      "value": "2001-01-01",
+      "value": "1992-02-02",
       "label": "Traveller two birth date"
     },
     {
-      "action": "click",
+      "action": "fill",
       "target": {
         "by": "css",
-        "value": ".px-commerce-card button.px-button-primary:visible, .px-commerce-card button.px-block:visible"
+        "value": "#bookingScreen .traveler-card >> nth=2 >> input >> nth=0"
       },
+      "value": "Demo Guest Three",
+      "label": "Traveller three name"
+    },
+    {
+      "action": "fill",
+      "target": {
+        "by": "css",
+        "value": "#bookingScreen .traveler-card >> nth=2 >> input >> nth=1"
+      },
+      "value": "2016-03-03",
+      "label": "Traveller three birth date"
+    },
+    {
+      "action": "hover",
+      "target": {
+        "by": "css",
+        "value": "#bookingScreen .price-facts:visible"
+      },
+      "pauseAfterMs": 700,
       "label": "Calculate total"
     },
     {
-      "action": "waitFor",
-      "target": {
-        "by": "css",
-        "value": ".px-quote-lines:visible"
-      },
-      "state": "visible",
-      "timeoutMs": 15000,
-      "label": "Wait quote"
-    },
-    {
-      "action": "wait",
-      "ms": 1000,
-      "label": "Show quote"
-    },
-    {
       "action": "click",
       "target": {
         "by": "css",
-        "value": "button:has-text(\"Bank card\"):visible, button:has-text(\"Банковская карта\"):visible"
+        "value": "#bookingScreen button:has-text(\"VNPAY\"):visible"
       },
       "label": "Choose card"
     },
@@ -507,7 +481,7 @@
       "action": "click",
       "target": {
         "by": "css",
-        "value": "button:has-text(\"MAX TOUR payment\"):visible, button:has-text(\"Оплата MAX TOUR\"):visible"
+        "value": "#bookingScreen button:has-text(\"Continue to payment\"):visible, #bookingScreen button:has-text(\"Перейти к оплате\"):visible"
       },
       "label": "Create booking"
     },
@@ -515,7 +489,7 @@
       "action": "waitFor",
       "target": {
         "by": "css",
-        "value": ".px-order-created:visible"
+        "value": "#bookingScreen .qrbox:visible"
       },
       "state": "visible",
       "timeoutMs": 15000,
@@ -530,7 +504,7 @@
       "action": "click",
       "target": {
         "by": "css",
-        "value": "button:has-text(\"DEMO\"):visible"
+        "value": "#bookingScreen button:has-text(\"Payment completed\"):visible, #bookingScreen button:has-text(\"Оплата выполнена\"):visible"
       },
       "label": "Demo payment"
     },
@@ -538,7 +512,7 @@
       "action": "waitFor",
       "target": {
         "by": "css",
-        "value": ".px-commerce-success:visible"
+        "value": "#tripsScreen.active .trip-card:visible, #tripsScreen .trip-card:visible"
       },
       "state": "visible",
       "timeoutMs": 15000,
