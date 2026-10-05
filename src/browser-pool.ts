@@ -32,7 +32,7 @@ export function browserReuseEnabled(
   env: NodeJS.ProcessEnv = process.env,
 ): boolean {
   const raw = env.DEMO_STUDIO_REUSE_BROWSER?.trim().toLowerCase();
-  return !raw || !["0", "false", "off", "no"].includes(raw);
+  return ["1", "true", "on", "yes"].includes(raw ?? "");
 }
 
 async function getSharedBrowser(): Promise<{
