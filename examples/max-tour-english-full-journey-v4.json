@@ -120,7 +120,7 @@
       "action": "waitFor",
       "target": {
         "by": "css",
-        "value": ".px-hero:visible, .px-app:visible"
+        "value": "button:has-text(\"Choose a tour\"):visible, button:has-text(\"Выбрать тур\"):visible"
       },
       "state": "visible",
       "timeoutMs": 20000,
@@ -135,7 +135,7 @@
       "action": "hover",
       "target": {
         "by": "css",
-        "value": ".px-hero-actions .px-button:visible, .px-hero-actions button:visible, .px-hero button:visible"
+        "value": "button:has-text(\"Choose a tour\"):visible, button:has-text(\"Выбрать тур\"):visible"
       },
       "pauseAfterMs": 900,
       "label": "Focus choose tour"
@@ -144,7 +144,7 @@
       "action": "click",
       "target": {
         "by": "css",
-        "value": ".px-hero-actions .px-button:visible, .px-hero-actions button:visible, .px-hero button:visible"
+        "value": "button:has-text(\"Choose a tour\"):visible, button:has-text(\"Выбрать тур\"):visible"
       },
       "label": "Open catalog"
     },
@@ -152,7 +152,7 @@
       "action": "waitFor",
       "target": {
         "by": "css",
-        "value": ".px-site-tour-card:visible, .px-catalog-count:visible"
+        "value": "h3:has-text(\"Dalat\"):visible, h3:has-text(\"Далат\"):visible, article:has-text(\"Dalat\"):visible, article:has-text(\"Далат\"):visible"
       },
       "state": "visible",
       "timeoutMs": 15000,
@@ -173,7 +173,7 @@
       "action": "hover",
       "target": {
         "by": "css",
-        "value": "article.px-site-tour-card:has-text(\"Dalat\"):visible, article.px-site-tour-card:has-text(\"Далат\"):visible"
+        "value": "h3:has-text(\"Dalat\"):visible, h3:has-text(\"Далат\"):visible"
       },
       "pauseAfterMs": 950,
       "label": "Focus Dalat Premium"
@@ -182,7 +182,7 @@
       "action": "click",
       "target": {
         "by": "css",
-        "value": "article.px-site-tour-card:has-text(\"Dalat\"):visible, article.px-site-tour-card:has-text(\"Далат\"):visible"
+        "value": "h3:has-text(\"Dalat\"):visible, h3:has-text(\"Далат\"):visible"
       },
       "label": "Open Dalat Premium"
     },
@@ -190,7 +190,7 @@
       "action": "waitFor",
       "target": {
         "by": "css",
-        "value": ".px-detail-hero:visible"
+        "value": "button:has-text(\"AI Assistant\"):visible, button:has-text(\"AI Consultant\"):visible, button:has-text(\"ИИ-Помощник\"):visible, button:has-text(\"Choose format\"):visible, button:has-text(\"Выбрать формат\"):visible"
       },
       "state": "visible",
       "timeoutMs": 15000,
@@ -273,7 +273,7 @@
       "action": "waitFor",
       "target": {
         "by": "css",
-        "value": ".px-sticky-cta button:visible"
+        "value": "button:has-text(\"Choose format\"):visible, button:has-text(\"Выбрать формат\"):visible"
       },
       "state": "visible",
       "timeoutMs": 15000,
@@ -283,7 +283,7 @@
       "action": "hover",
       "target": {
         "by": "css",
-        "value": ".px-sticky-cta button:visible"
+        "value": "button:has-text(\"Choose format\"):visible, button:has-text(\"Выбрать формат\"):visible"
       },
       "pauseAfterMs": 750,
       "label": "Focus booking CTA"
@@ -292,7 +292,7 @@
       "action": "click",
       "target": {
         "by": "css",
-        "value": ".px-sticky-cta button:visible"
+        "value": "button:has-text(\"Choose format\"):visible, button:has-text(\"Выбрать формат\"):visible"
       },
       "label": "Start booking"
     },
@@ -300,7 +300,7 @@
       "action": "waitFor",
       "target": {
         "by": "css",
-        "value": ".px-commerce-flow:visible, .px-commerce-card:visible, .px-booking:visible"
+        "value": "*:has-text(\"What would you like to book?\"):visible, *:has-text(\"Что хотите забронировать?\"):visible"
       },
       "state": "visible",
       "timeoutMs": 15000,
@@ -315,7 +315,7 @@
       "action": "click",
       "target": {
         "by": "css",
-        "value": ".px-commerce-card button.px-button-primary:visible, .px-commerce-card button.px-block:visible"
+        "value": "button:has-text(\"Continue with private tour\"):visible, button:has-text(\"Продолжить индивидуально\"):visible"
       },
       "label": "Continue private"
     },
@@ -323,7 +323,7 @@
       "action": "waitFor",
       "target": {
         "by": "css",
-        "value": ".px-counter-list:visible, .px-commerce-card:visible"
+        "value": "*:has-text(\"Who is travelling?\"):visible, *:has-text(\"Кто едет?\"):visible"
       },
       "state": "visible",
       "timeoutMs": 10000,
@@ -333,7 +333,7 @@
       "action": "click",
       "target": {
         "by": "css",
-        "value": ".px-commerce-card button.px-button-primary:visible, .px-commerce-card button.px-block:visible"
+        "value": "button:has-text(\"Choose date\"):visible, button:has-text(\"Выбрать дату\"):visible"
       },
       "label": "Continue group size"
     },
@@ -341,7 +341,7 @@
       "action": "waitFor",
       "target": {
         "by": "css",
-        "value": ".px-date-grid button:visible, input[type='date']:visible"
+        "value": "*:has-text(\"When are we going?\"):visible, *:has-text(\"Когда едем?\"):visible, input[type=\"date\"]:visible"
       },
       "state": "visible",
       "timeoutMs": 10000,
