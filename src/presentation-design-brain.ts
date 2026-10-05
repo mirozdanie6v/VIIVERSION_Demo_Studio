@@ -54,35 +54,76 @@ function intersects(
   );
 }
 
-function captionRect(
+type PresentationGeometry = {
+  viewportWidth: number;
+  viewportHeight: number;
+  active: { x: number; y: number; width: number; height: number };
+};
+
+function mapCameraToPresentation(
   camera: CameraFrame,
+  preset: PresentationPreset,
+): PresentationGeometry {
+  const layout =
+    preset === "9:16"
+      ? { viewportWidth: 1080, viewportHeight: 1920, maxWidth: 900, maxHeight: 1480, fixedY: 330 }
+      : preset === "1:1"
+        ? { viewportWidth: 1080, viewportHeight: 1080, maxWidth: 1080, maxHeight: 1080, fixedY: null }
+        : { viewportWidth: 1920, viewportHeight: 1080, maxWidth: 1920, maxHeight: 1080, fixedY: null };
+
+  const scale = Math.min(
+    layout.maxWidth / camera.viewportWidth,
+    layout.maxHeight / camera.viewportHeight,
+  );
+  const renderedWidth = camera.viewportWidth * scale;
+  const renderedHeight = camera.viewportHeight * scale;
+  const offsetX = (layout.viewportWidth - renderedWidth) / 2;
+  const offsetY =
+    layout.fixedY ?? (layout.viewportHeight - renderedHeight) / 2;
+
+  return {
+    viewportWidth: layout.viewportWidth,
+    viewportHeight: layout.viewportHeight,
+    active: {
+      x: offsetX + camera.x * scale,
+      y: offsetY + camera.y * scale,
+      width: camera.width * scale,
+      height: camera.height * scale,
+    },
+  };
+}
+
+function captionRect(
+  viewportWidth: number,
+  viewportHeight: number,
   placement: "top" | "bottom",
   bandRatio: number,
   horizontalMarginRatio: number,
 ) {
-  const height = camera.viewportHeight * bandRatio;
-  const margin = camera.viewportWidth * horizontalMarginRatio;
+  const height = viewportHeight * bandRatio;
+  const margin = viewportWidth * horizontalMarginRatio;
   return {
     x: margin,
-    y: placement === "top" ? 0 : camera.viewportHeight - height,
-    width: camera.viewportWidth - margin * 2,
+    y: placement === "top" ? 0 : viewportHeight - height,
+    width: viewportWidth - margin * 2,
     height,
   };
 }
 
 function brandRect(
-  camera: CameraFrame,
+  viewportWidth: number,
+  viewportHeight: number,
   corner: OverlayPlacement["brandCorner"],
 ) {
-  const width = camera.viewportWidth * 0.2;
-  const height = Math.max(42, camera.viewportHeight * 0.07);
-  const marginX = camera.viewportWidth * 0.025;
-  const marginY = camera.viewportHeight * 0.025;
+  const width = viewportWidth * 0.2;
+  const height = Math.max(42, viewportHeight * 0.07);
+  const marginX = viewportWidth * 0.025;
+  const marginY = viewportHeight * 0.025;
   const left = corner.endsWith("left");
   const top = corner.startsWith("top");
   return {
-    x: left ? marginX : camera.viewportWidth - width - marginX,
-    y: top ? marginY : camera.viewportHeight - height - marginY,
+    x: left ? marginX : viewportWidth - width - marginX,
+    y: top ? marginY : viewportHeight - height - marginY,
     width,
     height,
   };
@@ -90,6 +131,7 @@ function brandRect(
 
 function collisionCount(
   cameras: CameraFrame[],
+  preset: PresentationPreset,
   placement: "top" | "bottom",
   corner: OverlayPlacement["brandCorner"],
   bandRatio: number,
@@ -99,21 +141,31 @@ function collisionCount(
   let brand = 0;
 
   for (const camera of cameras) {
-    const active = {
-      x: camera.x,
-      y: camera.y,
-      width: camera.width,
-      height: camera.height,
-    };
+    const geometry = mapCameraToPresentation(camera, preset);
     if (
       intersects(
-        active,
-        captionRect(camera, placement, bandRatio, horizontalMarginRatio),
+        geometry.active,
+        captionRect(
+          geometry.viewportWidth,
+          geometry.viewportHeight,
+          placement,
+          bandRatio,
+          horizontalMarginRatio,
+        ),
       )
     ) {
       caption += 1;
     }
-    if (intersects(active, brandRect(camera, corner))) {
+    if (
+      intersects(
+        geometry.active,
+        brandRect(
+          geometry.viewportWidth,
+          geometry.viewportHeight,
+          corner,
+        ),
+      )
+    ) {
       brand += 1;
     }
   }
@@ -203,6 +255,7 @@ export function buildOverlayPlan(
       ...candidate,
       collisions: collisionCount(
         cameras,
+        preset,
         candidate.captionPlacement,
         candidate.brandCorner,
         effectiveBandRatio,
