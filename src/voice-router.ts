@@ -24,6 +24,17 @@ const DEFAULT_ORDER: VoiceProviderId[] = [
   "piper",
 ];
 
+function languageOf(locale: string): string {
+  return locale.trim().replace(/_/g, "-").split("-")[0].toLowerCase();
+}
+
+function prefersPremiumPresenterVoice(request: VoiceRequest): boolean {
+  const persona = request.persona ?? "viiversion-presenter";
+  if (persona !== "viiversion-presenter") return false;
+  const language = languageOf(request.locale);
+  return language === "ru" || language === "en";
+}
+
 function providerOrder(env: NodeJS.ProcessEnv): VoiceProviderId[] {
   const requested = (env.VOICE_PROVIDER_ORDER ?? "")
     .split(",")
@@ -90,6 +101,13 @@ export class VoiceRouter {
 
       if (request.requireNativeTimings) {
         score += provider.nativeTimings ? 35 : -60;
+      }
+      if (!explicit && prefersPremiumPresenterVoice(request)) {
+        // Russian and English product demos should use the approved premium
+        // ElevenLabs presenter path whenever it is configured. Auto mode still
+        // falls back to local/OpenAI providers if the premium provider is
+        // unavailable or fails at runtime.
+        if (provider.id === "elevenlabs") score += 80;
       }
       if (explicit) {
         score += provider.id === explicit ? 1000 : -1000;
