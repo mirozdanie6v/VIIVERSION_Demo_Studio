@@ -63,6 +63,12 @@ jobs:
           cat /tmp/demo-studio-http.log
           exit 1
 
+      - name: Verify UX audit cache re-materialization
+        env:
+          ALLOW_PRIVATE_TARGETS: "true"
+          DEMO_STUDIO_UX_CACHE_TTL_MS: "600000"
+        run: npx tsx scripts/smoke_ux_cache.ts http://127.0.0.1:4173/fixtures/smoke.html
+
       - name: Record local walkthrough
         env:
           ALLOW_PRIVATE_TARGETS: "true"

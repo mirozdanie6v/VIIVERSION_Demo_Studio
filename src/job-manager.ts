@@ -568,7 +568,10 @@ export class DemoJobManager {
 
     await this.update(job, {
       progress: 14,
-      message: "UX & design preflight passed.",
+      message:
+        "UX & design preflight passed (" +
+        uxDesign.cacheSource +
+        ").",
     });
 
     const jobDir = path.join(this.rootDir, job.id);
