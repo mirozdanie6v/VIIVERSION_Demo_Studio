@@ -265,15 +265,46 @@
       "label": "Read AI answer"
     },
     {
-      "action": "press",
-      "key": "Escape",
-      "label": "Close AI consultant"
+      "action": "click",
+      "target": {
+        "by": "css",
+        "value": "button:has-text(\"Catalog\"):visible, a:has-text(\"Catalog\"):visible, button:has-text(\"Каталог\"):visible, a:has-text(\"Каталог\"):visible"
+      },
+      "label": "Return to catalog after AI"
     },
     {
       "action": "waitFor",
       "target": {
         "by": "css",
-        "value": "button:has-text(\"Choose format\"):visible, button:has-text(\"Выбрать формат\"):visible"
+        "value": "h3:has-text(\"Dalat\"):visible, h3:has-text(\"Далат\"):visible, article:has-text(\"Dalat\"):visible, article:has-text(\"Далат\"):visible"
+      },
+      "state": "visible",
+      "timeoutMs": 15000,
+      "label": "Wait catalog after AI"
+    },
+    {
+      "action": "click",
+      "target": {
+        "by": "css",
+        "value": "h3:has-text(\"Dalat\"):visible, h3:has-text(\"Далат\"):visible"
+      },
+      "label": "Reopen Dalat after AI"
+    },
+    {
+      "action": "waitFor",
+      "target": {
+        "by": "css",
+        "value": "button:has-text(\"Private\"):visible, button:has-text(\"Индивидуальный\"):visible, button:has-text(\"Индивидуально\"):visible, button:has-text(\"Choose format\"):visible, button:has-text(\"Выбрать формат\"):visible"
+      },
+      "state": "visible",
+      "timeoutMs": 15000,
+      "label": "Wait tour after AI"
+    },
+    {
+      "action": "waitFor",
+      "target": {
+        "by": "css",
+        "value": "button:has-text(\"Private\"):visible, button:has-text(\"Индивидуальный\"):visible, button:has-text(\"Индивидуально\"):visible, button:has-text(\"Choose format\"):visible, button:has-text(\"Выбрать формат\"):visible"
       },
       "state": "visible",
       "timeoutMs": 15000,
@@ -283,7 +314,7 @@
       "action": "hover",
       "target": {
         "by": "css",
-        "value": "button:has-text(\"Choose format\"):visible, button:has-text(\"Выбрать формат\"):visible"
+        "value": "button:has-text(\"Private\"):visible, button:has-text(\"Индивидуальный\"):visible, button:has-text(\"Индивидуально\"):visible, button:has-text(\"Choose format\"):visible, button:has-text(\"Выбрать формат\"):visible"
       },
       "pauseAfterMs": 750,
       "label": "Focus booking CTA"
@@ -292,7 +323,7 @@
       "action": "click",
       "target": {
         "by": "css",
-        "value": "button:has-text(\"Choose format\"):visible, button:has-text(\"Выбрать формат\"):visible"
+        "value": "button:has-text(\"Private\"):visible, button:has-text(\"Индивидуальный\"):visible, button:has-text(\"Индивидуально\"):visible, button:has-text(\"Choose format\"):visible, button:has-text(\"Выбрать формат\"):visible"
       },
       "label": "Start booking"
     },
