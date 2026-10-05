@@ -40,11 +40,15 @@ jobs:
           console.log('NAV_COUNT=',await nav.count());
           if(await nav.count()>=2){await nav.nth(1).click(); await page.waitForTimeout(700);}
           await dump('CATALOG RU');
-          const dalat=page.getByText('Da Lat “Premium”',{exact:false}).first();
-          if(await dalat.count()){await dalat.click(); await page.waitForTimeout(700);}
+          const dalat=page.getByText('Далат «Премиум»',{exact:false}).first();
+          if(await dalat.count()){await dalat.click(); await page.waitForTimeout(900);}
           await dump('TOUR RU');
-          const ai=page.locator('button.nav-btn:visible').last();
-          if(await ai.count()){await ai.click(); await page.waitForTimeout(700);}
+          const book=page.locator('button').filter({hasText:/заброн|выбрать формат|присоедин|оформить/i}).first();
+          console.log('BOOK_COUNT=',await book.count());
+          if(await book.count()){console.log('BOOK_TEXT=',await book.innerText()); await book.click(); await page.waitForTimeout(900);}
+          await dump('BOOKING RU');
+          const aiNav=page.locator('button.nav-btn:visible').last();
+          if(await aiNav.count()){await aiNav.click(); await page.waitForTimeout(700);}
           await dump('AI RU');
           await browser.close();
           NODE
