@@ -1,0 +1,166 @@
+name: TEMP AVE Accented Niki ARM Render
+
+on:
+  push:
+    branches: [temp-ave-accent-arm]
+    paths:
+      - '.github/workflows/temp-ave-accent-render.yml'
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  render:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          python -m pip install --quiet --upgrade pip
+          python -m pip install --quiet torch==2.6.0 torchaudio==2.6.0 --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install --quiet "git+https://github.com/resemble-ai/chatterbox.git@master"
+
+      - name: Download AVE visual master
+        uses: actions/download-artifact@v4
+        with:
+          name: ave-dental-russian-niki-reference-premium-b2b
+          path: artifacts/source
+          github-token: ${{ github.token }}
+          run-id: 37364592032
+
+      - name: Download MAX TOUR Niki reference
+        uses: actions/download-artifact@v4
+        with:
+          name: max-tour-premium-russian-v9-final
+          path: artifacts/max-tour
+          github-token: ${{ github.token }}
+          run-id: 37353860935
+
+      - name: Prepare run directory
+        id: run
+        shell: bash
+        run: |
+          src_dir="$(dirname "$(find artifacts/source -type f -name capture.webm -print -quit)")"
+          base="$(basename "$src_dir")"
+          run_dir="artifacts/$base"
+          rm -rf "$run_dir"
+          cp -a "$src_dir" "$run_dir"
+          echo "dir=$run_dir" >> "$GITHUB_OUTPUT"
+
+      - name: Build stressed Russian narration text
+        shell: bash
+        env:
+          RUN_DIR: ${{ steps.run.outputs.dir }}
+        run: |
+          mkdir -p "$RUN_DIR/voices"
+          rm -f "$RUN_DIR"/voices/text-*.txt "$RUN_DIR"/voices/raw-*.wav "$RUN_DIR"/voices/step-*.mp3
+          node --import tsx --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import path from 'node:path';
+          import { applyPronunciation } from './src/voice-director.ts';
+          import { applyDefaultLocalePronunciation } from './src/russian-pronunciation.ts';
+          const scenario = JSON.parse(fs.readFileSync('examples/ave-dental-russian-demo.json','utf8'));
+          const locale = scenario.voice?.locale || 'ru-RU';
+          const pronunciation = scenario.voice?.pronunciation || {};
+          for (let i=0;i<scenario.steps.length;i+=1) {
+            const step=scenario.steps[i];
+            if (!step.narration?.trim()) continue;
+            const source=(step.voiceText || step.narration).trim();
+            const custom=applyPronunciation(source, pronunciation);
+            const spoken=applyDefaultLocalePronunciation(custom, locale);
+            fs.writeFileSync(path.join(process.env.RUN_DIR,'voices',`text-${i}.txt`), spoken+'\n');
+            console.log(i, spoken);
+          }
+          NODE
+
+      - name: Prepare Niki reference
+        run: |
+          ffmpeg -y -i artifacts/max-tour/voiceover_ru.wav -t 8.8 \
+            -af "highpass=f=70,lowpass=f=11500,loudnorm=I=-17:TP=-2:LRA=8" \
+            -ar 24000 -ac 1 artifacts/niki-reference.wav
+
+      - name: Synthesize stressed Niki narration
+        shell: bash
+        env:
+          RUN_DIR: ${{ steps.run.outputs.dir }}
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          import torch
+          import torchaudio as ta
+          import perth
+          if not callable(getattr(perth, "PerthImplicitWatermarker", None)):
+              perth.PerthImplicitWatermarker = perth.DummyWatermarker
+          from chatterbox.mtl_tts import ChatterboxMultilingualTTS
+          run_dir=Path(os.environ["RUN_DIR"])
+          voices=run_dir/"voices"
+          reference=str(Path("artifacts/niki-reference.wav").resolve())
+          device="cuda" if torch.cuda.is_available() else "cpu"
+          try:
+              model=ChatterboxMultilingualTTS.from_pretrained(device=device,t3_model="v3")
+          except TypeError:
+              model=ChatterboxMultilingualTTS.from_pretrained(device=device)
+          for txt in sorted(voices.glob("text-*.txt"),key=lambda p:int(p.stem.split("-")[-1])):
+              idx=txt.stem.split("-")[-1]
+              text=txt.read_text(encoding="utf-8").strip()
+              wav=model.generate(text,language_id="ru",audio_prompt_path=reference)
+              ta.save(str(voices/f"raw-{idx}.wav"),wav,model.sr)
+          PY
+          for raw in "$RUN_DIR"/voices/raw-*.wav; do
+            idx=$(basename "$raw" .wav | cut -d- -f2)
+            ffmpeg -y -i "$raw" \
+              -af "highpass=f=70,lowpass=f=11500,acompressor=threshold=-18dB:ratio=1.55:attack=18:release=220,loudnorm=I=-16:TP=-1.5:LRA=8" \
+              -c:a libmp3lame -b:a 224k "$RUN_DIR/voices/step-$idx.mp3"
+          done
+
+      - name: Synchronize narration
+        run: npx tsx src/narration-sync-cli.ts --run "${{ steps.run.outputs.dir }}" --bpm 96
+
+      - name: Render accented final
+        run: |
+          npm run render -- \
+            --run "${{ steps.run.outputs.dir }}" \
+            --preset 9:16 \
+            --voiceover "${{ steps.run.outputs.dir }}/voiceover.mp3" \
+            --captions-file "${{ steps.run.outputs.dir }}/synced-captions.ass" \
+            --music "${{ steps.run.outputs.dir }}/background.m4a" \
+            --music-volume 0.07 \
+            --music-bpm 96 \
+            --brand "VIIVERSION" \
+            --title "Запись + AI-консультант" \
+            --intro-seconds 3.4 \
+            --outro-seconds 6.5 \
+            --cta "Свяжитесь с VIIVERSION" \
+            --cta-secondary "Запись 24/7 · AI-консультант · автоматизация"
+
+      - name: Verify
+        shell: bash
+        env:
+          RUN_DIR: ${{ steps.run.outputs.dir }}
+        run: |
+          test -s "$RUN_DIR/final-9x16.mp4"
+          ffmpeg -v error -i "$RUN_DIR/final-9x16.mp4" -f null -
+          ffmpeg -y -ss 1.6 -i "$RUN_DIR/final-9x16.mp4" -frames:v 1 "$RUN_DIR/qa-accent-intro.png"
+          ffmpeg -y -sseof -3 -i "$RUN_DIR/final-9x16.mp4" -frames:v 1 "$RUN_DIR/qa-accent-outro.png"
+          ffprobe -v error -show_entries format=duration -of csv=p=0 "$RUN_DIR/final-9x16.mp4"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ave-dental-russian-niki-accented-final
+          path: ${{ steps.run.outputs.dir }}/
+          if-no-files-found: error
