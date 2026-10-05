@@ -12,7 +12,7 @@ function readArg(name: string) {
 async function main() {
   const scenarioArg = readArg("--scenario");
   if (!scenarioArg) {
-    throw new Error("Usage: npm run capture -- --scenario examples/viiversion-v1.json [--headed]");
+    throw new Error("Usage: npm run capture -- --scenario examples/viiversion-v1.json [--headed] [--hybrid]");
   }
 
   const scenarioPath = path.resolve(scenarioArg);
