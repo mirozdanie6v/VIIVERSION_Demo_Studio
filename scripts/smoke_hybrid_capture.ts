@@ -40,7 +40,7 @@ const hybridMs = performance.now() - hybridStarted;
 assert.equal(standard.captureMode, "standard");
 assert.ok(standard.videoPath);
 assert.equal(hybrid.captureMode, "hybrid-prototype");
-assert.equal(hybrid.videoPath, undefined);
+assert.ok(hybrid.videoPath);
 assert.ok(hybrid.hybridManifestPath);
 
 const manifest = JSON.parse(
@@ -52,6 +52,7 @@ const manifest = JSON.parse(
     passiveSteps: number;
     capturedFrames: number;
   };
+  realtimeSourceVideoPath?: string;
   keyframes: Array<{ path: string }>;
 };
 
@@ -60,6 +61,7 @@ assert.ok(manifest.counts.realtimeSteps >= 2);
 assert.ok(manifest.counts.passiveSteps >= 1);
 assert.equal(manifest.counts.capturedFrames, manifest.keyframes.length);
 assert.ok(manifest.counts.capturedFrames >= 4);
+assert.equal(manifest.realtimeSourceVideoPath, hybrid.videoPath);
 
 const speedup = standardMs / hybridMs;
 assert.ok(
