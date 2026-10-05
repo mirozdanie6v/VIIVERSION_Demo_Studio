@@ -60,7 +60,7 @@ test("serves health, OpenAPI and authenticated job status", { concurrency: false
       accessMode: string;
     };
     assert.equal(healthBody.ok, true);
-    assert.equal(healthBody.version, "0.14.0");
+    assert.equal(healthBody.version, "0.14.1");
     assert.equal(healthBody.generationMode, "hybrid");
     assert.equal(healthBody.accessMode, "authenticated");
 
@@ -83,7 +83,7 @@ test("serves health, OpenAPI and authenticated job status", { concurrency: false
       info: { version: string };
     };
     assert.equal(spec.openapi, "3.1.0");
-    assert.equal(spec.info.version, "0.14.0");
+    assert.equal(spec.info.version, "0.14.1");
 
     const missingAuth = await fetch(
       base + "/v1/jobs/00000000-0000-0000-0000-000000000000",
