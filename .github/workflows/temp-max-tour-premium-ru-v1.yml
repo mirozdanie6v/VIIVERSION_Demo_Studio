@@ -8,6 +8,7 @@ on:
       - '.github/workflows/temp-max-tour-premium-ru-v1.yml'
       - 'examples/max-tour-premium-product-film-ru-v1.json'
       - 'scripts/render_max_tour_premium_ru_v1.py'
+      - 'scripts/capture_max_tour_ru_v1.mjs'
 
 concurrency:
   group: max-tour-premium-russian-v1
@@ -37,10 +38,7 @@ jobs:
           sudo apt-get install -y fonts-inter || true
           python3 -m pip install --quiet pillow
       - name: Capture Russian semantic customer journey
-        env:
-          DEMO_STUDIO_ALLOWED_HOSTS: max-tour.viiversion.com
-          ALLOW_PRIVATE_TARGETS: "false"
-        run: npm run capture -- --scenario examples/max-tour-premium-product-film-ru-v1.json
+        run: node scripts/capture_max_tour_ru_v1.mjs
       - name: Resolve run directory
         id: run
         shell: bash
