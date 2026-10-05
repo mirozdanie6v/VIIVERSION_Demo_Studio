@@ -72,7 +72,7 @@ test("builds sequential SRT captions against edited scenes", () => {
 
 
 test("render encoder preset keeps fast as fallback and allows measured overrides", () => {
-  assert.equal(resolveRenderEncoderPreset(undefined, {}), "fast");
+  assert.equal(resolveRenderEncoderPreset(undefined, {}), "veryfast");
   assert.equal(
     resolveRenderEncoderPreset(undefined, { DEMO_STUDIO_FFMPEG_PRESET: "veryfast" }),
     "veryfast",
