@@ -1,0 +1,342 @@
+name: Deploy Demo Studio Production
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/deploy-production.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: viiversion-demo-studio-production
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      DEMO_STUDIO_API_KEY: ${{ secrets.DEMO_STUDIO_API_KEY }}
+      DEMO_STUDIO_PRODUCTION_HYBRID: ${{ vars.DEMO_STUDIO_PRODUCTION_HYBRID }}
+      TARGET_DOMAIN: demostudio.viiversion.com
+
+    steps:
+      - name: Resolve pinned RIC release
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL             https://raw.githubusercontent.com/mirozdanie6v/rusinfocenter/main/.deploy-demo-studio             -o /tmp/demo-release
+
+          version=$(awk -F= '/^release=/{print $2}' /tmp/demo-release)
+          source=$(awk -F= '/^source=/{print $2}' /tmp/demo-release)
+          domain=$(head -n 1 /tmp/demo-release)
+
+          test "${domain}" = "${TARGET_DOMAIN}"
+          [[ "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          [[ "${source}" =~ ^[0-9a-f]{40}$ ]]
+
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+          echo "source=${source}" >> "${GITHUB_OUTPUT}"
+          echo "Pinned Demo Studio release: ${version} @ ${source}"
+
+      - name: Checkout pinned Demo Studio source
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ steps.release.outputs.source }}
+          path: demo-studio
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Verify Demo Studio deployment credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}"
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
+          echo "Cloudflare deployment credentials: available"
+
+          if [ -n "${OPENAI_API_KEY:-}" ]; then
+            echo "OpenAI key: available"
+          else
+            echo "OpenAI key: missing"
+          fi
+
+          if [ -n "${DEMO_STUDIO_API_KEY:-}" ]; then
+            echo "Demo Studio access mode: authenticated"
+          else
+            echo "Demo Studio access mode: anonymous edge-quota mode"
+          fi
+
+          hybrid="${DEMO_STUDIO_PRODUCTION_HYBRID:-true}"
+          case "${hybrid}" in
+            true|false) ;;
+            *)
+              echo "DEMO_STUDIO_PRODUCTION_HYBRID must be true or false."
+              exit 1
+              ;;
+          esac
+          echo "Demo Studio production hybrid mode: ${hybrid}"
+
+      - name: Verify Cloudflare API token
+        shell: bash
+        run: |
+          set -euo pipefail
+          account_url="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/tokens/verify"
+          user_url="https://api.cloudflare.com/client/v4/user/tokens/verify"
+
+          if curl -fsS "${account_url}"             -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}"             > /tmp/cloudflare-token.json 2>/tmp/cloudflare-token-error.log; then
+            token_scope="account-owned"
+          elif curl -fsS "${user_url}"             -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}"             > /tmp/cloudflare-token.json 2>/tmp/cloudflare-token-error.log; then
+            token_scope="user"
+          else
+            cat /tmp/cloudflare-token-error.log
+            echo "Cloudflare API token verification failed."
+            exit 1
+          fi
+
+          if jq -e '.success == true and .result.status == "active"'             /tmp/cloudflare-token.json >/dev/null; then
+            echo "Cloudflare API token is active (${token_scope})."
+          else
+            echo "Cloudflare token verification response:"
+            jq '{success, status: .result.status, errors}' /tmp/cloudflare-token.json
+            exit 1
+          fi
+
+      - name: Install and validate pinned source
+        working-directory: demo-studio
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected_version="${{ steps.release.outputs.version }}"
+          expected_source="${{ steps.release.outputs.source }}"
+
+          test "$(node -p "require('./package.json').version")" = "${expected_version}"
+          test "$(git rev-parse HEAD)" = "${expected_source}"
+
+          npm ci --no-fund --no-audit
+          npm run typecheck
+          npm test
+          docker version
+
+          echo "Validated exact Demo Studio source ${expected_source} at version ${expected_version}."
+
+      - name: Verify R2 binding
+        working-directory: demo-studio
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq '"binding": "DEMO_STUDIO_ARTIFACTS"' wrangler.jsonc
+          grep -Fq '"bucket_name": "viiversion-demo-studio-artifacts"' wrangler.jsonc
+          echo "R2 binding configuration verified."
+
+      - name: Deploy Worker and Container image
+        working-directory: demo-studio
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx wrangler deploy --config wrangler.jsonc
+
+      - name: Sync runtime secrets
+        working-directory: demo-studio
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -n "${OPENAI_API_KEY:-}" ]; then
+            printf '%s' "${OPENAI_API_KEY}" | npx wrangler secret put OPENAI_API_KEY --config wrangler.jsonc
+          fi
+          if [ -n "${DEMO_STUDIO_API_KEY:-}" ]; then
+            printf '%s' "${DEMO_STUDIO_API_KEY}" | npx wrangler secret put DEMO_STUDIO_API_KEY --config wrangler.jsonc
+          fi
+
+          hybrid="${DEMO_STUDIO_PRODUCTION_HYBRID:-true}"
+          printf '%s' "${hybrid}" | npx wrangler secret put DEMO_STUDIO_PRODUCTION_HYBRID --config wrangler.jsonc
+
+      - name: Verify production health
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://${TARGET_DOMAIN}"
+          expected_version="${{ steps.release.outputs.version }}"
+          hybrid="${DEMO_STUDIO_PRODUCTION_HYBRID:-true}"
+
+          if [ "${hybrid}" = "false" ]; then
+            expected_mode="standard"
+          else
+            expected_mode="hybrid"
+          fi
+
+          if [ -n "${DEMO_STUDIO_API_KEY:-}" ]; then
+            expected_access="authenticated"
+          else
+            expected_access="anonymous"
+          fi
+
+          ready=0
+          for attempt in $(seq 1 60); do
+            code=$(curl -L -sS --connect-timeout 8 --max-time 40               -o /tmp/demo-health.json -w '%{http_code}'               "${base}/health?deploy=${GITHUB_SHA}" || true)
+
+            if [ "${code}" = "200" ] && jq -e               --arg version "${expected_version}"               --arg mode "${expected_mode}"               --arg access "${expected_access}"               '(.ok == true) and (.service == "viiversion-demo-studio") and (.version == $version) and (.generationMode == $mode) and (.accessMode == $access)'               /tmp/demo-health.json >/dev/null 2>&1; then
+              ready=1
+              break
+            fi
+
+            echo "Demo Studio container not ready yet (attempt ${attempt}, HTTP ${code})"
+            sleep 10
+          done
+
+          test "${ready}" -eq 1
+          jq '{ok,service,version,generationMode,accessMode}' /tmp/demo-health.json
+
+      - name: Verify public landing page
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://${TARGET_DOMAIN}"
+          code=$(curl -L -sS --connect-timeout 8 --max-time 40             -o /tmp/demo-root.html -w '%{http_code}'             "${base}/?release=${{ steps.release.outputs.version }}")
+
+          test "${code}" = "200"
+          grep -Fq 'VIIVERSION Demo Studio' /tmp/demo-root.html
+          grep -Fq 'Turn web apps into polished demo videos.' /tmp/demo-root.html
+          echo "Demo Studio public landing page verified."
+
+      - name: Verify MCP initialize and tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://${TARGET_DOMAIN}"
+          auth=()
+          if [ -n "${DEMO_STUDIO_API_KEY:-}" ]; then
+            auth=(-H "Authorization: Bearer ${DEMO_STUDIO_API_KEY}")
+          fi
+
+          normalize_mcp_response() {
+            source_file="$1"
+            target_file="$2"
+            if jq -e . "${source_file}" >/dev/null 2>&1; then
+              cp "${source_file}" "${target_file}"
+              return
+            fi
+            sed -n 's/^data: //p' "${source_file}" | tail -n 1 > "${target_file}"
+            jq -e . "${target_file}" >/dev/null
+          }
+
+          curl -fsS -X POST "${base}/mcp"             "${auth[@]}"             -H 'content-type: application/json'             -H 'accept: application/json, text/event-stream'             --data '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"demo-studio-production-deploy","version":"1"}}}'             > /tmp/demo-mcp-init.raw
+          normalize_mcp_response /tmp/demo-mcp-init.raw /tmp/demo-mcp-init.json
+          jq -e '.result.serverInfo.name == "viiversion-demo-studio"' /tmp/demo-mcp-init.json >/dev/null
+
+          curl -fsS -X POST "${base}/mcp"             "${auth[@]}"             -H 'content-type: application/json'             -H 'accept: application/json, text/event-stream'             --data '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'             > /tmp/demo-mcp-tools.raw
+          normalize_mcp_response /tmp/demo-mcp-tools.raw /tmp/demo-mcp-tools.json
+
+          jq -e             '([.result.tools[].name] | sort) == (["audit_web_app_design","create_demo_video","create_demo_video_from_scenario","get_demo_job","inspect_web_app"] | sort)'             /tmp/demo-mcp-tools.json >/dev/null
+
+          echo "Demo Studio MCP production surface verified."
+
+      - name: Verify UX Design Brain MCP
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://${TARGET_DOMAIN}"
+          auth=()
+          if [ -n "${DEMO_STUDIO_API_KEY:-}" ]; then
+            auth=(-H "Authorization: Bearer ${DEMO_STUDIO_API_KEY}")
+          fi
+
+          curl -fsS -X POST "${base}/mcp"             "${auth[@]}"             -H 'content-type: application/json'             -H 'accept: application/json, text/event-stream'             --data '{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"audit_web_app_design","arguments":{"url":"https://example.com"}}}'             > /tmp/demo-design-audit.raw
+
+          if jq -e . /tmp/demo-design-audit.raw >/dev/null 2>&1; then
+            cp /tmp/demo-design-audit.raw /tmp/demo-design-audit.json
+          else
+            sed -n 's/^data: //p' /tmp/demo-design-audit.raw | tail -n 1 > /tmp/demo-design-audit.json
+          fi
+
+          jq -e '
+            ((.result.isError // false) == false) and
+            ((.result.content[0].text | fromjson) as $audit |
+              ($audit.preflight.version == "ux-preflight-v1") and
+              (($audit.preflight.status == "PASS") or ($audit.preflight.status == "REVISE")) and
+              ($audit.profile.version == "design-profile-v1") and
+              ($audit.contract.version == "design-contract-v1"))
+          ' /tmp/demo-design-audit.json >/dev/null
+
+          echo "Demo Studio UX Design Brain production tool verified."
+
+      - name: Verify plugin-native production generation
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://${TARGET_DOMAIN}"
+          auth=()
+          if [ -n "${DEMO_STUDIO_API_KEY:-}" ]; then
+            auth=(-H "Authorization: Bearer ${DEMO_STUDIO_API_KEY}")
+          fi
+
+          payload='{"jsonrpc":"2.0","id":11,"method":"tools/call","params":{"name":"create_demo_video_from_scenario","arguments":{"url":"https://example.com","preset":"16:9","captions":true,"voiceover":false,"brand":"VIIVERSION","scenario":{"name":"Production check","baseUrl":"https://example.com","steps":[{"action":"goto","url":"/","label":"Open target","narration":"Open the target application."},{"action":"wait","ms":700}]}}}}'
+
+          curl -fsS -X POST "${base}/mcp"             "${auth[@]}"             -H 'content-type: application/json'             -H 'accept: application/json, text/event-stream'             --data "${payload}" > /tmp/demo-create.raw
+
+          if jq -e . /tmp/demo-create.raw >/dev/null 2>&1; then
+            cp /tmp/demo-create.raw /tmp/demo-create.json
+          else
+            sed -n 's/^data: //p' /tmp/demo-create.raw | tail -n 1 > /tmp/demo-create.json
+          fi
+
+          create_result=$(jq -r '.result.content[0].text | fromjson' /tmp/demo-create.json)
+          job_id=$(echo "${create_result}" | jq -r '.job_id')
+          status_page_url=$(echo "${create_result}" | jq -r '.status_page_url')
+
+          test -n "${job_id}"
+          test "${job_id}" != "null"
+          test -n "${status_page_url}"
+          test "${status_page_url}" != "null"
+
+          page_code=$(curl -L -sS --connect-timeout 8 --max-time 40             -o /tmp/demo-job-progress.html -w '%{http_code}'             "${status_page_url}")
+          test "${page_code}" = "200"
+          grep -Fq 'Generation progress' /tmp/demo-job-progress.html
+
+          completed=0
+          observed_live_progress=0
+          for attempt in $(seq 1 60); do
+            status_json=$(curl -fsS "${base}/v1/jobs/${job_id}" "${auth[@]}")
+
+            progress=$(echo "${status_json}" | jq -r '.progress')
+            if [ "${progress}" -gt 0 ] && [ "${progress}" -lt 100 ]; then
+              observed_live_progress=1
+            fi
+
+            status=$(echo "${status_json}" | jq -r '.status')
+            stage=$(echo "${status_json}" | jq -r '.stage')
+            echo "Generation status: ${status} / stage: ${stage} / progress: ${progress}%"
+
+            if [ "${status}" = "completed" ]; then
+              completed=1
+              break
+            fi
+
+            if [ "${status}" = "failed" ]; then
+              echo "${status_json}" | jq .
+              exit 1
+            fi
+
+            sleep 10
+          done
+
+          test "${completed}" -eq 1
+          test "${observed_live_progress}" -eq 1
+
+          code=$(curl -sS -o /tmp/demo-production.mp4 -w '%{http_code}'             "${base}/v1/jobs/${job_id}/artifact" "${auth[@]}")
+
+          test "${code}" = "200"
+          test "$(stat -c%s /tmp/demo-production.mp4)" -gt 10000
+          file /tmp/demo-production.mp4
+          echo "Production generation and durable R2 artifact verified."
