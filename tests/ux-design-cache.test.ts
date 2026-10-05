@@ -86,3 +86,20 @@ test("non-cacheable results are shared in-flight but not stored", async () => {
   assert.equal(second.source, "fresh");
   assert.equal(calls, 2);
 });
+
+
+test("cache evicts oldest completed values beyond its memory bound", async () => {
+  const cache = new ExpiringPromiseCache<number>(2);
+  let calls = 0;
+
+  await cache.getOrCreate("a", 60_000, async () => ++calls);
+  await cache.getOrCreate("b", 60_000, async () => ++calls);
+  await cache.getOrCreate("c", 60_000, async () => ++calls);
+
+  const a = await cache.getOrCreate("a", 60_000, async () => ++calls);
+  const c = await cache.getOrCreate("c", 60_000, async () => ++calls);
+
+  assert.equal(a.source, "fresh");
+  assert.equal(c.source, "cache");
+  assert.equal(calls, 4);
+});
