@@ -205,7 +205,9 @@ export async function focusTarget(
     },
   );
 
-  await page.waitForTimeout(160);
+  if (config?.enabled !== false) {
+    await page.waitForTimeout(160);
+  }
 
   return {
     x: box.x,
