@@ -677,10 +677,16 @@ async function auditUxDesignFresh(
       };
 
       const screenshots = captureScreenshots
-        ? {
-            desktop: await desktopPage.screenshot({ fullPage: true }),
-            mobile: await mobilePage.screenshot({ fullPage: true }),
-          }
+        ? await (async () => {
+            const [desktopScreenshot, mobileScreenshot] = await Promise.all([
+              desktopPage.screenshot({ fullPage: true }),
+              mobilePage.screenshot({ fullPage: true }),
+            ]);
+            return {
+              desktop: desktopScreenshot,
+              mobile: mobileScreenshot,
+            };
+          })()
         : undefined;
 
       return {
