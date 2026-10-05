@@ -40,27 +40,14 @@ jobs:
           console.log('NAV_COUNT=',await nav.count());
           if(await nav.count()>=2){await nav.nth(1).click(); await page.waitForTimeout(700);}
           await dump('CATALOG RU');
-          const dalat=page.getByText('Далат «Премиум»',{exact:false}).first();
-          if(await dalat.count()){
-            console.log('DALAT_PARENT=',await dalat.evaluate(el=>el.parentElement?.parentElement?.outerHTML?.slice(0,5000)));
-            await dalat.evaluate(el=>{
-              const clickable=el.closest('button,a,[onclick]') || el.parentElement?.closest('button,a,[onclick]') || el.parentElement?.parentElement;
-              clickable?.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true,view:window}));
-            });
-            await page.waitForTimeout(1200);
-          }
+          console.log('GLOBALS=',await page.evaluate(()=>({openTour:typeof window.openTour,joinDeparture:typeof window.joinDeparture})));
+          await page.evaluate(()=>window.openTour('dalat-premium'));
+          await page.waitForTimeout(1200);
           console.log('TOUR_URL=',page.url());
           await dump('TOUR RU');
-          const book=page.locator('button').filter({hasText:/заброн|выбрать формат|присоедин|оформить/i}).first();
-          console.log('BOOK_COUNT=',await book.count());
-          if(await book.count()){
-            console.log('BOOK_TEXT=',await book.innerText());
-            await book.evaluate(el=>{
-              el.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true,view:window}));
-              if(typeof el.onclick==='function') el.onclick(new MouseEvent('click',{bubbles:true,cancelable:true,view:window}));
-            });
-            await page.waitForTimeout(1500);
-          }
+          console.log('JOIN_GLOBAL=',await page.evaluate(()=>typeof window.joinDeparture));
+          await page.evaluate(()=>window.joinDeparture(0));
+          await page.waitForTimeout(1500);
           await dump('BOOKING RU');
           const aiNav=page.locator('button.nav-btn:visible').last();
           if(await aiNav.count()){await aiNav.click(); await page.waitForTimeout(700);}
