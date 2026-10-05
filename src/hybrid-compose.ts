@@ -289,14 +289,39 @@ export async function composeHybridRun(
     plan.viewport.width,
     plan.viewport.height,
   );
+  const realtimeSegments = plan.segments.filter(
+    (segment) => segment.mode === "realtime",
+  );
+  const realtimeInputByOrder = new Map<number, string>();
+
+  if (realtimeSegments.length === 1) {
+    realtimeInputByOrder.set(realtimeSegments[0].order, "[0:v]");
+  } else if (realtimeSegments.length > 1) {
+    const splitLabels = realtimeSegments
+      .map((segment) => {
+        const label = `hrt${segment.order}`;
+        realtimeInputByOrder.set(segment.order, `[${label}]`);
+        return `[${label}]`;
+      })
+      .join("");
+    filters.push(
+      `[0:v]split=${realtimeSegments.length}${splitLabels}`,
+    );
+  }
 
   for (const segment of plan.segments) {
     const label = `hseg${segment.order}`;
     segmentLabels.push(`[${label}]`);
 
     if (segment.mode === "realtime") {
+      const realtimeInput = realtimeInputByOrder.get(segment.order);
+      if (!realtimeInput) {
+        throw new Error(
+          `Missing realtime FFmpeg input for hybrid segment ${segment.order}.`,
+        );
+      }
       filters.push(
-        `[0:v]trim=start=${number(segment.sourceStart!)}:end=${number(segment.sourceEnd!)},` +
+        `${realtimeInput}trim=start=${number(segment.sourceStart!)}:end=${number(segment.sourceEnd!)},` +
           `setpts=PTS-STARTPTS,${normalized}[${label}]`,
       );
       continue;
