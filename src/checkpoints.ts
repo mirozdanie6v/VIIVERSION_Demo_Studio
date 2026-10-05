@@ -1,4 +1,4 @@
-import { readFile, stat } from "node:fs/promises";
+import { readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import {
   persistCheckpointFile,
@@ -187,8 +187,10 @@ export async function restoreCaptureCheckpoint(
       ...manifest,
       videoPath,
     };
-    await import("node:fs/promises").then(({ writeFile }) =>
-      writeFile(runPath, JSON.stringify(normalized, null, 2) + "\n", "utf8")
+    await writeFile(
+      runPath,
+      JSON.stringify(normalized, null, 2) + "\n",
+      "utf8",
     );
 
     return {
