@@ -104,10 +104,18 @@ export class HuggingFaceVoiceProvider implements VoiceProvider {
     context: VoiceProviderContext = {},
   ): boolean {
     const env = context.env ?? process.env;
+    const language = languageOf(request.locale);
+    const persona = request.persona ?? "viiversion-presenter";
+    const premiumPresenterDefault =
+      truthy(env.HF_TTS_PREMIUM_DEFAULT) &&
+      persona === "viiversion-presenter" &&
+      (language === "ru" || language === "en");
+
     return (
       request.provider === "huggingface" ||
       truthy(env.HF_TTS_ENABLED) ||
-      Boolean(env.HF_TTS_ENGINE)
+      Boolean(env.HF_TTS_ENGINE) ||
+      premiumPresenterDefault
     );
   }
 
