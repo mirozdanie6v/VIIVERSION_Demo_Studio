@@ -1,6 +1,7 @@
 import { chromium, type Page } from "playwright";
 import { mkdir, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { settleAfterNavigation } from "./performance.js";
 import { animateClick, focusTarget, resetPresentation } from "./presentation.js";
 import { attachNetworkGuard } from "./security.js";
 import { describeTarget, resolveTarget, resolveTargetWithRecovery } from "./targets.js";
@@ -128,7 +129,7 @@ async function runStep(
       const rawUrl = interpolate(step.url, variables);
       const baseUrl = scenario.baseUrl ? interpolate(scenario.baseUrl, variables) : undefined;
       await page.goto(resolveUrl(rawUrl, baseUrl), { waitUntil: "domcontentloaded" });
-      await page.waitForLoadState("networkidle").catch(() => undefined);
+      await settleAfterNavigation(page);
       return {};
     }
     case "click": {
