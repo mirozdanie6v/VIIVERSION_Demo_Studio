@@ -168,7 +168,7 @@ ScaledBorderAndShadow: yes
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 Style: Headline,Inter SemiBold,34,&H005CA6FF,&H005CA6FF,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,0,0,7,72,72,48,1
-Style: Caption,Inter,30,&H00FFFFFF,&H00FFFFFF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0,0,8,92,92,122,1
+Style: Caption,Inter,38,&H00FFFFFF,&H00FFFFFF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0,0,8,76,76,118,1
 Style: Outcome,Inter SemiBold,43,&H00FFFFFF,&H00FFFFFF,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,0,0,7,72,72,74,1
 Style: OutcomeOrange,Inter SemiBold,43,&H005CA6FF,&H005CA6FF,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,0,0,7,72,72,74,1
 Style: CTA,Inter,27,&H00D8D8DC,&H00D8D8DC,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0,0,7,72,72,74,1
