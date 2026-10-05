@@ -2,6 +2,8 @@ name: AVE Dental English Demo
 
 on:
   workflow_dispatch:
+  issues:
+    types: [opened]
   push:
     branches: [main]
     paths:
