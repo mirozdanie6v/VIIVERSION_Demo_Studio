@@ -139,6 +139,17 @@ function positiveInteger(value: string | undefined, fallback: number): number {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
 }
 
+export function productionHybridEnabled(
+  env: NodeJS.ProcessEnv = process.env,
+): boolean {
+  const raw = env.DEMO_STUDIO_PRODUCTION_HYBRID?.trim().toLowerCase();
+  if (!raw) return true;
+  if (["1", "true", "on", "yes"].includes(raw)) return true;
+  if (["0", "false", "off", "no"].includes(raw)) return false;
+  // An invalid explicit value fails safe to the proven standard path.
+  return false;
+}
+
 function secondsSince(value: string, now = Date.now()): number {
   const parsed = Date.parse(value);
   return Number.isFinite(parsed)
@@ -740,6 +751,7 @@ export class DemoJobManager {
       }
     }
 
+    const productionHybrid = productionHybridEnabled();
     const needsCapture = !restoredCapture;
     const needsVoiceover =
       Boolean(job.request.voiceover) && !restoredVoiceoverPath;
@@ -752,9 +764,13 @@ export class DemoJobManager {
       await this.beginStage(job, {
         status: "capturing",
         stage: "capture",
-        stageLabel: "Browser capture",
+        stageLabel: productionHybrid
+          ? "Hybrid browser capture"
+          : "Standard browser capture",
         progress: 30,
-        message: "Executing and recording the customer journey.",
+        message: productionHybrid
+          ? "Executing the customer journey with accelerated hybrid capture."
+          : "Executing the customer journey with standard capture.",
         timeoutSeconds: captureTimeout,
       });
     } else if (needsVoiceover) {
@@ -791,6 +807,7 @@ export class DemoJobManager {
           : () =>
               runScenario(activeScenario, {
                 artifactsRoot: path.join(jobDir, "captures"),
+                hybrid: productionHybrid,
               }),
         voiceover:
           narration && plannedVoiceoverPath
@@ -852,11 +869,14 @@ export class DemoJobManager {
       throw new Error("Capture stage did not produce a usable recording.");
     }
 
+    const renderHybrid = capture.captureMode === "hybrid-prototype";
+    const captureModeLabel = renderHybrid ? "Hybrid" : "Standard";
+
     await this.update(job, {
       progress: voiceoverPath ? 75 : 62,
       message: voiceoverPath
-        ? "Browser capture and narration are complete."
-        : "Browser capture is complete.",
+        ? captureModeLabel + " browser capture and narration are complete."
+        : captureModeLabel + " browser capture is complete.",
       runDir: capture.runDir,
       checkpoint: job.checkpoint,
     });
@@ -864,10 +884,11 @@ export class DemoJobManager {
     await this.beginStage(job, {
       status: "rendering",
       stage: "render",
-      stageLabel: "Final render",
+      stageLabel: renderHybrid ? "Hybrid final render" : "Standard final render",
       progress: 78,
-      message:
-        "Editor Brain, Design Brain and FFmpeg are building the final video.",
+      message: renderHybrid
+        ? "Editor Brain, Design Brain and FFmpeg are composing the accelerated hybrid final video."
+        : "Editor Brain, Design Brain and FFmpeg are building the standard final video.",
       timeoutSeconds: 420,
     });
 
@@ -887,6 +908,8 @@ export class DemoJobManager {
       cta: job.request.cta,
       designContractPath: path.join(jobDir, "design_contract.json"),
       uxPreflightPath: path.join(jobDir, "ux_preflight.json"),
+      hybrid: renderHybrid,
+      hybridStrict: false,
     });
 
     await this.beginStage(job, {

@@ -18,6 +18,7 @@ const CHECKPOINT_FILE_NAMES = new Set([
   "ux_preflight.json",
   "run.json",
   "capture.webm",
+  "hybrid-capture.bundle.json",
   "voiceover.mp3",
 ]);
 

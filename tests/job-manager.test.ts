@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { toPublicDemoJob, type DemoJob } from "../src/job-manager.js";
+import {
+  productionHybridEnabled,
+  toPublicDemoJob,
+  type DemoJob,
+} from "../src/job-manager.js";
 
 test("public job metadata does not expose the source request or local paths", () => {
   const job: DemoJob = {
@@ -32,4 +36,24 @@ test("public job metadata does not expose the source request or local paths", ()
   assert.equal("artifactPath" in publicJob, false);
   assert.equal("scenarioPath" in publicJob, false);
   assert.equal("runDir" in publicJob, false);
+});
+
+test("production hybrid is default-on with an explicit standard rollback", () => {
+  assert.equal(productionHybridEnabled({}), true);
+  assert.equal(
+    productionHybridEnabled({ DEMO_STUDIO_PRODUCTION_HYBRID: "true" }),
+    true,
+  );
+  assert.equal(
+    productionHybridEnabled({ DEMO_STUDIO_PRODUCTION_HYBRID: "false" }),
+    false,
+  );
+  assert.equal(
+    productionHybridEnabled({ DEMO_STUDIO_PRODUCTION_HYBRID: "0" }),
+    false,
+  );
+  assert.equal(
+    productionHybridEnabled({ DEMO_STUDIO_PRODUCTION_HYBRID: "invalid" }),
+    false,
+  );
 });

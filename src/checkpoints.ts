@@ -1,4 +1,4 @@
-import { readFile, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import {
   persistCheckpointFile,
@@ -18,7 +18,37 @@ type RunManifest = {
   finishedAt?: string;
   success?: boolean;
   videoPath?: string;
+  captureMode?: "standard" | "hybrid-prototype";
+  hybridManifestPath?: string;
 };
+
+type HybridCheckpointKeyframe = {
+  stepIndex: number;
+  action: string;
+  mode: string;
+  path: string;
+  capturedAt: string;
+  [key: string]: unknown;
+};
+
+type HybridCheckpointManifest = {
+  version?: number;
+  realtimeSourceVideoPath?: string;
+  keyframes: HybridCheckpointKeyframe[];
+  [key: string]: unknown;
+};
+
+type HybridCheckpointBundle = {
+  version: 1;
+  manifest: HybridCheckpointManifest;
+  frames: Array<{
+    stepIndex: number;
+    filename: string;
+    contentBase64: string;
+  }>;
+};
+
+const HYBRID_BUNDLE_NAME = "hybrid-capture.bundle.json" as const;
 
 async function hasBytes(filePath: string, minimum = 1): Promise<boolean> {
   try {
@@ -37,6 +67,7 @@ async function ensureFile(
     | "ux_preflight.json"
     | "run.json"
     | "capture.webm"
+    | "hybrid-capture.bundle.json"
     | "voiceover.mp3",
   destinationPath: string,
   minimumBytes = 1,
@@ -130,6 +161,137 @@ export async function restoreScenarioCheckpoint(
   }
 }
 
+function hybridFrameFilename(value: string, stepIndex: number): string {
+  const filename = path.basename(value);
+  if (!/^\d{3}-[a-zA-Z0-9_-]+\.png$/.test(filename)) {
+    throw new Error(
+      "Hybrid checkpoint contains an invalid keyframe filename for step " +
+        stepIndex +
+        ".",
+    );
+  }
+  return filename;
+}
+
+async function buildHybridCheckpointBundle(
+  capture: RunResult,
+): Promise<string> {
+  const manifestPath =
+    capture.hybridManifestPath ??
+    path.join(capture.runDir, "hybrid_capture.json");
+  const manifest = JSON.parse(
+    await readFile(manifestPath, "utf8"),
+  ) as HybridCheckpointManifest;
+
+  if (!Array.isArray(manifest.keyframes) || manifest.keyframes.length === 0) {
+    throw new Error("Hybrid capture checkpoint has no keyframes.");
+  }
+
+  const frames = await Promise.all(
+    manifest.keyframes.map(async (frame) => {
+      const filename = hybridFrameFilename(frame.path, frame.stepIndex);
+      const bytes = await readFile(
+        path.isAbsolute(frame.path)
+          ? frame.path
+          : path.resolve(capture.runDir, frame.path),
+      );
+      if (bytes.length < 128) {
+        throw new Error(
+          "Hybrid capture checkpoint keyframe is unexpectedly small: " +
+            filename,
+        );
+      }
+      return {
+        stepIndex: frame.stepIndex,
+        filename,
+        contentBase64: bytes.toString("base64"),
+      };
+    }),
+  );
+
+  const bundlePath = path.join(capture.runDir, HYBRID_BUNDLE_NAME);
+  const bundle: HybridCheckpointBundle = {
+    version: 1,
+    manifest,
+    frames,
+  };
+  await writeFile(
+    bundlePath,
+    JSON.stringify(bundle) + "\n",
+    "utf8",
+  );
+  return bundlePath;
+}
+
+async function restoreHybridCheckpointBundle(
+  jobId: string,
+  runDir: string,
+  videoPath: string,
+): Promise<string | undefined> {
+  const bundlePath = path.join(runDir, HYBRID_BUNDLE_NAME);
+  const ready = await ensureFile(
+    jobId,
+    HYBRID_BUNDLE_NAME,
+    bundlePath,
+    64,
+  );
+  if (!ready) return undefined;
+
+  try {
+    const bundle = JSON.parse(
+      await readFile(bundlePath, "utf8"),
+    ) as HybridCheckpointBundle;
+    if (
+      bundle.version !== 1 ||
+      !bundle.manifest ||
+      !Array.isArray(bundle.manifest.keyframes) ||
+      bundle.manifest.keyframes.length === 0 ||
+      !Array.isArray(bundle.frames)
+    ) {
+      return undefined;
+    }
+
+    const frameByStep = new Map(
+      bundle.frames.map((frame) => [frame.stepIndex, frame]),
+    );
+    const keyframeDir = path.join(runDir, "hybrid-keyframes");
+    await mkdir(keyframeDir, { recursive: true });
+
+    const restoredKeyframes: HybridCheckpointKeyframe[] = [];
+    for (const frame of bundle.manifest.keyframes) {
+      const bundled = frameByStep.get(frame.stepIndex);
+      if (!bundled) return undefined;
+      const filename = hybridFrameFilename(
+        bundled.filename,
+        frame.stepIndex,
+      );
+      const bytes = Buffer.from(bundled.contentBase64, "base64");
+      if (bytes.length < 128) return undefined;
+      const restoredPath = path.join(keyframeDir, filename);
+      await writeFile(restoredPath, bytes);
+      restoredKeyframes.push({
+        ...frame,
+        path: restoredPath,
+      });
+    }
+
+    const hybridManifestPath = path.join(runDir, "hybrid_capture.json");
+    const restoredManifest: HybridCheckpointManifest = {
+      ...bundle.manifest,
+      realtimeSourceVideoPath: videoPath,
+      keyframes: restoredKeyframes,
+    };
+    await writeFile(
+      hybridManifestPath,
+      JSON.stringify(restoredManifest, null, 2) + "\n",
+      "utf8",
+    );
+    return hybridManifestPath;
+  } catch {
+    return undefined;
+  }
+}
+
 export async function persistCaptureCheckpoint(
   jobId: string,
   capture: RunResult,
@@ -137,6 +299,11 @@ export async function persistCaptureCheckpoint(
   if (!capture.videoPath) {
     throw new Error("Capture checkpoint requires a recorded video.");
   }
+
+  const hybridBundlePath =
+    capture.captureMode === "hybrid-prototype"
+      ? await buildHybridCheckpointBundle(capture)
+      : undefined;
 
   await Promise.all([
     persistCheckpointFile(
@@ -151,6 +318,16 @@ export async function persistCaptureCheckpoint(
       capture.videoPath,
       "video/webm",
     ),
+    ...(hybridBundlePath
+      ? [
+          persistCheckpointFile(
+            jobId,
+            HYBRID_BUNDLE_NAME,
+            hybridBundlePath,
+            "application/json; charset=utf-8",
+          ),
+        ]
+      : []),
   ]);
 }
 
@@ -181,11 +358,22 @@ export async function restoreCaptureCheckpoint(
       return undefined;
     }
 
-    // The original manifest can contain an absolute path from a destroyed
-    // container. Renderers use run.json, so normalize it to the restored file.
+    let hybridManifestPath: string | undefined;
+    if (manifest.captureMode === "hybrid-prototype") {
+      hybridManifestPath = await restoreHybridCheckpointBundle(
+        jobId,
+        runDir,
+        videoPath,
+      );
+      if (!hybridManifestPath) return undefined;
+    }
+
+    // The original manifest can contain absolute paths from a destroyed
+    // container. Normalize every media reference to the restored run.
     const normalized = {
       ...manifest,
       videoPath,
+      ...(hybridManifestPath ? { hybridManifestPath } : {}),
     };
     await writeFile(
       runPath,
@@ -200,6 +388,8 @@ export async function restoreCaptureCheckpoint(
       startedAt: manifest.startedAt,
       finishedAt: manifest.finishedAt,
       success: true,
+      captureMode: manifest.captureMode,
+      hybridManifestPath,
     };
   } catch {
     return undefined;
