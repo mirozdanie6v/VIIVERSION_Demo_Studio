@@ -21,3 +21,9 @@ export function demoStudioGenerationMode(): "hybrid" | "standard" {
     ? "standard"
     : "hybrid";
 }
+
+export function demoStudioAccessMode(): "authenticated" | "anonymous" {
+  return process.env.DEMO_STUDIO_API_KEY?.trim()
+    ? "authenticated"
+    : "anonymous";
+}

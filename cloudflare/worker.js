@@ -235,11 +235,17 @@ function bearerToken(request) {
 
 async function quotaIdentity(request) {
   const token = bearerToken(request);
-  if (!token) return "anonymous-global";
+  const source = token
+    ? "bearer:" + token
+    : [
+        "anonymous",
+        request.headers.get("cf-connecting-ip") ?? "unknown-ip",
+        (request.headers.get("user-agent") ?? "unknown-agent").slice(0, 180),
+      ].join(":");
 
   const digest = await crypto.subtle.digest(
     "SHA-256",
-    new TextEncoder().encode(token),
+    new TextEncoder().encode(source),
   );
 
   return Array.from(new Uint8Array(digest))
@@ -965,7 +971,7 @@ export class DemoStudioContainer extends DurableObject {
           this.env.DEMO_STUDIO_FFMPEG_PRESET ?? "veryfast",
         DEMO_STUDIO_PRODUCTION_HYBRID: desiredHybrid,
         DEMO_STUDIO_MAX_CONCURRENT_JOBS: "1",
-        DEMO_STUDIO_DAILY_JOB_LIMIT: "10",
+        DEMO_STUDIO_DAILY_JOB_LIMIT: this.env.DEMO_STUDIO_API_KEY ? "10" : "0",
         DEMO_STUDIO_MAX_JOB_ATTEMPTS: "3",
         DEMO_STUDIO_HEARTBEAT_MS: "10000",
         DEMO_STUDIO_STORAGE_ROOT: "/data/jobs",
