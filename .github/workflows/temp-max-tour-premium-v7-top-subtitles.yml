@@ -6,6 +6,8 @@ on:
       - 'feature/max-tour-premium-v7-top-subtitles'
     paths:
       - '.github/workflows/temp-max-tour-premium-v7-top-subtitles.yml'
+      - 'scripts/render_max_tour_premium_v7.py'
+      - 'examples/max-tour-premium-product-film-v7.json'
 
 permissions:
   actions: read
