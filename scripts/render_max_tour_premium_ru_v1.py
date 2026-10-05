@@ -201,7 +201,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             nxt=start+dur if i==len(chunks)-1 else cur+dur*w/total
             events.append(f"Dialogue: 2,{ass_time(cur)},{ass_time(nxt)},Caption,,0,0,0,,{wrap_two(chunk)}")
             cur=nxt
-    events.append(f"Dialogue: 3,{ass_time(payment_start)},{ass_time(payment_start+1.55)},Headline,,0,0,0,,{{\\fad(160,280)}}Payment confirmed.")
+    events.append(f"Dialogue: 3,{ass_time(payment_start)},{ass_time(payment_start+1.55)},Headline,,0,0,0,,{{\\fad(160,280)}}Готово к оплате.")
 
     # Outro copy is baked into the designed final frame; keep ASS overlays off it to avoid duplicate text.
     Path(path).write_text(header+"\n".join(events)+"\n",encoding="utf-8")
@@ -245,7 +245,7 @@ def main():
     ap.add_argument("--music")
     ap.add_argument("--audio-master")
     ap.add_argument("--timing-report")
-    ap.add_argument("--payment-video",required=True)\n    ap.add_argument("--cta-voice",required=True)
+    ap.add_argument("--cta-voice",required=True)
     ap.add_argument("--out",required=True)
     args=ap.parse_args()
 
@@ -317,7 +317,8 @@ def main():
     intro_img=out/"intro.png"; make_intro(intro_img,home_frame)
 
     paid_frame=out/"paid.png"
-    extract_frame(Path(args.payment_video),max(0.0,probe(args.payment_video)-0.45),paid_frame)
+    paid_t=max(starts_src["Show quote"], ends_src["Show quote"]-0.35)
+    extract_frame(capture,paid_t,paid_frame)
     outro_img=out/"outro.png"; make_outro(outro_img,paid_frame)
 
     clips=[]
@@ -332,14 +333,9 @@ def main():
             render_source(capture,bg,b,starts_src[s0],ends_src[e0],dur-intro_dur)
             concat_videos([a,b],clip)
         elif section["name"]=="booking":
-            payment_dur=min(6.8,dur*0.60)
-            main_dur=dur-payment_dur
-            a=out/"booking_ui.mp4"; b=out/"payment_ui.mp4"
             s0,e0=section["src"]
-            render_source(capture,bg,a,starts_src[s0],ends_src[e0],main_dur)
-            render_payment(Path(args.payment_video),bg,b,payment_dur)
-            concat_videos([a,b],clip)
-            payment_start=starts_out[i]+main_dur
+            render_source(capture,bg,clip,starts_src[s0],ends_src[e0],dur)
+            payment_start=starts_out[i]+dur*0.72
         else:
             s0,e0=section["src"]
             render_source(capture,bg,clip,starts_src[s0],ends_src[e0],dur)
@@ -401,7 +397,9 @@ def main():
         "sections":[{"name":s["name"],"headline":s["headline"],"start":st,"duration":d} for s,st,d in zip(sections,starts_out,durations)],
         "visualLanguage":{
             "mainLayout":"full-mobile-viewport-below-top-subtitle-zone",
-            "subtitleZone":"top-graphite",\n            "language":"ru",\n            "cta":"Свяжитесь с VIIVERSION",
+            "subtitleZone":"top-graphite",
+            "language":"ru",
+            "cta":"Свяжитесь с VIIVERSION",
             "subtitleZoneHeightPx":TOP_ZONE_H,
             "subtitleMaxLines":2,
             "deviceFrames":["intro","outro"],
