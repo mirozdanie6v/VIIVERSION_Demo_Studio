@@ -53,7 +53,7 @@
       "action": "hover",
       "target": {
         "by": "text",
-        "value": "The Cloud",
+        "value": "Вечерний rooftop-бар с кальяном, коктейлями, видом на город и позициями для разного настроения.",
         "exact": true
       },
       "pauseAfterMs": 8500,
