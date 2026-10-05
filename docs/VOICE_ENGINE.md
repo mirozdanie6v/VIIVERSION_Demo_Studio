@@ -35,13 +35,15 @@ Subtitle / edit synchronization
 
 ## Default VIIVERSION presenter voices
 
-For Russian and English Demo Video Presenter output, the default is the premium presenter path:
+For Russian Demo Video Presenter output, the approved premium voice policy is:
 
-1. **ElevenLabs v3 locale-specific voice** — preferred whenever the corresponding Russian or English voice is configured.
-2. **Chatterbox Multilingual V3** — baked into the production container and automatically used as the premium local default for Russian and English when ElevenLabs is unavailable.
-3. **Supertonic 3** — resilient local fallback if Chatterbox cannot synthesize on a worker.
-4. **OpenAI** remains an additional configured-provider fallback when credentials are available.
-5. **Niki v3 / Leslie v3** remain the approved presenter casting references.
+1. **Niki / eleven_v3 / speed 1.06** — primary Russian female presenter and the MAX TOUR benchmark.
+2. **Leslie / eleven_v3 / speed 1.02** — approved Russian female fallback.
+3. When direct ElevenLabs/Runway synthesis is unavailable inside the render worker, the worker may synthesize from the **approved Niki reference audio** captured from MAX TOUR.
+4. **Generic/default Chatterbox Russian output is rejected and must not be auto-selected for Russian premium presentations.**
+5. Piper remains an emergency/offline fallback and is not considered premium.
+
+For English and other locales, provider routing remains locale-specific.
 
 When a scenario omits the locale, narration text is classified automatically: Cyrillic-dominant narration defaults to `ru-RU`; otherwise it defaults to `en-US`.
 
@@ -147,7 +149,7 @@ The Voice Director passes natural-language performance direction through the TTS
 
 ### Hugging Face local / free
 
-The local Hugging Face provider avoids per-character or per-request TTS API charges. Production containers enable it automatically only for the default VIIVERSION presenter in Russian and English; other locales remain opt-in unless explicitly configured.
+The local Hugging Face provider avoids per-character or per-request TTS API charges. Production containers may auto-enable it for the English presenter. Russian premium presentations are intentionally excluded from generic local auto-selection; Russian local synthesis requires an explicitly approved reference voice such as the Niki MAX TOUR reference.
 
 Install the default CPU-friendly engine:
 
@@ -168,12 +170,12 @@ HF_TTS_ENABLED=1
 HF_TTS_ENGINE=auto
 ```
 
-The approved VIIVERSION free presenter voice is **Chatterbox Multilingual V3**. In `auto` mode it is selected first when installed and when the locale is supported. **Supertonic 3** remains the lightweight zero-API-cost fallback for workers without Chatterbox and for locales such as Vietnamese that Chatterbox does not cover.
+Chatterbox Multilingual V3 remains available as a synthesis engine, but its **generic Russian voice is not an approved VIIVERSION premium presenter**. For Russian, it may be used only with an explicitly approved reference voice, currently the Niki MAX TOUR reference. **Supertonic 3** remains the lightweight zero-API-cost fallback for explicitly enabled local workflows.
 
 Available engines:
 
-- `auto` — preferred mode: Chatterbox V3 first, Supertonic 3 fallback.
-- `chatterbox` — approved primary free presenter voice for supported languages such as English, Russian and Chinese.
+- `auto` — local engine selection; for Russian premium work this does not override the approved Niki policy.
+- `chatterbox` — local synthesis engine; generic Russian output is rejected, Niki-reference synthesis is allowed.
 - `supertonic` — CPU-friendly fallback, including Vietnamese and other supported locales.
 
 Use Chatterbox:
