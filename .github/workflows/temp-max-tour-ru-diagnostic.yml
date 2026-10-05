@@ -41,7 +41,15 @@ jobs:
           if(await nav.count()>=2){await nav.nth(1).click(); await page.waitForTimeout(700);}
           await dump('CATALOG RU');
           const dalat=page.getByText('Далат «Премиум»',{exact:false}).first();
-          if(await dalat.count()){await dalat.click(); await page.waitForTimeout(900);}
+          if(await dalat.count()){
+            console.log('DALAT_PARENT=',await dalat.evaluate(el=>el.parentElement?.parentElement?.outerHTML?.slice(0,5000)));
+            await dalat.evaluate(el=>{
+              const clickable=el.closest('button,a,[onclick]') || el.parentElement?.closest('button,a,[onclick]') || el.parentElement?.parentElement;
+              clickable?.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true,view:window}));
+            });
+            await page.waitForTimeout(1200);
+          }
+          console.log('TOUR_URL=',page.url());
           await dump('TOUR RU');
           const book=page.locator('button').filter({hasText:/заброн|выбрать формат|присоедин|оформить/i}).first();
           console.log('BOOK_COUNT=',await book.count());
@@ -49,7 +57,7 @@ jobs:
             console.log('BOOK_TEXT=',await book.innerText());
             await book.scrollIntoViewIfNeeded();
             await page.waitForTimeout(300);
-            await book.click({force:true});
+            await book.evaluate(el=>el.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true,view:window})));
             await page.waitForTimeout(1200);
           }
           await dump('BOOKING RU');
