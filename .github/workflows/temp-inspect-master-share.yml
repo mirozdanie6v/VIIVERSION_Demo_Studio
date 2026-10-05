@@ -1,0 +1,21 @@
+name: Inspect temporary master share
+
+on:
+  push:
+    branches:
+      - 'feature/max-tour-russian-v9'
+    paths:
+      - '.github/workflows/temp-inspect-master-share.yml'
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Inspect share page
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -L --fail --silent --show-error 'https://firestorage.ai/ja/f/pf1BP-8uDHLb' -o /tmp/page.html
+          echo SIZE=$(wc -c </tmp/page.html)
+          grep -Eo 'https?://[^"[:space:]]+' /tmp/page.html | head -n 80 || true
+          grep -Eo 'href="[^"]+"' /tmp/page.html | head -n 120 || true
