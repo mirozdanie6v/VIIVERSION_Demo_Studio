@@ -4,7 +4,7 @@ on:
   push:
     branches: [temp-ave-accent-arm]
     paths:
-      - '.github/workflows/temp-ave-accent-render.yml'
+      - '.github/workflows/temp-ave-accent-arm.yml'
 
 permissions:
   actions: read
