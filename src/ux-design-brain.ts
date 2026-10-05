@@ -2,6 +2,11 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { chromium, type Page } from "playwright";
 import { assertSafeHttpUrl, attachNetworkGuard } from "./security.js";
+import {
+  ExpiringPromiseCache,
+  uxCacheTtlMs,
+  type CacheSource,
+} from "./ux-design-cache.js";
 
 export type UxViewportKind = "desktop" | "mobile";
 export type Rect = { x: number; y: number; width: number; height: number };
@@ -556,15 +561,73 @@ function preflightStatus(
   };
 }
 
-export async function auditUxDesign(
-  url: string,
-  options: { outputDir?: string } = {},
-): Promise<{
+type UxDesignAuditPayload = {
   preflight: UxPreflight;
   profile: DesignProfile;
   contract: DesignContract;
-}> {
-  await assertSafeHttpUrl(url);
+  screenshots?: {
+    desktop: Buffer;
+    mobile: Buffer;
+  };
+};
+
+export type UxDesignAuditResult = {
+  preflight: UxPreflight;
+  profile: DesignProfile;
+  contract: DesignContract;
+  cacheSource: CacheSource | "disabled";
+};
+
+const uxAuditCache = new ExpiringPromiseCache<UxDesignAuditPayload>();
+
+function uxCacheKey(url: string): string {
+  return [
+    "ux-design-v1",
+    VIEWPORTS.desktop.width + "x" + VIEWPORTS.desktop.height,
+    VIEWPORTS.mobile.width + "x" + VIEWPORTS.mobile.height,
+    new URL(url).toString(),
+  ].join("|");
+}
+
+async function materializeUxDesignArtifacts(
+  outputDirValue: string,
+  audit: UxDesignAuditPayload,
+): Promise<void> {
+  const outputDir = path.resolve(outputDirValue);
+  await mkdir(outputDir, { recursive: true });
+
+  const writes: Promise<unknown>[] = [
+    writeFile(
+      path.join(outputDir, "ux_preflight.json"),
+      JSON.stringify(audit.preflight, null, 2) + "\n",
+      "utf8",
+    ),
+    writeFile(
+      path.join(outputDir, "design_profile.json"),
+      JSON.stringify(audit.profile, null, 2) + "\n",
+      "utf8",
+    ),
+    writeFile(
+      path.join(outputDir, "design_contract.json"),
+      JSON.stringify(audit.contract, null, 2) + "\n",
+      "utf8",
+    ),
+  ];
+
+  if (audit.screenshots) {
+    writes.push(
+      writeFile(path.join(outputDir, "ux_desktop.png"), audit.screenshots.desktop),
+      writeFile(path.join(outputDir, "ux_mobile.png"), audit.screenshots.mobile),
+    );
+  }
+
+  await Promise.all(writes);
+}
+
+async function auditUxDesignFresh(
+  url: string,
+  captureScreenshots: boolean,
+): Promise<UxDesignAuditPayload> {
   const browser = await chromium.launch({ headless: true });
 
   try {
@@ -613,37 +676,19 @@ export async function auditUxDesign(
         },
       };
 
-      if (options.outputDir) {
-        const outputDir = path.resolve(options.outputDir);
-        await mkdir(outputDir, { recursive: true });
-        await Promise.all([
-          writeFile(
-            path.join(outputDir, "ux_preflight.json"),
-            JSON.stringify(preflight, null, 2) + "\n",
-            "utf8",
-          ),
-          writeFile(
-            path.join(outputDir, "design_profile.json"),
-            JSON.stringify(profile, null, 2) + "\n",
-            "utf8",
-          ),
-          writeFile(
-            path.join(outputDir, "design_contract.json"),
-            JSON.stringify(contract, null, 2) + "\n",
-            "utf8",
-          ),
-          desktopPage.screenshot({
-            path: path.join(outputDir, "ux_desktop.png"),
-            fullPage: true,
-          }),
-          mobilePage.screenshot({
-            path: path.join(outputDir, "ux_mobile.png"),
-            fullPage: true,
-          }),
-        ]);
-      }
+      const screenshots = captureScreenshots
+        ? {
+            desktop: await desktopPage.screenshot({ fullPage: true }),
+            mobile: await mobilePage.screenshot({ fullPage: true }),
+          }
+        : undefined;
 
-      return { preflight, profile, contract };
+      return {
+        preflight,
+        profile,
+        contract,
+        screenshots,
+      };
     } finally {
       await desktopContext.close();
       await mobileContext.close();
@@ -651,4 +696,50 @@ export async function auditUxDesign(
   } finally {
     await browser.close();
   }
+}
+
+export async function auditUxDesign(
+  url: string,
+  options: {
+    outputDir?: string;
+    cache?: boolean;
+  } = {},
+): Promise<UxDesignAuditResult> {
+  await assertSafeHttpUrl(url);
+
+  const ttlMs = uxCacheTtlMs();
+  const useCache =
+    options.cache !== false &&
+    Boolean(options.outputDir) &&
+    ttlMs > 0;
+
+  let audit: UxDesignAuditPayload;
+  let cacheSource: CacheSource | "disabled";
+
+  if (useCache) {
+    const cached = await uxAuditCache.getOrCreate(
+      uxCacheKey(url),
+      ttlMs,
+      () => auditUxDesignFresh(url, true),
+      (value) =>
+        value.preflight.status !== "BLOCKED" &&
+        Boolean(value.screenshots),
+    );
+    audit = cached.value;
+    cacheSource = cached.source;
+  } else {
+    audit = await auditUxDesignFresh(url, Boolean(options.outputDir));
+    cacheSource = "disabled";
+  }
+
+  if (options.outputDir) {
+    await materializeUxDesignArtifacts(options.outputDir, audit);
+  }
+
+  return {
+    preflight: audit.preflight,
+    profile: audit.profile,
+    contract: audit.contract,
+    cacheSource,
+  };
 }
