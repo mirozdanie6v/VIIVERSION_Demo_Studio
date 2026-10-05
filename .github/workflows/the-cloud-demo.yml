@@ -1,4 +1,4 @@
-name: The Cloud Demo Inspect
+name: The Cloud Flow Probe
 
 on:
   workflow_dispatch:
@@ -8,7 +8,7 @@ on:
       - '.github/workflows/the-cloud-demo.yml'
 
 jobs:
-  inspect:
+  probe:
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
@@ -18,49 +18,71 @@ jobs:
           node-version: 20
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - name: Inspect The Cloud flows
+      - name: Probe booking and AI
         shell: bash
         run: |
           node --input-type=module <<'NODE'
           import { chromium } from 'playwright';
           const browser = await chromium.launch({headless:true});
           const page = await browser.newPage({viewport:{width:430,height:932}});
-          const dump = async (label) => {
+          const dump=async(label)=>{
             await page.waitForTimeout(900);
             console.log('\n===== '+label+' =====');
-            console.log('URL', page.url());
-            console.log('BODY\n'+(await page.locator('body').innerText()).slice(0,22000));
-            console.log('BUTTONS', JSON.stringify(await page.getByRole('button').allTextContents()));
-            console.log('INPUTS', JSON.stringify(await page.locator('input,textarea,select').evaluateAll(els => els.map(e => ({
-              tag:e.tagName,type:e.getAttribute('type'),placeholder:e.getAttribute('placeholder'),value:e.value
+            console.log((await page.locator('body').innerText()).slice(0,18000));
+            console.log('BUTTONS',JSON.stringify(await page.getByRole('button').allTextContents()));
+            console.log('INPUTS',JSON.stringify(await page.locator('input,textarea,select').evaluateAll(els=>els.map(e=>({
+              tag:e.tagName,type:e.getAttribute('type'),name:e.getAttribute('name'),placeholder:e.getAttribute('placeholder'),value:e.value
             })))));
-            await page.screenshot({path:'the-cloud-'+label.toLowerCase().replace(/[^a-z0-9]+/g,'-')+'.png',fullPage:true});
           };
-          const home = async () => {
-            await page.goto('https://thecloud.viiversion.com/', {waitUntil:'domcontentloaded',timeout:45000});
-            await page.waitForTimeout(2500);
-          };
-          await home(); await dump('HOME');
+          await page.goto('https://thecloud.viiversion.com/',{waitUntil:'domcontentloaded',timeout:45000});
+          await page.waitForTimeout(2500);
+          await page.getByRole('button',{name:'Бронировать',exact:true}).last().click();
+          await dump('BOOK-1');
+          await page.getByRole('button',{name:'Далее',exact:true}).click();
+          await dump('BOOK-2');
 
-          for (const label of ['Позиции','Бронировать','AI']) {
-            await home();
-            const b=page.getByRole('button',{name:label,exact:true}).last();
-            if (await b.count()) {
-              await b.click();
-              await dump(label);
-            }
+          let buttons=await page.getByRole('button').allTextContents();
+          console.log('STEP2 CANDIDATES',JSON.stringify(buttons));
+          for(const n of ['Rooftop View','Sunset Line','Выбрать позицию']){
+            const b=page.getByRole('button',{name:n,exact:n!=='Выбрать позицию'}).first();
+            if(await b.count()){ try{await b.click(); break;}catch{} }
           }
+          if(await page.getByRole('button',{name:'Далее',exact:true}).count()) await page.getByRole('button',{name:'Далее',exact:true}).click();
+          await dump('BOOK-3');
 
-          await home();
-          const book=page.getByRole('button',{name:'Забронировать',exact:true}).first();
-          if(await book.count()){ await book.click(); await dump('HOME-BOOK'); }
+          buttons=await page.getByRole('button').allTextContents();
+          const excludes=new Set(['Админ','RU','EN','VI','1. Детали','2. Позиция','3. Стол','4. Данные','5. Оплата','Назад','Далее','Главная','Позиции','Бронировать','AI','Брони']);
+          const candidate=buttons.find(x=>x.trim()&&!excludes.has(x.trim()));
+          console.log('STEP3 PICK',candidate||'NONE');
+          if(candidate){
+            const b=page.getByRole('button',{name:candidate,exact:true}).first();
+            if(await b.count()) try{await b.click();}catch{}
+          }
+          if(await page.getByRole('button',{name:'Далее',exact:true}).count()) try{await page.getByRole('button',{name:'Далее',exact:true}).click();}catch{}
+          await dump('BOOK-4');
 
-          await home();
-          const ai=page.getByRole('button',{name:'Спросить AI',exact:true}).first();
-          if(await ai.count()){ await ai.click(); await dump('HOME-AI'); }
+          const inputs=page.locator('input,textarea');
+          const count=await inputs.count();
+          for(let i=0;i<count;i++){
+            const el=inputs.nth(i);
+            const type=await el.getAttribute('type');
+            if(['time','number','date','hidden'].includes(type||'')) continue;
+            const ph=(await el.getAttribute('placeholder'))||'';
+            const nm=(await el.getAttribute('name'))||'';
+            let v='Demo';
+            if(/phone|тел/i.test(ph+' '+nm)) v='+84 90 555 12 34';
+            else if(/email/i.test(ph+' '+nm)) v='demo@example.com';
+            else if(/name|имя/i.test(ph+' '+nm)) v='Анна';
+            try{await el.fill(v);}catch{}
+          }
+          if(await page.getByRole('button',{name:'Далее',exact:true}).count()) try{await page.getByRole('button',{name:'Далее',exact:true}).click();}catch{}
+          await dump('BOOK-5');
+
+          await page.goto('https://thecloud.viiversion.com/',{waitUntil:'domcontentloaded',timeout:45000});
+          await page.waitForTimeout(2000);
+          await page.getByRole('button',{name:'AI',exact:true}).last().click();
+          await page.getByRole('button',{name:'Где лучше на закат?',exact:true}).click();
+          await page.waitForTimeout(6000);
+          await dump('AI-ANSWER');
           await browser.close();
           NODE
-      - uses: actions/upload-artifact@v4
-        with:
-          name: the-cloud-deep-inspection
-          path: the-cloud-*.png
