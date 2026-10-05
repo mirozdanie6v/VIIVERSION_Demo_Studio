@@ -86,7 +86,9 @@ export function syntheticKeyframeDuration(
   scenario: DemoScenario,
 ): number {
   const pauseMs = step.pauseAfterMs ?? scenario.defaultPauseMs ?? 650;
-  return clamp(pauseMs / 1000 + 0.4, 0.6, 1.6);
+  return Number(
+    clamp(pauseMs / 1000 + 0.4, 0.6, 1.6).toFixed(3),
+  );
 }
 
 function isoAt(baseMs: number, seconds: number): string {
