@@ -1,0 +1,103 @@
+name: MAX TOUR Premium Russian Product Film
+
+on:
+  push:
+    branches:
+      - 'feature/max-tour-premium-ru-v1'
+    paths:
+      - '.github/workflows/temp-max-tour-premium-ru-v1.yml'
+      - 'examples/max-tour-premium-product-film-ru-v1.json'
+      - 'scripts/render_max_tour_premium_ru_v1.py'
+
+concurrency:
+  group: max-tour-premium-russian-v1
+  cancel-in-progress: true
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm install
+      - name: Validate engine and Russian renderer
+        run: |
+          npm run typecheck
+          npm test
+          python3 -m py_compile scripts/render_max_tour_premium_ru_v1.py
+      - name: Install browser and media tools
+        run: |
+          npx playwright install --with-deps chromium
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg fonts-dejavu-core jq
+          sudo apt-get install -y fonts-inter || true
+          python3 -m pip install --quiet pillow
+      - name: Capture Russian semantic customer journey
+        env:
+          DEMO_STUDIO_ALLOWED_HOSTS: max-tour.viiversion.com
+          ALLOW_PRIVATE_TARGETS: "false"
+        run: npm run capture -- --scenario examples/max-tour-premium-product-film-ru-v1.json
+      - name: Resolve run directory
+        id: run
+        shell: bash
+        run: echo "dir=$(find artifacts -mindepth 1 -maxdepth 1 -type d | sort | tail -n 1)" >> "$GITHUB_OUTPUT"
+      - name: Enforce visual QA
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_dir="${{ steps.run.outputs.dir }}"
+          cat "$run_dir/visual-qa.json"
+          jq -e '.summary.critical == 0' "$run_dir/visual-qa.json" >/dev/null
+      - name: Download premium Russian narration and music
+        shell: bash
+        env:
+          V_HOOK: "https://dnznrvs05pmza.cloudfront.net/text_to_speech/ee914bfd-0829-4ef3-9668-b790b0b8a007/MAX_TOUR_RU___01_intro.mp3?_jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJrZXlIYXNoIjoiOTRiNzk2ZTZkOWVmODg4ZiIsImJ1Y2tldCI6InJ1bndheS10YXNrLWFydGlmYWN0cyIsInN0YWdlIjoicHJvZCIsImV4cCI6MTc5MTMzMTY4Nn0.0mA2yhHyKOrZiFFFPWB3S0OBZ_OAEk9tOejwBwhzIp8"
+          V_CATALOG: "https://dnznrvs05pmza.cloudfront.net/text_to_speech/f47f854e-11f1-40da-89da-e519d37a232e/MAX_TOUR_RU___02_catalog.mp3?_jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJrZXlIYXNoIjoiYWJkZWY5NTUyZThiOGFjOCIsImJ1Y2tldCI6InJ1bndheS10YXNrLWFydGlmYWN0cyIsInN0YWdlIjoicHJvZCIsImV4cCI6MTc5MTMzNDM1N30._qgbazh6583iDtiRDaUK-C5QyL65aoMpytGk267WBuA"
+          V_TOUR: "https://dnznrvs05pmza.cloudfront.net/text_to_speech/5e1591d5-6cd2-4cdb-95b6-1263cf3cb932/MAX_TOUR_RU___03_tour.mp3?_jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJrZXlIYXNoIjoiYmY0MTU3NDA0YWQ4MmFhZiIsImJ1Y2tldCI6InJ1bndheS10YXNrLWFydGlmYWN0cyIsInN0YWdlIjoicHJvZCIsImV4cCI6MTc5MTMzODQzMn0.ipARCl2FTWFzMnVOpmiCU_EP8RuuDkuY65KXDH00MvQ"
+          V_AI: "https://dnznrvs05pmza.cloudfront.net/text_to_speech/788d4ee2-8745-43fb-bd61-cb09373bfd23/MAX_TOUR_RU___04_AI.mp3?_jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJrZXlIYXNoIjoiMjMwNzViMWVlODcyNWI4YSIsImJ1Y2tldCI6InJ1bndheS10YXNrLWFydGlmYWN0cyIsInN0YWdlIjoicHJvZCIsImV4cCI6MTc5MTMyMzAzOH0.FQWrAx9Gcql5qhF1zuvJyadz0kXCh8R771XcOBFXlAg"
+          V_CHOICE: "https://dnznrvs05pmza.cloudfront.net/text_to_speech/354520a0-8d20-4159-b4cc-f3941029a0db/MAX_TOUR_RU___05_choice.mp3?_jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJrZXlIYXNoIjoiZjNlNmNiNWU5ZGQ0MGJmZCIsImJ1Y2tldCI6InJ1bndheS10YXNrLWFydGlmYWN0cyIsInN0YWdlIjoicHJvZCIsImV4cCI6MTc5MTMyOTYzMH0.yYuZB-ychwLTtgn3H-e0BkkqTyxvB5X_LXC--qIJiME"
+          V_BOOKING: "https://dnznrvs05pmza.cloudfront.net/text_to_speech/8c39a8aa-4df1-4f1e-9520-682a99db3060/MAX_TOUR_RU___06_booking.mp3?_jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJrZXlIYXNoIjoiNjhhZjQwMWI3OGJlMDhmMiIsImJ1Y2tldCI6InJ1bndheS10YXNrLWFydGlmYWN0cyIsInN0YWdlIjoicHJvZCIsImV4cCI6MTc5MTMwNzY3NX0.LrZmkgeI8Y8_AZ-5IVw_5RWaED_fPhvNjrRxxftX5C8"
+          V_CTA: "https://dnznrvs05pmza.cloudfront.net/text_to_speech/2580ffcf-401b-4742-a681-6ff73c64f8ed/MAX_TOUR_RU___07_CTA.mp3?_jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJrZXlIYXNoIjoiODdhY2I3YTM5ZTIwYzVjZCIsImJ1Y2tldCI6InJ1bndheS10YXNrLWFydGlmYWN0cyIsInN0YWdlIjoicHJvZCIsImV4cCI6MTc5MTM2NjU2M30.6-nXEXpFsgXIU_43X-0GQMsDus4wvVL6SHEB7SAyMz0"
+          MUSIC: "https://dnznrvs05pmza.cloudfront.net/lyria3-pro/d4a20388-514d-4826-a5a2-dfdb4da244b7/MAX_TOUR_RU___Premium_Product_Film_Music.mp3?_jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJrZXlIYXNoIjoiZDNjYzI1ZThkYjIyNDA1MSIsImJ1Y2tldCI6InJ1bndheS10YXNrLWFydGlmYWN0cyIsInN0YWdlIjoicHJvZCIsImV4cCI6MTc5MTMzMDAyNH0.n6VygIRKPPyyDR_1RfDN4vr0fQfqkzTVD2Eas27pa3Y"
+        run: |
+          set -euo pipefail
+          d=artifacts/premium-voices-ru
+          mkdir -p "$d"
+          curl -L --fail --retry 3 "$V_HOOK" -o "$d/hook.mp3"
+          curl -L --fail --retry 3 "$V_CATALOG" -o "$d/catalog.mp3"
+          curl -L --fail --retry 3 "$V_TOUR" -o "$d/tour.mp3"
+          curl -L --fail --retry 3 "$V_AI" -o "$d/ai.mp3"
+          curl -L --fail --retry 3 "$V_CHOICE" -o "$d/choice.mp3"
+          curl -L --fail --retry 3 "$V_BOOKING" -o "$d/booking.mp3"
+          curl -L --fail --retry 3 "$V_CTA" -o "$d/cta.mp3"
+          curl -L --fail --retry 3 "$MUSIC" -o artifacts/premium-music-ru.mp3
+          for f in "$d"/*.mp3 artifacts/premium-music-ru.mp3; do test -s "$f"; ffprobe -v error -show_entries format=duration -of csv=p=0 "$f"; done
+      - name: Render premium Russian product film
+        run: |
+          python3 scripts/render_max_tour_premium_ru_v1.py \
+            --run "${{ steps.run.outputs.dir }}" \
+            --voices artifacts/premium-voices-ru \
+            --music artifacts/premium-music-ru.mp3 \
+            --cta-voice artifacts/premium-voices-ru/cta.mp3 \
+            --out artifacts/max-tour-premium-ru-v1
+      - name: Verify Russian final
+        shell: bash
+        run: |
+          set -euo pipefail
+          f=artifacts/max-tour-premium-ru-v1/MAX_TOUR_Premium_Product_Film_RU_FINAL.mp4
+          test -s "$f"
+          duration=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$f")
+          echo "FINAL_DURATION=$duration"
+          awk -v d="$duration" 'BEGIN { exit !(d >= 62 && d <= 85) }'
+          jq -e '.visualLanguage.language == "ru"' artifacts/max-tour-premium-ru-v1/render-report.json >/dev/null
+          jq -e '.visualLanguage.cta == "Свяжитесь с VIIVERSION"' artifacts/max-tour-premium-ru-v1/render-report.json >/dev/null
+          ffprobe -v error -show_entries stream=codec_type,width,height -of json "$f"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: max-tour-premium-russian-final
+          path: artifacts/max-tour-premium-ru-v1/
+          if-no-files-found: error
