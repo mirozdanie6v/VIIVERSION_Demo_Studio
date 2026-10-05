@@ -95,6 +95,7 @@ export type DemoJob = {
   storyboardPath?: string;
   runDir?: string;
   artifactPath?: string;
+  checkpoint?: DemoJobCheckpoint;
   error?: string;
 };
 
@@ -128,6 +129,7 @@ export type DemoJobRecovery = {
   attempt: number;
   maxAttempts: number;
   history: DemoJobEvent[];
+  checkpoint?: DemoJobCheckpoint;
 };
 
 class PermanentJobError extends Error {}
