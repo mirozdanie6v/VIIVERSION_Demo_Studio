@@ -171,24 +171,24 @@ jobs:
       - name: Download stable v6 audio master
         uses: actions/download-artifact@v4
         with:
-          name: max-tour-premium-product-film-v7-final
+          name: max-tour-premium-product-film-v6-final
           path: artifacts/prior-v6
           github-token: ${{ github.token }}
-          run-id: 37224098345
+          run-id: 37234952126
 
       - name: Verify stable audio master
         shell: bash
         run: |
           set -euo pipefail
-          test -s artifacts/prior-v6/MAX_TOUR_Premium_Product_Film_v7_FINAL.mp4
+          test -s artifacts/prior-v6/MAX_TOUR_Premium_Product_Film_v6_FINAL.mp4
           test -s artifacts/prior-v6/render-report.json
-          ffprobe -v error -show_entries stream=codec_type -of csv=p=0 artifacts/prior-v6/MAX_TOUR_Premium_Product_Film_v7_FINAL.mp4 | grep -q audio
+          ffprobe -v error -show_entries stream=codec_type -of csv=p=0 artifacts/prior-v6/MAX_TOUR_Premium_Product_Film_v6_FINAL.mp4 | grep -q audio
 
       - name: Render premium product film
         run: |
           python3 scripts/render_max_tour_premium_v7.py \
             --run "${{ steps.run.outputs.dir }}" \
-            --audio-master artifacts/prior-v6/MAX_TOUR_Premium_Product_Film_v7_FINAL.mp4 \
+            --audio-master artifacts/prior-v6/MAX_TOUR_Premium_Product_Film_v6_FINAL.mp4 \
             --timing-report artifacts/prior-v6/render-report.json \
             --payment-video "${{ steps.payment.outputs.file }}" \
             --out artifacts/max-tour-premium-v7
