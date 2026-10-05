@@ -286,7 +286,7 @@ export async function runScenario(
   const browser = lease.browser;
   const context = await browser.newContext({
     viewport,
-    ...(hybrid ? {} : { recordVideo: { dir: runDir, size: viewport } }),
+    recordVideo: { dir: runDir, size: viewport },
   }).catch(async (error) => {
     await lease.release();
     throw error;
@@ -398,12 +398,14 @@ export async function runScenario(
     for (let index = 0; index < scenario.steps.length; index += 1) {
       const step = scenario.steps[index];
       const stepStartedAt = new Date().toISOString();
+      const planItem = hybrid ? hybridPlan[index] : undefined;
+      const stepScenario =
+        hybrid && planItem?.mode !== "realtime" ? executionScenario : scenario;
 
       try {
-        await applyLocaleOverlayNow(page, executionScenario).catch(() => undefined);
-        const execution = await runStep(page, step, executionScenario);
+        await applyLocaleOverlayNow(page, stepScenario).catch(() => undefined);
+        const execution = await runStep(page, step, stepScenario);
 
-        const planItem = hybrid ? hybridPlan[index] : undefined;
         const pause = hybrid
           ? resolvedStepPauseMs(step, scenario, planItem)
           : step.pauseAfterMs ?? scenario.defaultPauseMs ?? 650;
@@ -412,12 +414,12 @@ export async function runScenario(
         }
 
         if (execution.camera) {
-          await resetPresentation(page, executionScenario.presentation);
+          await resetPresentation(page, stepScenario.presentation);
         }
 
-        await applyLocaleOverlayNow(page, executionScenario).catch(() => undefined);
+        await applyLocaleOverlayNow(page, stepScenario).catch(() => undefined);
         await page.waitForTimeout(40);
-        await applyLocaleOverlayNow(page, executionScenario).catch(() => undefined);
+        await applyLocaleOverlayNow(page, stepScenario).catch(() => undefined);
 
         if (hybrid && planItem) {
           const keyframe = await captureHybridKeyframe(page, runDir, planItem);
@@ -435,7 +437,7 @@ export async function runScenario(
           recovery: execution.recovery,
         });
       } catch (error) {
-        await resetPresentation(page, executionScenario.presentation).catch(() => undefined);
+        await resetPresentation(page, stepScenario.presentation).catch(() => undefined);
 
         timeline.push({
           index,
@@ -475,6 +477,7 @@ export async function runScenario(
         hybridKeyframes,
         startedAt,
         finishedAt,
+        videoPath,
       )
     : undefined;
 
