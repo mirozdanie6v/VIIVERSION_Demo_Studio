@@ -1,9 +1,11 @@
+import { DEMO_STUDIO_VERSION } from "./version.js";
+
 export function buildOpenApiDocument(baseUrl = process.env.PUBLIC_BASE_URL ?? "http://localhost:8787") {
   return {
     openapi: "3.1.0",
     info: {
       title: "VIIVERSION Demo Studio API",
-      version: "0.13.0",
+      version: DEMO_STUDIO_VERSION,
       description:
         "Generate polished presentation videos from web applications using AI-directed browser automation.",
     },
