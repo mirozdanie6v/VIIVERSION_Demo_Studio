@@ -2,6 +2,8 @@ export type CaptureWithVoiceoverOptions<TCapture> = {
   capture: () => Promise<TCapture>;
   voiceover?: () => Promise<string>;
   parallel?: boolean;
+  onCapture?: (capture: TCapture) => Promise<void> | void;
+  onVoiceover?: (voiceoverPath: string) => Promise<void> | void;
 };
 
 export type CaptureWithVoiceoverResult<TCapture> = {
@@ -20,12 +22,16 @@ export async function runCaptureWithOptionalVoiceover<TCapture>(
   options: CaptureWithVoiceoverOptions<TCapture>,
 ): Promise<CaptureWithVoiceoverResult<TCapture>> {
   if (!options.voiceover) {
-    return { capture: await options.capture() };
+    const capture = await options.capture();
+    await options.onCapture?.(capture);
+    return { capture };
   }
 
   if (options.parallel === false) {
     const capture = await options.capture();
+    await options.onCapture?.(capture);
     const voiceoverPath = await options.voiceover();
+    await options.onVoiceover?.(voiceoverPath);
     return { capture, voiceoverPath };
   }
 
@@ -35,6 +41,13 @@ export async function runCaptureWithOptionalVoiceover<TCapture>(
     captureTask,
     voiceoverTask,
   ]);
+
+  if (captureResult.status === "fulfilled") {
+    await options.onCapture?.(captureResult.value);
+  }
+  if (voiceoverResult.status === "fulfilled") {
+    await options.onVoiceover?.(voiceoverResult.value);
+  }
 
   if (captureResult.status === "rejected") {
     throw captureResult.reason;

@@ -106,3 +106,24 @@ test("sequential fallback preserves capture-then-voice ordering", async () => {
     voiceoverPath: "/tmp/voice.mp3",
   });
 });
+
+
+test("successful capture hook runs before a parallel voice failure is propagated", async () => {
+  const events: string[] = [];
+
+  const result = runCaptureWithOptionalVoiceover({
+    capture: async () => "capture-ok",
+    voiceover: async () => {
+      throw new Error("voice failed");
+    },
+    onCapture: async (value) => {
+      events.push("capture:" + value);
+    },
+    onVoiceover: async () => {
+      events.push("voice-hook");
+    },
+  });
+
+  await assert.rejects(result, /voice failed/);
+  assert.deepEqual(events, ["capture:capture-ok"]);
+});

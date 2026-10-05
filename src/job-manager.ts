@@ -11,7 +11,16 @@ import {
 } from "./persistence.js";
 import { runScenario } from "./runner.js";
 import { assertSafeHttpUrl } from "./security.js";
-import type { DemoScenario } from "./types.js";
+import type { DemoScenario, RunResult } from "./types.js";
+import {
+  persistCaptureCheckpoint,
+  persistScenarioCheckpoint,
+  persistVoiceoverCheckpoint,
+  restoreCaptureCheckpoint,
+  restoreScenarioCheckpoint,
+  restoreVoiceoverCheckpoint,
+  type DemoJobCheckpoint,
+} from "./checkpoints.js";
 import {
   parallelVoiceoverEnabled,
   runCaptureWithOptionalVoiceover,
@@ -86,6 +95,7 @@ export type DemoJob = {
   storyboardPath?: string;
   runDir?: string;
   artifactPath?: string;
+  checkpoint?: DemoJobCheckpoint;
   error?: string;
 };
 
@@ -119,6 +129,7 @@ export type DemoJobRecovery = {
   attempt: number;
   maxAttempts: number;
   history: DemoJobEvent[];
+  checkpoint?: DemoJobCheckpoint;
 };
 
 class PermanentJobError extends Error {}
@@ -315,6 +326,7 @@ export class DemoJobManager {
       maxAttempts: recovery.maxAttempts,
       retryReason: reason,
       history: recovery.history.slice(-20),
+      checkpoint: recovery.checkpoint,
     };
     this.pushEvent(job);
 
@@ -382,6 +394,7 @@ export class DemoJobManager {
       | "storyboardPath"
       | "runDir"
       | "artifactPath"
+      | "checkpoint"
       | "error"
       | "completedAt"
     >>,
@@ -448,6 +461,7 @@ export class DemoJobManager {
       attempt: job.attempt,
       maxAttempts: job.maxAttempts,
       history: job.history.slice(-20),
+      checkpoint: job.checkpoint,
     };
   }
 
@@ -543,111 +557,143 @@ export class DemoJobManager {
   }
 
   private async executeAttempt(job: DemoJob): Promise<void> {
-    await this.beginStage(job, {
-      status: "preflighting",
-      stage: "preflight",
-      stageLabel: "UX & design preflight",
-      progress: 5,
-      message:
-        "Checking desktop, mobile, accessibility and visual-system constraints.",
-      timeoutSeconds: 150,
-    });
-
-    const uxDesign = await auditUxDesign(job.request.url, {
-      outputDir: path.join(this.rootDir, job.id),
-    });
-
-    if (uxDesign.preflight.status === "BLOCKED") {
-      throw new PermanentJobError(
-        "UX/Design preflight blocked generation: " +
-          uxDesign.preflight.findings
-            .map((finding) => finding.message)
-            .join(" "),
-      );
-    }
-
-    await this.update(job, {
-      progress: 14,
-      message:
-        "UX & design preflight passed (" +
-        uxDesign.cacheSource +
-        ").",
-    });
-
     const jobDir = path.join(this.rootDir, job.id);
-    let scenario: DemoScenario;
-    let storyboard: string;
-    let snapshot: unknown;
-
-    if (job.request.scenario) {
-      scenario = job.request.scenario;
-      storyboard = buildStoryboard(scenario);
-    } else {
-      await this.beginStage(job, {
-        status: "directing",
-        stage: "director",
-        stageLabel: "AI Director",
-        progress: 16,
-        message:
-          "Inspecting the application and building the presentation storyboard.",
-        timeoutSeconds: 180,
-      });
-
-      const directed = await planDemo(
-        job.request.url,
-        job.request.goal ?? "",
-      );
-      scenario = directed.scenario;
-      storyboard = directed.storyboard;
-      snapshot = directed.snapshot;
-
-      await this.update(job, {
-        progress: 26,
-        message: "Storyboard is ready.",
-      });
-    }
-
     const scenarioPath = path.join(jobDir, "scenario.json");
     const storyboardPath = path.join(jobDir, "storyboard.md");
-    const writes: Promise<unknown>[] = [
-      writeFile(
-        scenarioPath,
-        JSON.stringify(scenario, null, 2) + "\n",
-        "utf8",
-      ),
-      writeFile(storyboardPath, storyboard + "\n", "utf8"),
-    ];
 
-    if (snapshot) {
-      writes.push(
+    let scenario: DemoScenario | undefined;
+    let storyboard: string | undefined;
+    let snapshot: unknown;
+
+    if (job.checkpoint?.version === 1 && job.checkpoint.scenarioReady) {
+      const restored = await restoreScenarioCheckpoint(job.id, jobDir);
+      if (restored) {
+        scenario = restored.scenario;
+        storyboard = restored.storyboard;
+        await this.beginStage(job, {
+          status: "directing",
+          stage: "director",
+          stageLabel: "Checkpoint recovery",
+          progress: 26,
+          message: "Recovered a validated scenario checkpoint.",
+          timeoutSeconds: 60,
+        });
+        await this.update(job, {
+          scenarioPath,
+          storyboardPath,
+          checkpoint: job.checkpoint,
+        });
+      } else {
+        job.checkpoint = undefined;
+        await this.persistRecovery(job);
+      }
+    }
+
+    if (!scenario || !storyboard) {
+      await this.beginStage(job, {
+        status: "preflighting",
+        stage: "preflight",
+        stageLabel: "UX & design preflight",
+        progress: 5,
+        message:
+          "Checking desktop, mobile, accessibility and visual-system constraints.",
+        timeoutSeconds: 150,
+      });
+
+      const uxDesign = await auditUxDesign(job.request.url, {
+        outputDir: jobDir,
+      });
+
+      if (uxDesign.preflight.status === "BLOCKED") {
+        throw new PermanentJobError(
+          "UX/Design preflight blocked generation: " +
+            uxDesign.preflight.findings
+              .map((finding) => finding.message)
+              .join(" "),
+        );
+      }
+
+      await this.update(job, {
+        progress: 14,
+        message:
+          "UX & design preflight passed (" +
+          uxDesign.cacheSource +
+          ").",
+      });
+
+      if (job.request.scenario) {
+        scenario = job.request.scenario;
+        storyboard = buildStoryboard(scenario);
+      } else {
+        await this.beginStage(job, {
+          status: "directing",
+          stage: "director",
+          stageLabel: "AI Director",
+          progress: 16,
+          message:
+            "Inspecting the application and building the presentation storyboard.",
+          timeoutSeconds: 180,
+        });
+
+        const directed = await planDemo(
+          job.request.url,
+          job.request.goal ?? "",
+        );
+        scenario = directed.scenario;
+        storyboard = directed.storyboard;
+        snapshot = directed.snapshot;
+
+        await this.update(job, {
+          progress: 26,
+          message: "Storyboard is ready.",
+        });
+      }
+
+      const writes: Promise<unknown>[] = [
         writeFile(
-          path.join(jobDir, "snapshot.json"),
-          JSON.stringify(snapshot, null, 2) + "\n",
+          scenarioPath,
+          JSON.stringify(scenario, null, 2) + "\n",
           "utf8",
         ),
-      );
-    }
-    await Promise.all(writes);
+        writeFile(storyboardPath, storyboard + "\n", "utf8"),
+      ];
 
-    const captureTimeout = Math.max(300, scenario.steps.length * 40);
-    await this.beginStage(job, {
-      status: "capturing",
-      stage: "capture",
-      stageLabel: "Browser capture",
-      progress: 30,
-      message: "Executing and recording the customer journey.",
-      timeoutSeconds: captureTimeout,
-    });
-    await this.update(job, {
-      scenarioPath,
-      storyboardPath,
-    });
+      if (snapshot) {
+        writes.push(
+          writeFile(
+            path.join(jobDir, "snapshot.json"),
+            JSON.stringify(snapshot, null, 2) + "\n",
+            "utf8",
+          ),
+        );
+      }
+      await Promise.all(writes);
+
+      await persistScenarioCheckpoint(job.id, jobDir);
+      job.checkpoint = {
+        version: 1,
+        scenarioReady: true,
+      };
+      await this.update(job, {
+        scenarioPath,
+        storyboardPath,
+        checkpoint: job.checkpoint,
+        progress: Math.max(job.progress, 28),
+        message: "Scenario checkpoint saved.",
+      });
+      await this.persistRecovery(job);
+    }
+
+    const activeScenario = scenario;
+    if (!activeScenario) {
+      throw new Error("Scenario checkpoint resolution failed.");
+    }
 
     let narration: string | undefined;
     let plannedVoiceoverPath: string | undefined;
 
     if (job.request.voiceover) {
-      narration = narrationFor(scenario);
+      narration = narrationFor(activeScenario);
       if (!narration) {
         throw new PermanentJobError(
           "Voiceover requested, but the scenario contains no narration.",
@@ -656,25 +702,155 @@ export class DemoJobManager {
       plannedVoiceoverPath = path.join(jobDir, "voiceover.mp3");
     }
 
-    const media = await runCaptureWithOptionalVoiceover({
-      parallel: parallelVoiceoverEnabled(),
-      capture: () =>
-        runScenario(scenario, {
-          artifactsRoot: path.join(jobDir, "captures"),
-        }),
-      voiceover:
-        narration && plannedVoiceoverPath
-          ? async () => {
-              await createVoiceover(narration, plannedVoiceoverPath, {
-                voice: job.request.voice,
-              });
-              return plannedVoiceoverPath;
-            }
-          : undefined,
-    });
+    let restoredCapture: RunResult | undefined;
+    let restoredVoiceoverPath: string | undefined;
 
-    const capture = media.capture;
-    const voiceoverPath = media.voiceoverPath;
+    if (job.checkpoint?.captureRunId) {
+      restoredCapture = await restoreCaptureCheckpoint(
+        job.id,
+        jobDir,
+        job.checkpoint.captureRunId,
+      );
+      if (!restoredCapture) {
+        job.checkpoint = {
+          version: 1,
+          scenarioReady: true,
+          voiceoverReady: job.checkpoint.voiceoverReady,
+        };
+        await this.persistRecovery(job);
+      }
+    }
+
+    if (
+      job.request.voiceover &&
+      plannedVoiceoverPath &&
+      job.checkpoint?.voiceoverReady
+    ) {
+      restoredVoiceoverPath = await restoreVoiceoverCheckpoint(
+        job.id,
+        plannedVoiceoverPath,
+      );
+      if (!restoredVoiceoverPath) {
+        job.checkpoint = {
+          version: 1,
+          scenarioReady: true,
+          captureRunId: job.checkpoint.captureRunId,
+        };
+        await this.persistRecovery(job);
+      }
+    }
+
+    const needsCapture = !restoredCapture;
+    const needsVoiceover =
+      Boolean(job.request.voiceover) && !restoredVoiceoverPath;
+
+    if (needsCapture) {
+      const captureTimeout = Math.max(
+        300,
+        activeScenario.steps.length * 40,
+      );
+      await this.beginStage(job, {
+        status: "capturing",
+        stage: "capture",
+        stageLabel: "Browser capture",
+        progress: 30,
+        message: "Executing and recording the customer journey.",
+        timeoutSeconds: captureTimeout,
+      });
+    } else if (needsVoiceover) {
+      await this.beginStage(job, {
+        status: "voicing",
+        stage: "voiceover",
+        stageLabel: "Narration recovery",
+        progress: 64,
+        message:
+          "Browser capture restored. Generating only the missing narration.",
+        timeoutSeconds: 180,
+      });
+    } else {
+      await this.update(job, {
+        progress: job.request.voiceover ? 75 : 62,
+        message: job.request.voiceover
+          ? "Browser capture and narration restored from checkpoints."
+          : "Browser capture restored from checkpoint.",
+        runDir: restoredCapture?.runDir,
+      });
+    }
+
+    let capture = restoredCapture;
+    let voiceoverPath = restoredVoiceoverPath;
+
+    if (needsCapture || needsVoiceover) {
+      const captureWasRestored = Boolean(restoredCapture);
+      const voiceoverWasRestored = Boolean(restoredVoiceoverPath);
+
+      const media = await runCaptureWithOptionalVoiceover({
+        parallel: parallelVoiceoverEnabled(),
+        capture: restoredCapture
+          ? async () => restoredCapture as RunResult
+          : () =>
+              runScenario(activeScenario, {
+                artifactsRoot: path.join(jobDir, "captures"),
+              }),
+        voiceover:
+          narration && plannedVoiceoverPath
+            ? restoredVoiceoverPath
+              ? async () => restoredVoiceoverPath as string
+              : async () => {
+                  await createVoiceover(
+                    narration as string,
+                    plannedVoiceoverPath as string,
+                    {
+                      voice: job.request.voice,
+                    },
+                  );
+                  return plannedVoiceoverPath as string;
+                }
+            : undefined,
+        onCapture: captureWasRestored
+          ? undefined
+          : async (result) => {
+              await persistCaptureCheckpoint(job.id, result);
+              job.checkpoint = {
+                ...(job.checkpoint ?? { version: 1 }),
+                version: 1,
+                scenarioReady: true,
+                captureRunId: result.runId,
+              };
+              await this.update(job, {
+                checkpoint: job.checkpoint,
+                runDir: result.runDir,
+                progress: Math.max(job.progress, 62),
+                message: "Browser capture checkpoint saved.",
+              });
+              await this.persistRecovery(job);
+            },
+        onVoiceover: voiceoverWasRestored
+          ? undefined
+          : async (resultPath) => {
+              await persistVoiceoverCheckpoint(job.id, resultPath);
+              job.checkpoint = {
+                ...(job.checkpoint ?? { version: 1 }),
+                version: 1,
+                scenarioReady: true,
+                voiceoverReady: true,
+              };
+              await this.update(job, {
+                checkpoint: job.checkpoint,
+                progress: Math.max(job.progress, 70),
+                message: "Narration checkpoint saved.",
+              });
+              await this.persistRecovery(job);
+            },
+      });
+
+      capture = media.capture;
+      voiceoverPath = media.voiceoverPath;
+    }
+
+    if (!capture) {
+      throw new Error("Capture stage did not produce a usable recording.");
+    }
 
     await this.update(job, {
       progress: voiceoverPath ? 75 : 62,
@@ -682,8 +858,8 @@ export class DemoJobManager {
         ? "Browser capture and narration are complete."
         : "Browser capture is complete.",
       runDir: capture.runDir,
+      checkpoint: job.checkpoint,
     });
-
 
     await this.beginStage(job, {
       status: "rendering",

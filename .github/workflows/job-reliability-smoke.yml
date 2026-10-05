@@ -73,6 +73,22 @@ jobs:
           cat /tmp/reliability-fixture.log
           exit 1
 
+      - name: Install fail-once FFmpeg wrapper
+        shell: bash
+        run: |
+          cat > /tmp/ffmpeg-fail-once <<'EOF'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          marker=/tmp/demo-studio-render-failed-once
+          if [ ! -f "$marker" ]; then
+            touch "$marker"
+            echo "intentional one-time render failure for checkpoint resume smoke" >&2
+            exit 97
+          fi
+          exec /usr/bin/ffmpeg "$@"
+          EOF
+          chmod +x /tmp/ffmpeg-fail-once
+
       - name: Start Demo Studio API
         shell: bash
         env:
@@ -86,6 +102,7 @@ jobs:
           DEMO_STUDIO_MAX_CONCURRENT_JOBS: "1"
           DEMO_STUDIO_MAX_JOB_ATTEMPTS: "3"
           DEMO_STUDIO_HEARTBEAT_MS: "500"
+          FFMPEG_PATH: /tmp/ffmpeg-fail-once
         run: |
           npm run serve > /tmp/reliability-api.log 2>&1 &
           for i in {1..60}; do
@@ -176,7 +193,15 @@ jobs:
 
           test "$completed" -eq 1
           test "$observed_progress" -eq 1
-          jq -e '.progress == 100 and .artifactReady == true' /tmp/reliability-status.json >/dev/null
+          jq -e '
+            .progress == 100 and
+            .artifactReady == true and
+            .attempt == 2 and
+            ([.history[].status] | index("retrying") != null)
+          ' /tmp/reliability-status.json >/dev/null
+
+          capture_count=$(find "/tmp/demo-studio-reliability/${job_id}/captures" -mindepth 1 -maxdepth 1 -type d | wc -l)
+          test "$capture_count" -eq 1
 
           curl -fsS "http://127.0.0.1:8788/v1/jobs/${job_id}/artifact" -o /tmp/reliability-success.mp4
           test "$(stat -c%s /tmp/reliability-success.mp4)" -gt 10000
