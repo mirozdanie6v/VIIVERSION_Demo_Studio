@@ -109,7 +109,7 @@ export class HuggingFaceVoiceProvider implements VoiceProvider {
     const premiumPresenterDefault =
       truthy(env.HF_TTS_PREMIUM_DEFAULT) &&
       persona === "viiversion-presenter" &&
-      (language === "ru" || language === "en");
+      language === "en";
 
     return (
       request.provider === "huggingface" ||
