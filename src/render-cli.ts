@@ -87,8 +87,8 @@ async function main() {
     outro: !has("--no-outro"),
     introSeconds: arg("--intro-seconds") ? Number(arg("--intro-seconds")) : undefined,
     outroSeconds: arg("--outro-seconds") ? Number(arg("--outro-seconds")) : undefined,
-    hybrid: has("--hybrid"),
-    hybridStrict: has("--hybrid-strict"),
+    hybrid: has("--hybrid") ? true : undefined,
+    hybridStrict: has("--hybrid-strict") ? true : undefined,
   });
 
   console.log(output);
