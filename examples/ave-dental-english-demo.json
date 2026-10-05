@@ -1,0 +1,402 @@
+{
+  "name": "AVE Dental Clinic — English Mini App Demo",
+  "baseUrl": "https://ave-dental-miniapp.vercel.app",
+  "viewport": {
+    "width": 430,
+    "height": 932
+  },
+  "defaultPauseMs": 620,
+  "presentation": {
+    "smartZoom": {
+      "scale": 1.16,
+      "mobileScale": 1.1,
+      "transitionMs": 430,
+      "settleMs": 190
+    },
+    "cursor": {
+      "size": 16,
+      "fill": "rgba(255,255,255,0.96)",
+      "border": "rgba(32,33,29,0.72)",
+      "borderWidth": 2,
+      "shadow": "0 5px 18px rgba(0,0,0,0.22)"
+    },
+    "focusRing": {
+      "enabled": true,
+      "color": "rgba(104,120,60,0.40)",
+      "width": 2,
+      "padding": 8
+    },
+    "clickRipple": {
+      "enabled": true,
+      "color": "rgba(104,120,60,0.50)",
+      "size": 52,
+      "durationMs": 380
+    }
+  },
+  "steps": [
+    {
+      "action": "goto",
+      "url": "/",
+      "label": "Open AVE Dental Clinic"
+    },
+    {
+      "action": "click",
+      "target": {
+        "by": "role",
+        "value": "button",
+        "name": "EN",
+        "exact": true
+      },
+      "label": "Switch interface to English"
+    },
+    {
+      "action": "waitFor",
+      "target": {
+        "by": "text",
+        "value": "Modern dentistry in Nha Trang",
+        "exact": true
+      },
+      "state": "visible",
+      "timeoutMs": 20000
+    },
+    {
+      "action": "hover",
+      "target": {
+        "by": "role",
+        "value": "heading",
+        "name": "Modern dentistry in Nha Trang"
+      },
+      "pauseAfterMs": 8500,
+      "narration": "AVE Dental Clinic gives patients a clear mobile experience. From the home screen, services, prices, booking, specialists and the AI assistant are all available in one place."
+    },
+    {
+      "action": "click",
+      "target": {
+        "by": "role",
+        "value": "button",
+        "name": "Services & prices",
+        "exact": true
+      },
+      "label": "Open services and prices"
+    },
+    {
+      "action": "waitFor",
+      "target": {
+        "by": "text",
+        "value": "Choose a category, open its procedures and see pricing.",
+        "exact": true
+      },
+      "state": "visible",
+      "timeoutMs": 15000
+    },
+    {
+      "action": "hover",
+      "target": {
+        "by": "text",
+        "value": "Philips Zoom 4",
+        "exact": true
+      },
+      "pauseAfterMs": 7800,
+      "narration": "The service catalog shows real treatment categories and transparent pricing. Patients can understand the expected cost before they contact the clinic."
+    },
+    {
+      "action": "click",
+      "target": {
+        "by": "role",
+        "value": "button",
+        "name": "Professional hygiene",
+        "exact": false
+      },
+      "label": "Open professional hygiene"
+    },
+    {
+      "action": "waitFor",
+      "target": {
+        "by": "text",
+        "value": "Professional dental cleaning",
+        "exact": true
+      },
+      "state": "visible",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "hover",
+      "target": {
+        "by": "text",
+        "value": "1,350,000–1,550,000 VND",
+        "exact": true
+      },
+      "pauseAfterMs": 6500,
+      "narration": "A service page combines the procedure description and price range, so the key information stays inside the Mini App."
+    },
+    {
+      "action": "click",
+      "target": {
+        "by": "role",
+        "value": "button",
+        "name": "Book",
+        "exact": true
+      },
+      "label": "Start booking"
+    },
+    {
+      "action": "waitFor",
+      "target": {
+        "by": "text",
+        "value": "Choose a service",
+        "exact": true
+      },
+      "state": "visible",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "click",
+      "target": {
+        "by": "css",
+        "value": "button:has-text(\"Initial consultation\"):visible"
+      },
+      "label": "Choose initial consultation"
+    },
+    {
+      "action": "hover",
+      "target": {
+        "by": "text",
+        "value": "Free",
+        "exact": true
+      },
+      "pauseAfterMs": 6500,
+      "narration": "For a first visit, we choose the initial consultation. The price is visible immediately and the selected option stays clearly highlighted."
+    },
+    {
+      "action": "click",
+      "target": {
+        "by": "role",
+        "value": "button",
+        "name": "Continue",
+        "exact": true
+      },
+      "label": "Continue to specialist"
+    },
+    {
+      "action": "click",
+      "target": {
+        "by": "css",
+        "value": "button:has-text(\"Restorative dentist\"):visible"
+      },
+      "label": "Choose restorative dentist"
+    },
+    {
+      "action": "hover",
+      "target": {
+        "by": "text",
+        "value": "Caries, root canal treatment and restorations",
+        "exact": true
+      },
+      "pauseAfterMs": 6500,
+      "narration": "Next, the patient chooses the appropriate specialist. The role and treatment focus explain why the dentist matches the selected service."
+    },
+    {
+      "action": "click",
+      "target": {
+        "by": "role",
+        "value": "button",
+        "name": "Continue",
+        "exact": true
+      },
+      "label": "Continue to date and time"
+    },
+    {
+      "action": "click",
+      "target": {
+        "by": "css",
+        "value": ".date-grid button:nth-child(2)"
+      },
+      "label": "Choose date"
+    },
+    {
+      "action": "click",
+      "target": {
+        "by": "role",
+        "value": "button",
+        "name": "11:00",
+        "exact": true
+      },
+      "label": "Choose time"
+    },
+    {
+      "action": "hover",
+      "target": {
+        "by": "text",
+        "value": "Date and time",
+        "exact": true
+      },
+      "pauseAfterMs": 6100,
+      "narration": "Date and time are selected in the same flow. Each step is short and makes the next action obvious."
+    },
+    {
+      "action": "click",
+      "target": {
+        "by": "role",
+        "value": "button",
+        "name": "Continue",
+        "exact": true
+      },
+      "label": "Continue to contact details"
+    },
+    {
+      "action": "fill",
+      "target": {
+        "by": "css",
+        "value": "input[name=\"name\"]"
+      },
+      "value": "Anna",
+      "label": "Enter patient name"
+    },
+    {
+      "action": "fill",
+      "target": {
+        "by": "css",
+        "value": "input[name=\"phone\"]"
+      },
+      "value": "+84 90 555 12 34",
+      "label": "Enter phone number"
+    },
+    {
+      "action": "hover",
+      "target": {
+        "by": "text",
+        "value": "Your details",
+        "exact": true
+      },
+      "pauseAfterMs": 7000,
+      "narration": "Contact details are entered once. Inside Telegram, the patient identity can be detected automatically, while the phone number remains an additional contact channel."
+    },
+    {
+      "action": "click",
+      "target": {
+        "by": "role",
+        "value": "button",
+        "name": "Continue",
+        "exact": true
+      },
+      "label": "Review appointment"
+    },
+    {
+      "action": "waitFor",
+      "target": {
+        "by": "text",
+        "value": "Review appointment",
+        "exact": true
+      },
+      "state": "visible",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "hover",
+      "target": {
+        "by": "text",
+        "value": "Initial consultation",
+        "exact": true
+      },
+      "pauseAfterMs": 7200,
+      "narration": "Before confirmation, the Mini App summarizes the service, specialist, date, time and contact details. Any item can be changed without starting over."
+    },
+    {
+      "action": "click",
+      "target": {
+        "by": "role",
+        "value": "button",
+        "name": "Create demo appointment",
+        "exact": true
+      },
+      "label": "Confirm appointment"
+    },
+    {
+      "action": "waitFor",
+      "target": {
+        "by": "text",
+        "value": "Appointment saved",
+        "exact": true
+      },
+      "state": "visible",
+      "timeoutMs": 20000
+    },
+    {
+      "action": "hover",
+      "target": {
+        "by": "text",
+        "value": "Appointment saved",
+        "exact": true
+      },
+      "pauseAfterMs": 6300,
+      "narration": "The appointment is created and the patient receives a clear confirmation. It is then available in Profile together with upcoming visits."
+    },
+    {
+      "action": "click",
+      "target": {
+        "by": "role",
+        "value": "button",
+        "name": "AI",
+        "exact": true
+      },
+      "label": "Open AI assistant"
+    },
+    {
+      "action": "waitFor",
+      "target": {
+        "by": "css",
+        "value": "input[placeholder*=\"chipped a tooth\"]"
+      },
+      "state": "visible",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "fill",
+      "target": {
+        "by": "css",
+        "value": "input[placeholder*=\"chipped a tooth\"]"
+      },
+      "value": "How much does Philips Zoom 4 whitening cost, and can I book an appointment?",
+      "pauseAfterMs": 5000,
+      "narration": "The built-in AI assistant answers common patient questions using the clinic’s current catalog. Let’s ask about Philips Zoom 4 whitening."
+    },
+    {
+      "action": "click",
+      "target": {
+        "by": "role",
+        "value": "button",
+        "name": "Ask",
+        "exact": true
+      },
+      "label": "Ask the AI assistant"
+    },
+    {
+      "action": "wait",
+      "ms": 9000,
+      "narration": "The assistant returns the catalog price, explains the next step and can move the patient directly into booking. The entire journey stays inside one interface."
+    },
+    {
+      "action": "hover",
+      "target": {
+        "by": "text",
+        "value": "5,650,000 VND",
+        "exact": false
+      },
+      "pauseAfterMs": 6800,
+      "narration": "AVE Dental Clinic gets a unified digital patient journey: transparent services and prices, online booking, profile and intelligent assistance in one Mini App."
+    }
+  ],
+  "voice": {
+    "locale": "en-US",
+    "provider": "auto",
+    "persona": "viiversion-presenter",
+    "instructions": "Warm, modern, confident product-demo presenter. Natural English speech, medium energetic pace, short organic pauses, no radio-announcer cadence.",
+    "requireNativeTimings": false,
+    "pronunciation": {
+      "AVE Dental Clinic": "A V E Dental Clinic",
+      "AI": "A I",
+      "Philips Zoom 4": "Philips Zoom Four",
+      "VND": "Vietnamese dong"
+    }
+  }
+}
