@@ -36,7 +36,7 @@ jobs:
           sudo apt-get install -y ffmpeg espeak-ng
           python3 -m pip install --quiet torch torchaudio --index-url https://download.pytorch.org/whl/cpu
           python3 -m pip install --quiet "setuptools<82" resemble-perth
-          python3 -m pip install --quiet numpy -r requirements-tts-chatterbox.txt
+          python3 -m pip install --quiet numpy chatterbox-tts
 
       - name: Capture The Cloud guest journey
         env:
