@@ -51,3 +51,29 @@ test("automatic local engine exposes the union needed for Chatterbox-first fallb
   assert.equal(provider.supportsLocale("zh-CN", baseRequest, context), true);
   assert.equal(provider.supportsLocale("vi-VN", baseRequest, context), true);
 });
+
+
+test("premium-local default auto-enables only Russian and English presenter voices", () => {
+  const provider = new HuggingFaceVoiceProvider();
+  const context = { env: { HF_TTS_PREMIUM_DEFAULT: "1" } };
+
+  assert.equal(
+    provider.isConfigured({ ...baseRequest, locale: "en-US" }, context),
+    true,
+  );
+  assert.equal(
+    provider.isConfigured({ ...baseRequest, locale: "ru-RU" }, context),
+    true,
+  );
+  assert.equal(
+    provider.isConfigured({ ...baseRequest, locale: "vi-VN" }, context),
+    false,
+  );
+  assert.equal(
+    provider.isConfigured(
+      { ...baseRequest, locale: "ru-RU", persona: "neutral" },
+      context,
+    ),
+    false,
+  );
+});
