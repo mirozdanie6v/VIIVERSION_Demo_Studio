@@ -1,0 +1,55 @@
+name: MAX TOUR Hybrid Promotion Gate
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'scripts/benchmark_max_tour_hybrid.ts'
+      - 'examples/max-tour-english-full-journey-v4.json'
+      - '.github/workflows/max-tour-hybrid-promotion-gate.yml'
+
+concurrency:
+  group: max-tour-hybrid-promotion-gate
+  cancel-in-progress: true
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Install FFmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Run real MAX TOUR v4 standard vs hybrid gate
+        env:
+          DEMO_STUDIO_ALLOWED_HOSTS: max-tour.viiversion.com
+          ALLOW_PRIVATE_TARGETS: "false"
+          MAX_TOUR_SCENARIO: examples/max-tour-english-full-journey-v4.json
+          MAX_TOUR_HYBRID_MIN_IMPROVEMENT: "0.15"
+          MAX_TOUR_HYBRID_MIN_SSIM: "0.99"
+        run: npx tsx scripts/benchmark_max_tour_hybrid.ts
+
+      - name: Upload benchmark report and final videos
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: max-tour-hybrid-promotion-gate
+          path: /tmp/max-tour-hybrid-promotion-gate
+          retention-days: 5
+          if-no-files-found: warn
