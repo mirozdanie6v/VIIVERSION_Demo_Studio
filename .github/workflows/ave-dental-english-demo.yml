@@ -25,6 +25,36 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Publish render start
+        env:
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          HEAD_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git pull --rebase origin main
+          mkdir -p status
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const payload = {
+            workflow: "AVE Dental English Demo",
+            status: "in_progress",
+            runId: Number(process.env.RUN_ID),
+            runAttempt: Number(process.env.RUN_ATTEMPT),
+            headSha: process.env.HEAD_SHA,
+            durationSeconds: null,
+            artifact: null,
+            runUrl: `https://github.com/mirozdanie6v/VIIVERSION_Demo_Studio/actions/runs/${process.env.RUN_ID}`,
+            updatedAt: new Date().toISOString()
+          };
+          fs.writeFileSync('status/ave-dental-english-latest.json', JSON.stringify(payload, null, 2) + '\n');
+          NODE
+          git add status/ave-dental-english-latest.json
+          git commit -m "Mark AVE Dental English render in progress" || true
+          git push origin HEAD:main
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
@@ -207,6 +237,9 @@ jobs:
           FINAL_DURATION: ${{ env.FINAL_DURATION }}
         shell: bash
         run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git pull --rebase origin main
           mkdir -p status
           node --input-type=module <<'NODE'
           import fs from 'node:fs';
@@ -224,9 +257,6 @@ jobs:
           fs.writeFileSync('status/ave-dental-english-latest.json', JSON.stringify(payload, null, 2) + '\n');
           NODE
 
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git pull --rebase origin main
           git add status/ave-dental-english-latest.json
           git commit -m "Update AVE Dental English render status" || exit 0
           git push origin HEAD:main
