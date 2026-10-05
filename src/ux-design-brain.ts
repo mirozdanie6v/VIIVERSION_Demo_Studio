@@ -1,6 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { chromium, type Page } from "playwright";
+import { type Page } from "playwright";
+import { acquireBrowser } from "./browser-pool.js";
 import { assertSafeHttpUrl, attachNetworkGuard } from "./security.js";
 import {
   ExpiringPromiseCache,
@@ -628,7 +629,8 @@ async function auditUxDesignFresh(
   url: string,
   captureScreenshots: boolean,
 ): Promise<UxDesignAuditPayload> {
-  const browser = await chromium.launch({ headless: true });
+  const lease = await acquireBrowser({ headless: true });
+  const browser = lease.browser;
 
   try {
     const desktopContext = await browser.newContext({
@@ -700,7 +702,7 @@ async function auditUxDesignFresh(
       await mobileContext.close();
     }
   } finally {
-    await browser.close();
+    await lease.release();
   }
 }
 
