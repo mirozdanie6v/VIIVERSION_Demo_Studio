@@ -58,8 +58,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          run_dir="$(dirname "$(find artifacts/ave -type f -name capture.webm -print -quit)")"
-          test -n "$run_dir"
+          downloaded_dir="$(dirname "$(find artifacts/ave -type f -name capture.webm -print -quit)")"
+          test -n "$downloaded_dir"
+          base_name="$(basename "$downloaded_dir")"
+          run_dir="artifacts/$base_name"
+          rm -rf "$run_dir"
+          cp -a "$downloaded_dir" "$run_dir"
+          test -s "$run_dir/capture.webm"
           test -s artifacts/max-tour/voiceover_ru.wav
           echo "dir=$run_dir" >> "$GITHUB_OUTPUT"
           ffmpeg -y -i artifacts/max-tour/voiceover_ru.wav -t 8.8 \
