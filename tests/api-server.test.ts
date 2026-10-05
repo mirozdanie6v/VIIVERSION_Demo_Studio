@@ -53,7 +53,14 @@ test("serves health, OpenAPI and authenticated job status", { concurrency: false
 
     const health = await fetch(base + "/health");
     assert.equal(health.status, 200);
-    assert.equal((await health.json() as { ok: boolean }).ok, true);
+    const healthBody = await health.json() as {
+      ok: boolean;
+      version: string;
+      generationMode: string;
+    };
+    assert.equal(healthBody.ok, true);
+    assert.equal(healthBody.version, "0.14.0");
+    assert.equal(healthBody.generationMode, "hybrid");
 
     const statusPage = await fetch(
       base + "/jobs/00000000-0000-0000-0000-000000000000",
@@ -69,8 +76,12 @@ test("serves health, OpenAPI and authenticated job status", { concurrency: false
 
     const openapi = await fetch(base + "/openapi.json");
     assert.equal(openapi.status, 200);
-    const spec = await openapi.json() as { openapi: string };
+    const spec = await openapi.json() as {
+      openapi: string;
+      info: { version: string };
+    };
     assert.equal(spec.openapi, "3.1.0");
+    assert.equal(spec.info.version, "0.14.0");
 
     const missingAuth = await fetch(
       base + "/v1/jobs/00000000-0000-0000-0000-000000000000",

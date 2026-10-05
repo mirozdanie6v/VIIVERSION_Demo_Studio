@@ -5,6 +5,7 @@ const PUBLIC_HOST = "demostudio.viiversion.com";
 const CONTAINER_PORT = 8080;
 const INACTIVITY_TIMEOUT_MS = 60 * 60 * 1000;
 const ACTIVE_IMAGE_KEY = "active-container-image";
+const ACTIVE_HYBRID_KEY = "active-production-hybrid";
 const INTERNAL_TOKEN_KEY = "internal-storage-token";
 const GENERATION_DAILY_LIMIT = 10;
 const INSPECTION_DAILY_LIMIT = 30;
@@ -909,18 +910,33 @@ export class DemoStudioContainer extends DurableObject {
     return this.ctx.container.getTcpPort(CONTAINER_PORT).fetch(forwarded);
   }
 
-  async ensureCurrentImage(container) {
+  async ensureCurrentRuntime(container) {
     const desiredImage = container.images.app;
-    const activeImage = await this.ctx.storage.get(ACTIVE_IMAGE_KEY);
+    const desiredHybrid =
+      String(this.env.DEMO_STUDIO_PRODUCTION_HYBRID ?? "true")
+        .trim()
+        .toLowerCase() === "false"
+        ? "false"
+        : "true";
+    const [activeImage, activeHybrid] = await Promise.all([
+      this.ctx.storage.get(ACTIVE_IMAGE_KEY),
+      this.ctx.storage.get(ACTIVE_HYBRID_KEY),
+    ]);
 
-    if (container.running && activeImage !== desiredImage) {
+    if (
+      container.running &&
+      (activeImage !== desiredImage || activeHybrid !== desiredHybrid)
+    ) {
       await container.destroy(
-        "Replacing stale Demo Studio container image",
+        "Replacing stale Demo Studio container runtime",
       );
-      await this.ctx.storage.delete(ACTIVE_IMAGE_KEY);
+      await Promise.all([
+        this.ctx.storage.delete(ACTIVE_IMAGE_KEY),
+        this.ctx.storage.delete(ACTIVE_HYBRID_KEY),
+      ]);
     }
 
-    return desiredImage;
+    return { desiredImage, desiredHybrid };
   }
 
   async startAndWaitForPort() {
@@ -929,7 +945,7 @@ export class DemoStudioContainer extends DurableObject {
       throw new Error("Cloudflare Container binding is unavailable.");
     }
 
-    const desiredImage = await this.ensureCurrentImage(container);
+    const { desiredImage, desiredHybrid } = await this.ensureCurrentRuntime(container);
 
     if (!container.running) {
       const internalToken = await this.getInternalToken();
@@ -947,6 +963,7 @@ export class DemoStudioContainer extends DurableObject {
         DEMO_STUDIO_REUSE_BROWSER: "true",
         DEMO_STUDIO_FFMPEG_PRESET:
           this.env.DEMO_STUDIO_FFMPEG_PRESET ?? "veryfast",
+        DEMO_STUDIO_PRODUCTION_HYBRID: desiredHybrid,
         DEMO_STUDIO_MAX_CONCURRENT_JOBS: "1",
         DEMO_STUDIO_DAILY_JOB_LIMIT: "10",
         DEMO_STUDIO_MAX_JOB_ATTEMPTS: "3",
@@ -988,7 +1005,10 @@ export class DemoStudioContainer extends DurableObject {
         await response.body?.cancel();
 
         if (response.ok) {
-          await this.ctx.storage.put(ACTIVE_IMAGE_KEY, desiredImage);
+          await Promise.all([
+            this.ctx.storage.put(ACTIVE_IMAGE_KEY, desiredImage),
+            this.ctx.storage.put(ACTIVE_HYBRID_KEY, desiredHybrid),
+          ]);
           return;
         }
 

@@ -6,10 +6,10 @@ ENV PORT=8080
 ENV HOST=0.0.0.0
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
-COPY package.json ./
+COPY package.json package-lock.json ./
 COPY requirements-tts.txt requirements-tts-chatterbox.txt ./
 
-RUN npm install --include=dev --no-fund --no-audit \
+RUN npm ci --include=dev --no-fund --no-audit \
   && apt-get update \
   && apt-get install -y --no-install-recommends ffmpeg \
   && rm -rf /var/lib/apt/lists/*
