@@ -44,10 +44,6 @@ async function ffmpeg(args: string[]): Promise<string> {
   });
 }
 
-function secondsBetween(start: string, end: string): number {
-  return Math.max(0, (Date.parse(end) - Date.parse(start)) / 1000);
-}
-
 const standardCaptureStarted = performance.now();
 const standard = await runScenario(scenario, {
   artifactsRoot: path.join(root, "standard"),
@@ -126,6 +122,17 @@ const totalSpeedup = standardTotalMs / hybridTotalMs;
 const totalReduction =
   1 - hybridTotalMs / standardTotalMs;
 
+console.log(
+  JSON.stringify({
+    phase: "hybrid-core-benchmark",
+    standardTotalMs: Math.round(standardTotalMs),
+    hybridTotalMs: Math.round(hybridTotalMs),
+    totalReductionPercent: Number((totalReduction * 100).toFixed(1)),
+    captureSpeedup: Number(captureSpeedup.toFixed(3)),
+    composeMs: Math.round(composeMs),
+  }),
+);
+
 assert.ok(
   hybridCaptureMs < standardCaptureMs,
   `Expected hybrid capture to be faster. standard=${standardCaptureMs.toFixed(0)}ms hybrid=${hybridCaptureMs.toFixed(0)}ms`,
@@ -135,49 +142,61 @@ assert.ok(
   `Expected >=20% capture+render reduction. standard=${standardTotalMs.toFixed(0)}ms hybrid=${hybridTotalMs.toFixed(0)}ms reduction=${(totalReduction * 100).toFixed(1)}%`,
 );
 
-const firstKeyframe = manifest.keyframes.find(
-  (frame) => frame.stepIndex === 0,
-);
-assert.ok(firstKeyframe);
-
-const standardRun = JSON.parse(
-  await readFile(path.join(standard.runDir, "run.json"), "utf8"),
+const standardScenes = JSON.parse(
+  await readFile(path.join(standard.runDir, "scenes.json"), "utf8"),
 ) as {
-  startedAt: string;
-  timeline: Array<{
-    index: number;
-    finishedAt: string;
+  scenes: Array<{
+    outputStart: number;
+    outputEnd: number;
+    stepIndexes: number[];
   }>;
 };
-const firstTimeline = standardRun.timeline.find(
-  (item) => item.index === 0,
-);
-assert.ok(firstTimeline);
+const hybridScenes = JSON.parse(
+  await readFile(path.join(composed.runDir, "scenes.json"), "utf8"),
+) as typeof standardScenes;
 
-const stableFramePath = path.join(root, "standard-stable.png");
-const stableTime = Math.max(
-  0,
-  secondsBetween(
-    standardRun.startedAt,
-    firstTimeline.finishedAt,
-  ) - 0.04,
+const standardStableScene = standardScenes.scenes.find((scene) =>
+  scene.stepIndexes.includes(0),
 );
+const hybridStableScene = hybridScenes.scenes.find((scene) =>
+  scene.stepIndexes.includes(0),
+);
+assert.ok(standardStableScene);
+assert.ok(hybridStableScene);
+
+const standardStableTime =
+  (standardStableScene!.outputStart + standardStableScene!.outputEnd) / 2;
+const hybridStableTime =
+  (hybridStableScene!.outputStart + hybridStableScene!.outputEnd) / 2;
+const standardStablePath = path.join(root, "standard-stable-final.png");
+const hybridStablePath = path.join(root, "hybrid-stable-final.png");
+
 await ffmpeg([
   "-y",
-  "-ss",
-  stableTime.toFixed(3),
   "-i",
-  standard.videoPath!,
+  standardFinal,
+  "-ss",
+  standardStableTime.toFixed(3),
   "-frames:v",
   "1",
-  stableFramePath,
+  standardStablePath,
+]);
+await ffmpeg([
+  "-y",
+  "-i",
+  hybridFinal,
+  "-ss",
+  hybridStableTime.toFixed(3),
+  "-frames:v",
+  "1",
+  hybridStablePath,
 ]);
 
 const ssimLog = await ffmpeg([
   "-i",
-  stableFramePath,
+  standardStablePath,
   "-i",
-  firstKeyframe!.path,
+  hybridStablePath,
   "-lavfi",
   "ssim",
   "-f",
@@ -189,7 +208,7 @@ assert.ok(ssimMatch, "Expected FFmpeg SSIM output.");
 const stableFrameSsim = Number(ssimMatch![1]);
 assert.ok(
   stableFrameSsim >= 0.99,
-  `Expected stable-frame SSIM >=0.99, got ${stableFrameSsim}`,
+  `Expected final stable-frame SSIM >=0.99, got ${stableFrameSsim}`,
 );
 
 console.log(
