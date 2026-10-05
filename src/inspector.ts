@@ -1,4 +1,4 @@
-import { chromium } from "playwright";
+import { acquireBrowser } from "./browser-pool.js";
 import { assertSafeHttpUrl, attachNetworkGuard } from "./security.js";
 import type { Target, Viewport } from "./types.js";
 
@@ -54,12 +54,19 @@ export async function inspectApplication(
   viewport: Viewport = { width: 1440, height: 900 },
 ): Promise<ApplicationSnapshot> {
   await assertSafeHttpUrl(url);
-  const browser = await chromium.launch({ headless: true });
-  const context = await browser.newContext({ viewport });
+  const lease = await acquireBrowser({ headless: true });
+  const browser = lease.browser;
+  const context = await browser.newContext({ viewport }).catch(async (error) => {
+    await lease.release();
+    throw error;
+  });
   await attachNetworkGuard(context);
   const page = await context.newPage();
 
   try {
+    await page.addInitScript(
+      "globalThis.__name = globalThis.__name || ((target) => target);",
+    );
     await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30_000 });
     await page.waitForLoadState("networkidle", { timeout: 8_000 }).catch(() => undefined);
 
@@ -194,7 +201,7 @@ export async function inspectApplication(
       elements,
     };
   } finally {
-    await context.close();
-    await browser.close();
+    await context.close().catch(() => undefined);
+    await lease.release();
   }
 }

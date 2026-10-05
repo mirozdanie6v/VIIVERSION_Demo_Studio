@@ -1,6 +1,7 @@
-import { chromium, type Page } from "playwright";
+import { type Page } from "playwright";
 import { mkdir, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { acquireBrowser } from "./browser-pool.js";
 import { settleAfterNavigation } from "./performance.js";
 import { animateClick, focusTarget, resetPresentation } from "./presentation.js";
 import { attachNetworkGuard } from "./security.js";
@@ -268,10 +269,14 @@ export async function runScenario(
   await mkdir(runDir, { recursive: true });
 
   const viewport = scenario.viewport ?? DEFAULT_VIEWPORT;
-  const browser = await chromium.launch({ headless: !options.headed });
+  const lease = await acquireBrowser({ headless: !options.headed });
+  const browser = lease.browser;
   const context = await browser.newContext({
     viewport,
     recordVideo: { dir: runDir, size: viewport },
+  }).catch(async (error) => {
+    await lease.release();
+    throw error;
   });
   await attachNetworkGuard(context);
 
@@ -426,8 +431,8 @@ export async function runScenario(
   } catch (error) {
     runError = error;
   } finally {
-    await context.close();
-    await browser.close();
+    await context.close().catch(() => undefined);
+    await lease.release();
   }
 
   let videoPath: string | undefined;
@@ -450,6 +455,7 @@ export async function runScenario(
       startedAt,
       finishedAt,
       videoPath,
+      browserSource: lease.source,
       success,
       error: runError instanceof Error ? runError.message : runError ? String(runError) : undefined,
     }, null, 2),

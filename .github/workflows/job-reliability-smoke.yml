@@ -4,6 +4,10 @@ on:
   pull_request:
     paths:
       - 'src/job-manager.ts'
+      - 'src/browser-pool.ts'
+      - 'src/runner.ts'
+      - 'src/inspector.ts'
+      - 'src/ux-design-brain.ts'
       - 'src/job-status-page.ts'
       - 'src/persistence.ts'
       - 'src/api-server.ts'
@@ -16,6 +20,10 @@ on:
     branches: [main]
     paths:
       - 'src/job-manager.ts'
+      - 'src/browser-pool.ts'
+      - 'src/runner.ts'
+      - 'src/inspector.ts'
+      - 'src/ux-design-brain.ts'
       - 'src/job-status-page.ts'
       - 'src/persistence.ts'
       - 'src/api-server.ts'
@@ -74,6 +82,7 @@ jobs:
           PORT: "8788"
           PUBLIC_BASE_URL: http://127.0.0.1:8788
           DEMO_STUDIO_STORAGE_ROOT: /tmp/demo-studio-reliability
+          DEMO_STUDIO_REUSE_BROWSER: "true"
           DEMO_STUDIO_MAX_CONCURRENT_JOBS: "1"
           DEMO_STUDIO_MAX_JOB_ATTEMPTS: "3"
           DEMO_STUDIO_HEARTBEAT_MS: "500"
