@@ -44,9 +44,12 @@ jobs:
           exit 1
 
       - name: Compare fast and veryfast
+        env:
+          ALLOW_PRIVATE_TARGETS: "true"
         run: npx tsx scripts/benchmark_render_presets.ts http://127.0.0.1:4173
 
       - name: Upload benchmark evidence
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: render-benchmark
