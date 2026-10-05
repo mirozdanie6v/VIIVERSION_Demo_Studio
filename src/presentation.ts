@@ -138,10 +138,14 @@ async function centerTarget(
   const locator = resolveTarget(page, target);
   await locator.waitFor({ state: "visible", timeout: 10_000 });
   await locator.evaluate(
-    (element, behavior) => {
-      element.scrollIntoView({ behavior, block: "center", inline: "center" });
+    (element, shouldScrollInstantly) => {
+      element.scrollIntoView({
+        behavior: shouldScrollInstantly ? "auto" : "smooth",
+        block: "center",
+        inline: "center",
+      });
     },
-    instant ? "auto" : "smooth",
+    instant,
   );
 }
 
