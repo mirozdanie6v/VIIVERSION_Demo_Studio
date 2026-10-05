@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { hybridCaptureEnabled } from "./hybrid-capture.js";
 import { runScenario } from "./runner.js";
 import { parseScenario } from "./scenario.js";
 
@@ -20,7 +21,7 @@ async function main() {
 
   const result = await runScenario(scenario, {
     headed: process.argv.includes("--headed"),
-    hybrid: process.argv.includes("--hybrid") ? true : undefined,
+    hybrid: process.argv.includes("--hybrid") || hybridCaptureEnabled(),
   });
 
   console.log(JSON.stringify(result, null, 2));
