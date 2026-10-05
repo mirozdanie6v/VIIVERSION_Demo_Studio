@@ -63,8 +63,12 @@ jobs:
         run: |
           set -euo pipefail
           test -n "${CLOUDFLARE_API_TOKEN:-}"
-          test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
-          echo "Cloudflare deployment credentials: available"
+          echo "Cloudflare API token: available"
+          if [ -n "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then
+            echo "Cloudflare account ID: available"
+          else
+            echo "Cloudflare account ID: not configured; discovery will be attempted."
+          fi
 
           if [ -n "${OPENAI_API_KEY:-}" ]; then
             echo "OpenAI key: available"
@@ -87,6 +91,41 @@ jobs:
               ;;
           esac
           echo "Demo Studio production hybrid mode: ${hybrid}"
+
+      - name: Resolve Cloudflare account ID
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ -n "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then
+            echo "Using configured Cloudflare account ID."
+            exit 0
+          fi
+
+          discovered=""
+
+          if curl -fsS "https://api.cloudflare.com/client/v4/memberships?status=accepted&per_page=50" \
+            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            > /tmp/cloudflare-memberships.json 2>/dev/null; then
+            discovered=$(jq -r '[.result[]?.account.id] | unique | if length == 1 then .[0] else empty end' /tmp/cloudflare-memberships.json)
+          fi
+
+          if [ -z "${discovered}" ]; then
+            if curl -fsS "https://api.cloudflare.com/client/v4/zones?name=viiversion.com&per_page=5" \
+              -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+              > /tmp/cloudflare-zones.json 2>/dev/null; then
+              discovered=$(jq -r '[.result[]?.account.id] | unique | if length == 1 then .[0] else empty end' /tmp/cloudflare-zones.json)
+            fi
+          fi
+
+          if [ -z "${discovered}" ]; then
+            echo "Unable to discover CLOUDFLARE_ACCOUNT_ID from this token."
+            echo "Add CLOUDFLARE_ACCOUNT_ID as a Demo Studio repository secret or variable."
+            exit 1
+          fi
+
+          echo "CLOUDFLARE_ACCOUNT_ID=${discovered}" >> "${GITHUB_ENV}"
+          echo "Cloudflare account ID discovered successfully."
 
       - name: Verify Cloudflare API token
         shell: bash
