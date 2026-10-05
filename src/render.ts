@@ -34,7 +34,7 @@ export function resolveRenderEncoderPreset(
   const configured = env.DEMO_STUDIO_FFMPEG_PRESET?.trim().toLowerCase();
   return RENDER_ENCODER_PRESETS.has(configured as RenderEncoderPreset)
     ? configured as RenderEncoderPreset
-    : "fast";
+    : "veryfast";
 }
 
 export type RenderOptions = {
