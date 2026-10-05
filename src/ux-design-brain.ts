@@ -1,6 +1,6 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { type Page } from "playwright";
+import { type BrowserContext, type Page } from "playwright";
 import { acquireBrowser } from "./browser-pool.js";
 import { assertSafeHttpUrl, attachNetworkGuard } from "./security.js";
 import {
@@ -631,12 +631,14 @@ async function auditUxDesignFresh(
 ): Promise<UxDesignAuditPayload> {
   const lease = await acquireBrowser({ headless: true });
   const browser = lease.browser;
+  let desktopContext: BrowserContext | undefined;
+  let mobileContext: BrowserContext | undefined;
 
   try {
-    const desktopContext = await browser.newContext({
+    desktopContext = await browser.newContext({
       viewport: VIEWPORTS.desktop,
     });
-    const mobileContext = await browser.newContext({
+    mobileContext = await browser.newContext({
       viewport: VIEWPORTS.mobile,
     });
     await attachNetworkGuard(desktopContext);
@@ -698,8 +700,10 @@ async function auditUxDesignFresh(
         screenshots,
       };
     } finally {
-      await desktopContext.close();
-      await mobileContext.close();
+      await Promise.all([
+        desktopContext?.close().catch(() => undefined),
+        mobileContext?.close().catch(() => undefined),
+      ]);
     }
   } finally {
     await lease.release();
