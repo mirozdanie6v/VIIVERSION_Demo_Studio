@@ -1,0 +1,54 @@
+name: Render Benchmark
+
+on:
+  pull_request:
+    paths:
+      - 'src/render.ts'
+      - 'scripts/benchmark_render_presets.ts'
+      - '.github/workflows/render-benchmark.yml'
+  workflow_dispatch:
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Install FFmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Start fixture app
+        shell: bash
+        run: |
+          python3 -m http.server 4173 --bind 127.0.0.1 > /tmp/render-benchmark-fixture.log 2>&1 &
+          for i in {1..30}; do
+            curl -fsS http://127.0.0.1:4173/fixtures/smoke.html >/dev/null && exit 0
+            sleep 0.25
+          done
+          cat /tmp/render-benchmark-fixture.log
+          exit 1
+
+      - name: Compare fast and veryfast
+        run: npx tsx scripts/benchmark_render_presets.ts http://127.0.0.1:4173
+
+      - name: Upload benchmark evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: render-benchmark
+          path: /tmp/demo-render-benchmark
+          retention-days: 3
