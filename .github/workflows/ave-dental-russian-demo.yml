@@ -49,6 +49,14 @@ jobs:
           ALLOW_PRIVATE_TARGETS: "false"
         run: npm run capture -- --scenario examples/ave-dental-russian-demo.json
 
+      - name: Download approved MAX TOUR Niki reference
+        uses: actions/download-artifact@v4
+        with:
+          name: max-tour-premium-russian-v9-final
+          path: artifacts/max-tour-reference
+          github-token: ${{ github.token }}
+          run-id: 37353860935
+
       - name: Resolve run directory
         id: run
         shell: bash
@@ -81,7 +89,16 @@ jobs:
           }
           NODE
 
-      - name: Synthesize premium Russian voice with Chatterbox V3
+      - name: Prepare approved Niki reference from MAX TOUR v9
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s artifacts/max-tour-reference/voiceover_ru.wav
+          ffmpeg -y -i artifacts/max-tour-reference/voiceover_ru.wav -t 8.8 \
+            -af "highpass=f=70,lowpass=f=11500,loudnorm=I=-17:TP=-2:LRA=8" \
+            -ar 24000 -ac 1 artifacts/niki-reference.wav
+
+      - name: Synthesize approved Niki-reference Russian voice
         shell: bash
         env:
           RUN_DIR: ${{ steps.run.outputs.dir }}
@@ -102,6 +119,7 @@ jobs:
 
           run_dir = Path(os.environ["RUN_DIR"])
           voices = run_dir / "voices"
+          reference = str(Path("artifacts/niki-reference.wav").resolve())
           device = "cuda" if torch.cuda.is_available() else "cpu"
 
           try:
@@ -119,9 +137,14 @@ jobs:
               text = txt.read_text(encoding="utf-8").strip()
               if not text:
                   continue
-              wav = model.generate(text, language_id="ru")
+              wav = model.generate(
+                  text,
+                  language_id="ru",
+                  audio_prompt_path=reference,
+              )
               ta.save(str(voices / f"raw-{idx}.wav"), wav, model.sr)
 
+          print(f"APPROVED_RU_VOICE=Niki reference / MAX TOUR v9")
           print(f"PREMIUM_VOICE_DEVICE={device}")
           print(f"PREMIUM_VOICE_SEGMENTS={len(text_files)}")
           PY
@@ -131,7 +154,9 @@ jobs:
             base=$(basename "$raw" .wav)
             idx=${base#raw-}
             out="${run_dir}/voices/step-${idx}.mp3"
-            ffmpeg -y -i "$raw"               -af "highpass=f=70,lowpass=f=11500,acompressor=threshold=-18dB:ratio=1.65:attack=20:release=220,loudnorm=I=-16:TP=-1.5:LRA=8"               -c:a libmp3lame -b:a 224k "$out"
+            ffmpeg -y -i "$raw" \
+              -af "highpass=f=70,lowpass=f=11500,acompressor=threshold=-18dB:ratio=1.55:attack=18:release=220,loudnorm=I=-16:TP=-1.5:LRA=8" \
+              -c:a libmp3lame -b:a 224k "$out"
           done
 
       - name: Synchronize narration and captions
@@ -217,9 +242,9 @@ jobs:
           ffmpeg -y -sseof -12 -i "${run_dir}/final-9x16.mp4" -frames:v 1 "${run_dir}/qa-ai.png"
           ffmpeg -y -sseof -3 -i "${run_dir}/final-9x16.mp4" -frames:v 1 "${run_dir}/qa-outro.png"
 
-      - name: Upload AVE Dental premium Russian presentation
+      - name: Upload AVE Dental Niki-reference premium Russian presentation
         uses: actions/upload-artifact@v4
         with:
-          name: ave-dental-russian-premium-b2b
+          name: ave-dental-russian-niki-premium-b2b
           path: artifacts/
           if-no-files-found: error
