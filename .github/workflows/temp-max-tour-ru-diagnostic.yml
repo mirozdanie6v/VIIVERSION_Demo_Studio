@@ -55,10 +55,11 @@ jobs:
           console.log('BOOK_COUNT=',await book.count());
           if(await book.count()){
             console.log('BOOK_TEXT=',await book.innerText());
-            await book.scrollIntoViewIfNeeded();
-            await page.waitForTimeout(300);
-            await book.evaluate(el=>el.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true,view:window})));
-            await page.waitForTimeout(1200);
+            await book.evaluate(el=>{
+              el.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true,view:window}));
+              if(typeof el.onclick==='function') el.onclick(new MouseEvent('click',{bubbles:true,cancelable:true,view:window}));
+            });
+            await page.waitForTimeout(1500);
           }
           await dump('BOOKING RU');
           const aiNav=page.locator('button.nav-btn:visible').last();
