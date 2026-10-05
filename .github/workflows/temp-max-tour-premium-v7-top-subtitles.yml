@@ -1,0 +1,219 @@
+name: MAX TOUR Premium Product Film v7 — Top Subtitles
+
+on:
+  push:
+    branches:
+      - 'feature/max-tour-premium-v7-top-subtitles'
+    paths:
+      - '.github/workflows/temp-max-tour-premium-v7-top-subtitles.yml'
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: max-tour-premium-product-film-v7
+  cancel-in-progress: true
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Validate premium engine
+        run: |
+          npm run typecheck
+          npm test
+
+      - name: Install browser media and typography
+        run: |
+          npx playwright install --with-deps chromium
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg fonts-dejavu-core jq
+          sudo apt-get install -y fonts-inter || true
+          python3 -m pip install --quiet pillow
+          fc-match Inter || true
+
+      - name: Capture premium semantic journey
+        env:
+          DEMO_STUDIO_ALLOWED_HOSTS: max-tour.viiversion.com
+          ALLOW_PRIVATE_TARGETS: "false"
+        run: npm run capture -- --scenario examples/max-tour-premium-product-film-v7.json
+
+      - name: Resolve run directory
+        id: run
+        shell: bash
+        run: echo "dir=$(find artifacts -mindepth 1 -maxdepth 1 -type d | sort | tail -n 1)" >> "$GITHUB_OUTPUT"
+
+      - name: Enforce visual QA
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_dir="${{ steps.run.outputs.dir }}"
+          cat "$run_dir/visual-qa.json"
+          jq -e '.summary.critical == 0' "$run_dir/visual-qa.json" >/dev/null
+          jq -e '[.issues[] | select(.code == "cursor_visible_when_disabled")] | length == 0' "$run_dir/visual-qa.json" >/dev/null
+
+      - name: Record translated demo payment confirmation
+        id: payment
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/payment-recording
+          python3 - <<'PY'
+          from pathlib import Path
+          src=Path('.github/workflows/temp-max-tour-native-en-checkout.yml').read_text()
+          marker="node --input-type=module <<'NODE'\n"
+          start=src.index(marker)+len(marker)
+          end=src.index("\n          NODE", start)
+          js=src[start:end]
+          old="const page=await browser.newPage({viewport:{width:430,height:932}});"
+          new=r"""const context=await browser.newContext({
+            viewport:{width:430,height:932},
+            recordVideo:{dir:'artifacts/payment-recording',size:{width:430,height:932}}
+          });
+          await context.addInitScript(({replacements})=>{
+            const pairs=Object.entries(replacements).sort((a,b)=>b[0].length-a[0].length);
+            const translate=(value)=>{
+              let next=value||'';
+              for(const [source,target] of pairs) next=next.split(source).join(target);
+              next=next
+                .replace(/\u0422\u0423\u0420/g,'TOUR')
+                .replace(/\u0432\u0441\u0435\u0433\u043e/g,'total')
+                .replace(/\u041e\u043f\u043b\u0430\u0442\u0430/g,'Payment')
+                .replace(/\u041e\u043f\u043b\u0430\u0447\u0435\u043d\u043e/g,'Paid');
+              return next;
+            };
+            const apply=()=>{
+              document.documentElement.lang='en';
+              const walker=document.createTreeWalker(document.documentElement,NodeFilter.SHOW_TEXT);
+              const nodes=[]; while(walker.nextNode()) nodes.push(walker.currentNode);
+              for(const node of nodes){ const cur=node.nodeValue||''; const next=translate(cur); if(next!==cur) node.nodeValue=next; }
+              for(const el of document.querySelectorAll('*')){
+                for(const attr of ['placeholder','aria-label','title']){
+                  const cur=el.getAttribute(attr); if(!cur) continue;
+                  const next=translate(cur); if(next!==cur) el.setAttribute(attr,next);
+                }
+              }
+            };
+            const install=()=>{apply(); new MutationObserver(apply).observe(document.documentElement,{subtree:true,childList:true,characterData:true}); setInterval(apply,50);};
+            if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',install,{once:true}); else install();
+          },{replacements:{
+            'Например: Sunrise':'For example: Sunrise',
+            'Отсканируйте QR-код в приложении VNPAY':'Scan the QR code in the VNPAY app',
+            'Отсканируйте QR-код':'Scan the QR code',
+            'ТУР':'TOUR',
+            'Участники':'Travelers',
+            'Оплата':'Payment',
+            'Оплачено':'Paid'
+          }});
+          const page=await context.newPage();
+          const forceEnglish=async()=>{
+            await page.evaluate((replacements)=>{
+              const pairs=Object.entries(replacements).sort((a,b)=>b[0].length-a[0].length);
+              const translate=(value)=>{
+                let next=value||'';
+                for(const [source,target] of pairs) next=next.split(source).join(target);
+                next=next
+                  .replace(/\u0422\u0423\u0420/g,'TOUR')
+                  .replace(/\u0432\u0441\u0435\u0433\u043e/g,'total')
+                  .replace(/\u041e\u043f\u043b\u0430\u0442\u0430/g,'Payment')
+                  .replace(/\u041e\u043f\u043b\u0430\u0447\u0435\u043d\u043e/g,'Paid');
+                return next;
+              };
+              const walker=document.createTreeWalker(document.documentElement,NodeFilter.SHOW_TEXT);
+              const nodes=[]; while(walker.nextNode()) nodes.push(walker.currentNode);
+              for(const node of nodes){ const cur=node.nodeValue||''; const next=translate(cur); if(next!==cur) node.nodeValue=next; }
+              for(const el of document.querySelectorAll('*')){
+                for(const attr of ['placeholder','aria-label','title']){
+                  const cur=el.getAttribute(attr); if(!cur) continue;
+                  const next=translate(cur); if(next!==cur) el.setAttribute(attr,next);
+                }
+              }
+            },{
+              'Отсканируйте QR или подтвердите оплату, чтобы увидеть чек в «Мои поездки».':'Scan the QR code or confirm payment to see the receipt in My Trips.',
+              'Отсканируйте QR или подтвердите оплату':'Scan the QR code or confirm payment',
+              'Отсканируйте QR-код в приложении VNPAY':'Scan the QR code in the VNPAY app',
+              'Отсканируйте QR-код':'Scan the QR code',
+              'Например: Sunrise':'For example: Sunrise',
+              'Участники':'Travelers',
+              'всего':'total',
+              'Оплата':'Payment',
+              'Оплачено':'Paid',
+              'ТУР':'TOUR'
+            });
+          };"""
+          if old not in js:
+              raise SystemExit('payment diagnostic page creation not found')
+          js=js.replace(old,new,1)
+          js=js.replace("await page.waitForTimeout(700);","await page.waitForTimeout(700);\nawait forceEnglish();\nawait page.locator('*').evaluateAll(els=>{for(const el of els){const t=(el.textContent||'').trim();if(t==='ТУР')el.textContent='TOUR';else if(t==='Участники')el.textContent='Travelers';else if(t==='всего')el.textContent='total';}});\nconst paymentText=await page.locator('body').innerText();\nif(/[\\u0400-\\u04FF]/.test(paymentText)) console.warn('Residual Cyrillic on payment screen after EN normalization:',paymentText.match(/[^.!?\\n]{0,50}[\\u0400-\\u04FF][^.!?\\n]{0,50}/g)?.slice(0,8).join(' | '));",1)
+          js=js.replace("await page.waitForTimeout(1000);","await page.waitForTimeout(1000);\nawait forceEnglish();\nawait page.locator('*').evaluateAll(els=>{for(const el of els){const t=(el.textContent||'').trim();if(t==='ТУР')el.textContent='TOUR';else if(t==='Участники')el.textContent='Travelers';else if(t==='всего')el.textContent='total';}});\nconst finalText=await page.locator('body').innerText();\nif(/[\\u0400-\\u04FF]/.test(finalText)) console.warn('Residual Cyrillic on final confirmation after EN normalization:',finalText.match(/[^.!?\\n]{0,50}[\\u0400-\\u04FF][^.!?\\n]{0,50}/g)?.slice(0,8).join(' | '));",1)
+          js=js.replace("await browser.close();","await context.close();\nawait browser.close();",1)
+          Path('payment-premium-record.mjs').write_text(js)
+          PY
+          node payment-premium-record.mjs
+          f="$(find artifacts/payment-recording -type f -name '*.webm' | head -n 1)"
+          test -s "$f"
+          echo "file=$f" >> "$GITHUB_OUTPUT"
+          ffprobe -v error -show_entries format=duration -of csv=p=0 "$f"
+
+      - name: Download stable v6 audio master
+        uses: actions/download-artifact@v4
+        with:
+          name: max-tour-premium-product-film-v7-final
+          path: artifacts/prior-v6
+          github-token: ${{ github.token }}
+          run-id: 37224098345
+
+      - name: Verify stable audio master
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s artifacts/prior-v6/MAX_TOUR_Premium_Product_Film_v7_FINAL.mp4
+          test -s artifacts/prior-v6/render-report.json
+          ffprobe -v error -show_entries stream=codec_type -of csv=p=0 artifacts/prior-v6/MAX_TOUR_Premium_Product_Film_v7_FINAL.mp4 | grep -q audio
+
+      - name: Render premium product film
+        run: |
+          python3 scripts/render_max_tour_premium_v7.py \
+            --run "${{ steps.run.outputs.dir }}" \
+            --audio-master artifacts/prior-v6/MAX_TOUR_Premium_Product_Film_v7_FINAL.mp4 \
+            --timing-report artifacts/prior-v6/render-report.json \
+            --payment-video "${{ steps.payment.outputs.file }}" \
+            --out artifacts/max-tour-premium-v7
+
+      - name: Verify premium final
+        shell: bash
+        run: |
+          set -euo pipefail
+          f="artifacts/max-tour-premium-v7/MAX_TOUR_Premium_Product_Film_v7_FINAL.mp4"
+          test -s "$f"
+          duration=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$f")
+          echo "FINAL_DURATION=$duration"
+          awk -v d="$duration" 'BEGIN { exit !(d >= 65 && d <= 95) }'
+          run_dir="${{ steps.run.outputs.dir }}"
+          jq -e '.success == true' "$run_dir/run.json" >/dev/null
+          jq -e '.visualQa.critical == 0' "$run_dir/run.json" >/dev/null
+          jq -e '.visualLanguage.mainLayout == "full-mobile-viewport-below-top-subtitle-zone"' artifacts/max-tour-premium-v7/render-report.json >/dev/null
+          jq -e '.visualLanguage.subtitleZone == "top-graphite"' artifacts/max-tour-premium-v7/render-report.json >/dev/null
+          jq -e '.visualLanguage.subtitleMaxLines == 2' artifacts/max-tour-premium-v7/render-report.json >/dev/null
+          jq -e '.visualLanguage.cursor == "hidden"' artifacts/max-tour-premium-v7/render-report.json >/dev/null
+          jq -e '.visualLanguage.camera == "semantic establish-focus-resolve"' artifacts/max-tour-premium-v7/render-report.json >/dev/null
+          ffprobe -v error -show_entries stream=codec_type,width,height -of json "$f"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: max-tour-premium-product-film-v7-final
+          path: artifacts/max-tour-premium-v7/
+          if-no-files-found: error
