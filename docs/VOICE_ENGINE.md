@@ -38,8 +38,10 @@ Subtitle / edit synchronization
 For Russian and English Demo Video Presenter output, the default is the premium presenter path:
 
 1. **ElevenLabs v3 locale-specific voice** — preferred whenever the corresponding Russian or English voice is configured.
-2. **Chatterbox Multilingual V3 / OpenAI** — automatic fallback when the paid premium voice is unavailable.
-3. **Niki v3 / Leslie v3** remain the approved presenter casting references.
+2. **Chatterbox Multilingual V3** — baked into the production container and automatically used as the premium local default for Russian and English when ElevenLabs is unavailable.
+3. **Supertonic 3** — resilient local fallback if Chatterbox cannot synthesize on a worker.
+4. **OpenAI** remains an additional configured-provider fallback when credentials are available.
+5. **Niki v3 / Leslie v3** remain the approved presenter casting references.
 
 When a scenario omits the locale, narration text is classified automatically: Cyrillic-dominant narration defaults to `ru-RU`; otherwise it defaults to `en-US`.
 
@@ -145,7 +147,7 @@ The Voice Director passes natural-language performance direction through the TTS
 
 ### Hugging Face local / free
 
-The local Hugging Face provider avoids per-character or per-request TTS API charges. It is opt-in so production containers do not unexpectedly download model weights.
+The local Hugging Face provider avoids per-character or per-request TTS API charges. Production containers enable it automatically only for the default VIIVERSION presenter in Russian and English; other locales remain opt-in unless explicitly configured.
 
 Install the default CPU-friendly engine:
 
