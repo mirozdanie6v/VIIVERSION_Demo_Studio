@@ -1,7 +1,0 @@
-{
-  "functions": {
-    "api/niki.js": {
-      "maxDuration": 60
-    }
-  }
-}
