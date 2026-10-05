@@ -1,0 +1,52 @@
+name: The Cloud Demo Inspect
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/the-cloud-demo.yml'
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install dependencies
+        run: npm ci
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Inspect live The Cloud mini app
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import { chromium } from 'playwright';
+          const browser = await chromium.launch({headless:true});
+          const page = await browser.newPage({viewport:{width:430,height:932}});
+          page.on('console', msg => console.log('BROWSER', msg.type(), msg.text()));
+          page.on('pageerror', err => console.log('PAGEERROR', err.message));
+          await page.goto('https://thecloud.viiversion.com/', {waitUntil:'domcontentloaded', timeout:45000});
+          await page.waitForTimeout(4000);
+          console.log('URL', page.url());
+          console.log('TITLE', await page.title());
+          console.log('BODY\\n' + (await page.locator('body').innerText()).slice(0,20000));
+          console.log('BUTTONS', JSON.stringify(await page.getByRole('button').allTextContents()));
+          console.log('LINKS', JSON.stringify(await page.locator('a').evaluateAll(els => els.map(a => ({text:(a.textContent||'').trim(), href:a.getAttribute('href')})))));
+          console.log('INPUTS', JSON.stringify(await page.locator('input,textarea,select').evaluateAll(els => els.map(e => ({
+            tag:e.tagName, type:e.getAttribute('type'), name:e.getAttribute('name'), placeholder:e.getAttribute('placeholder'),
+            aria:e.getAttribute('aria-label'), value:e.value
+          })))));
+          await page.screenshot({path:'the-cloud-home.png', fullPage:true});
+          await browser.close();
+          NODE
+      - name: Upload inspection screenshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: the-cloud-inspection
+          path: the-cloud-home.png
