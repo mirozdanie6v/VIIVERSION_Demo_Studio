@@ -130,4 +130,6 @@ export type RunResult = {
   startedAt: string;
   finishedAt: string;
   success: boolean;
+  captureMode?: "standard" | "hybrid-prototype";
+  hybridManifestPath?: string;
 };

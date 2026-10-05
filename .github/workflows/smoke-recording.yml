@@ -75,6 +75,11 @@ jobs:
           DEMO_STUDIO_UX_CACHE_TTL_MS: "600000"
         run: npx tsx scripts/smoke_ux_cache.ts http://127.0.0.1:4173/fixtures/smoke.html
 
+      - name: Verify experimental hybrid capture is faster
+        env:
+          ALLOW_PRIVATE_TARGETS: "true"
+        run: npx tsx scripts/smoke_hybrid_capture.ts http://127.0.0.1:4173/fixtures/smoke.html
+
       - name: Record local walkthrough
         env:
           ALLOW_PRIVATE_TARGETS: "true"

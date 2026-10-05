@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { hybridCaptureEnabled } from "./hybrid-capture.js";
 import { runScenario } from "./runner.js";
 import { parseScenario } from "./scenario.js";
 
@@ -11,7 +12,7 @@ function readArg(name: string) {
 async function main() {
   const scenarioArg = readArg("--scenario");
   if (!scenarioArg) {
-    throw new Error("Usage: npm run capture -- --scenario examples/viiversion-v1.json [--headed]");
+    throw new Error("Usage: npm run capture -- --scenario examples/viiversion-v1.json [--headed] [--hybrid]");
   }
 
   const scenarioPath = path.resolve(scenarioArg);
@@ -20,6 +21,7 @@ async function main() {
 
   const result = await runScenario(scenario, {
     headed: process.argv.includes("--headed"),
+    hybrid: process.argv.includes("--hybrid") || hybridCaptureEnabled(),
   });
 
   console.log(JSON.stringify(result, null, 2));
