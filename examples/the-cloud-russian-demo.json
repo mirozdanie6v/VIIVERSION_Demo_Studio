@@ -1,0 +1,265 @@
+{
+  "name": "The Cloud — Russian Mini App Demo",
+  "baseUrl": "https://thecloud.viiversion.com",
+  "viewport": {
+    "width": 430,
+    "height": 932
+  },
+  "defaultPauseMs": 620,
+  "presentation": {
+    "smartZoom": {
+      "scale": 1.1,
+      "mobileScale": 1.06,
+      "transitionMs": 520,
+      "settleMs": 220
+    },
+    "cursor": {
+      "size": 15,
+      "fill": "rgba(255,255,255,0.96)",
+      "border": "rgba(20,24,28,0.70)",
+      "borderWidth": 2,
+      "shadow": "0 5px 18px rgba(0,0,0,0.22)"
+    },
+    "focusRing": {
+      "enabled": true,
+      "color": "rgba(255,255,255,0.34)",
+      "width": 2,
+      "padding": 8
+    },
+    "clickRipple": {
+      "enabled": true,
+      "color": "rgba(255,255,255,0.42)",
+      "size": 50,
+      "durationMs": 380
+    }
+  },
+  "steps": [
+    {
+      "action": "goto",
+      "url": "/",
+      "label": "Открыть The Cloud"
+    },
+    {
+      "action": "waitFor",
+      "target": {
+        "by": "text",
+        "value": "Вечерний rooftop-бар с кальяном, коктейлями, видом на город и позициями для разного настроения.",
+        "exact": true
+      },
+      "state": "visible",
+      "timeoutMs": 20000
+    },
+    {
+      "action": "hover",
+      "target": {
+        "by": "text",
+        "value": "The Cloud",
+        "exact": true
+      },
+      "pauseAfterMs": 8500,
+      "narration": "The Cloud — rooftop-бар в Нячанге. Мини-приложение сразу показывает главное: атмосферу заведения, быстрый переход к бронированию, AI-консультанта, контакты и локацию."
+    },
+    {
+      "action": "click",
+      "target": {
+        "by": "role",
+        "value": "button",
+        "name": "Позиции",
+        "exact": true
+      },
+      "label": "Открыть позиции"
+    },
+    {
+      "action": "waitFor",
+      "target": {
+        "by": "text",
+        "value": "Выберите атмосферу вечера.",
+        "exact": true
+      },
+      "state": "visible",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "hover",
+      "target": {
+        "by": "text",
+        "value": "Sunset Line",
+        "exact": true
+      },
+      "pauseAfterMs": 9000,
+      "narration": "Гость выбирает не просто стол, а настроение вечера. Rooftop View, Sunset Line, Shisha Lounge, активная зона у бара или более приватный Group VIP — каждая позиция объяснена прямо в приложении."
+    },
+    {
+      "action": "click",
+      "target": {
+        "by": "role",
+        "value": "button",
+        "name": "Бронировать",
+        "exact": true
+      },
+      "label": "Перейти к бронированию"
+    },
+    {
+      "action": "waitFor",
+      "target": {
+        "by": "text",
+        "value": "1. Детали",
+        "exact": true
+      },
+      "state": "visible",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "hover",
+      "target": {
+        "by": "text",
+        "value": "5. Оплата",
+        "exact": true
+      },
+      "pauseAfterMs": 8500,
+      "narration": "Бронирование разбито на пять понятных шагов: детали визита, позиция, конкретный стол, контактные данные и оплата. Пользователь сразу видит весь путь до подтверждения."
+    },
+    {
+      "action": "fill",
+      "target": {
+        "by": "css",
+        "value": "input[type=\"time\"]"
+      },
+      "value": "18:30",
+      "label": "Выбрать время"
+    },
+    {
+      "action": "fill",
+      "target": {
+        "by": "css",
+        "value": "input[type=\"number\"]"
+      },
+      "value": "2",
+      "label": "Указать гостей"
+    },
+    {
+      "action": "hover",
+      "target": {
+        "by": "text",
+        "value": "Дата",
+        "exact": true
+      },
+      "pauseAfterMs": 6500,
+      "narration": "На первом шаге достаточно выбрать дату, время и количество гостей. Для примера — вечерний столик на двоих к закату."
+    },
+    {
+      "action": "click",
+      "target": {
+        "by": "role",
+        "value": "button",
+        "name": "Далее",
+        "exact": true
+      },
+      "label": "Продолжить бронирование"
+    },
+    {
+      "action": "wait",
+      "ms": 1800
+    },
+    {
+      "action": "hover",
+      "target": {
+        "by": "text",
+        "value": "Rooftop View",
+        "exact": true
+      },
+      "pauseAfterMs": 7500,
+      "narration": "Следующий шаг связывает бронирование с выбранной атмосферой. Так гость понимает, что именно он резервирует, а интерфейс сохраняет контекст выбора."
+    },
+    {
+      "action": "click",
+      "target": {
+        "by": "role",
+        "value": "button",
+        "name": "AI",
+        "exact": true
+      },
+      "label": "Открыть AI-консультанта"
+    },
+    {
+      "action": "waitFor",
+      "target": {
+        "by": "text",
+        "value": "AI-консультант",
+        "exact": true
+      },
+      "state": "visible",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "hover",
+      "target": {
+        "by": "text",
+        "value": "Где лучше на закат?",
+        "exact": true
+      },
+      "pauseAfterMs": 6500,
+      "narration": "Если человек пока не определился, встроенный AI-консультант помогает выбрать позицию по ситуации: красивый вид, кальян, компания друзей или лучший стол на закат."
+    },
+    {
+      "action": "click",
+      "target": {
+        "by": "role",
+        "value": "button",
+        "name": "Где лучше на закат?",
+        "exact": true
+      },
+      "label": "Спросить AI про закат"
+    },
+    {
+      "action": "wait",
+      "ms": 7500,
+      "narration": "Консультант отвечает внутри того же интерфейса и учитывает контекст The Cloud. Гостю не нужно уходить в отдельный чат, чтобы принять решение."
+    },
+    {
+      "action": "click",
+      "target": {
+        "by": "role",
+        "value": "button",
+        "name": "Главная",
+        "exact": true
+      },
+      "label": "Вернуться на главную"
+    },
+    {
+      "action": "waitFor",
+      "target": {
+        "by": "text",
+        "value": "163 Nguyễn Thiện Thuật",
+        "exact": true
+      },
+      "state": "visible",
+      "timeoutMs": 10000
+    },
+    {
+      "action": "hover",
+      "target": {
+        "by": "text",
+        "value": "163 Nguyễn Thiện Thuật",
+        "exact": true
+      },
+      "pauseAfterMs": 8000,
+      "narration": "В одном мини-приложении The Cloud объединены выбор атмосферы, бронирование, AI-помощник, связь с менеджером и навигация. Весь путь гостя — от идеи провести вечер до готового решения — собран в одном месте."
+    }
+  ],
+  "voice": {
+    "locale": "ru-RU",
+    "provider": "auto",
+    "persona": "viiversion-presenter",
+    "instructions": "Современная, тёплая, уверенная подача презентации продукта. Естественный русский язык, средний темп, короткие органичные паузы, без дикторской монотонности.",
+    "requireNativeTimings": false,
+    "pronunciation": {
+      "The Cloud": "Зэ Клауд",
+      "AI": "эй-ай",
+      "Rooftop View": "руфтоп вью",
+      "Sunset Line": "сансет лайн",
+      "Shisha Lounge": "шиша лаунж",
+      "Group VIP": "груп вип"
+    }
+  }
+}
