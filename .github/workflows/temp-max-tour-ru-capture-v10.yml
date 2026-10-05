@@ -1,0 +1,35 @@
+name: MAX TOUR RU Capture v10
+
+on:
+  push:
+    branches:
+      - 'feature/max-tour-russian-v9'
+    paths:
+      - '.github/workflows/temp-max-tour-ru-capture-v10.yml'
+      - 'examples/max-tour-premium-russian-v10.json'
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: |
+          npm run typecheck
+          npm test
+      - run: npx playwright install --with-deps chromium
+      - name: Capture Russian journey
+        env:
+          DEMO_STUDIO_ALLOWED_HOSTS: max-tour.viiversion.com
+          ALLOW_PRIVATE_TARGETS: "false"
+        run: npm run capture -- --scenario examples/max-tour-premium-russian-v10.json
+      - name: Upload Russian capture
+        uses: actions/upload-artifact@v4
+        with:
+          name: max-tour-russian-v10-capture
+          path: artifacts/
+          if-no-files-found: error
