@@ -54,12 +54,17 @@ jobs:
         id: run
         shell: bash
         run: |
-          src_dir="$(dirname "$(find artifacts/source -type f -name capture.webm -print -quit)")"
-          base="$(basename "$src_dir")"
+          set -euo pipefail
+          test -s artifacts/source/run.json
+          test -s artifacts/source/capture.webm
+          base="$(node -e "const r=require('./artifacts/source/run.json'); const p=r.videoPath; if(!p) process.exit(2); console.log(p.split('/').slice(-2,-1)[0])")"
           run_dir="artifacts/$base"
           rm -rf "$run_dir"
-          cp -a "$src_dir" "$run_dir"
+          mkdir -p "$run_dir"
+          cp -a artifacts/source/. "$run_dir/"
+          test -s "$run_dir/capture.webm"
           echo "dir=$run_dir" >> "$GITHUB_OUTPUT"
+          echo "RUN_DIR=$run_dir"
 
       - name: Build stressed Russian narration text
         shell: bash
