@@ -1,0 +1,39 @@
+name: MAX TOUR RU Selector Diagnostic
+
+on:
+  push:
+    branches:
+      - 'feature/max-tour-russian-v9'
+    paths:
+      - '.github/workflows/temp-max-tour-ru-selector-diagnostic.yml'
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npx playwright install chromium
+      - name: Inspect visible Dalat selectors
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import { chromium } from 'playwright';
+          const browser=await chromium.launch({headless:true});
+          const page=await browser.newPage({viewport:{width:430,height:932}});
+          await page.goto('https://max-tour.viiversion.com/',{waitUntil:'domcontentloaded',timeout:30000});
+          await page.waitForTimeout(1200);
+          await page.locator('button.nav-btn:visible').nth(1).click();
+          await page.waitForTimeout(600);
+          const matches=page.getByText('Далат «Премиум»',{exact:false});
+          console.log('MATCH_COUNT=',await matches.count());
+          console.log('MATCHES=',JSON.stringify(await matches.evaluateAll(els=>els.map((e,i)=>{
+            const r=e.getBoundingClientRect(), s=getComputedStyle(e);
+            return {i,tag:e.tagName,cls:String(e.className||''),text:(e.textContent||'').trim(),display:s.display,visibility:s.visibility,w:r.width,h:r.height,x:r.x,y:r.y,parentTag:e.parentElement?.tagName,parentCls:String(e.parentElement?.className||'')};
+          }))));
+          await browser.close();
+          NODE
