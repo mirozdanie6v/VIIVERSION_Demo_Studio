@@ -57,10 +57,12 @@ test("serves health, OpenAPI and authenticated job status", { concurrency: false
       ok: boolean;
       version: string;
       generationMode: string;
+      accessMode: string;
     };
     assert.equal(healthBody.ok, true);
     assert.equal(healthBody.version, "0.14.0");
     assert.equal(healthBody.generationMode, "hybrid");
+    assert.equal(healthBody.accessMode, "authenticated");
 
     const statusPage = await fetch(
       base + "/jobs/00000000-0000-0000-0000-000000000000",
