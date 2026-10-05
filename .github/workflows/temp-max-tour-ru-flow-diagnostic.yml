@@ -47,8 +47,8 @@ jobs:
           if(await t2.count()){ await t2.first().click(); await page.waitForTimeout(500); }
           const buttons=page.locator('button');
           console.log('TOUR_BUTTON_TEXTS=',JSON.stringify(await buttons.allTextContents()));
-          const possible=buttons.filter({hasText:/заброн|выбрать|формат|присоедин|оформ/i});
+          const possible=page.locator('button:has-text("Присоединиться"):visible');
           console.log('POSSIBLE_COUNT=',await possible.count());
-          if(await possible.count()){ await possible.first().click(); await page.waitForTimeout(800); await dump('BOOKING RU'); }
+          if(await possible.count()){ await possible.first().click(); await page.waitForTimeout(1000); await dump('BOOKING RU'); }
           await browser.close();
           NODE
