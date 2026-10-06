@@ -30,7 +30,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat > /tmp/qa.mjs <<'NODE'
+          cat > qa.mjs <<'NODE'
           import { chromium } from "playwright";
           import fs from "node:fs";
 
@@ -87,7 +87,7 @@ jobs:
           if(errors.length) throw new Error("Browser errors: "+errors.join(" | "));
           await browser.close();
           NODE
-          node /tmp/qa.mjs
+          node qa.mjs
 
       - uses: actions/upload-artifact@v4
         if: always()
