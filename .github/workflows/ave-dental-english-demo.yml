@@ -1,4 +1,4 @@
-name: AVE Dental English Demo
+name: AVE Dental English Premium Demo
 
 on:
   workflow_dispatch:
@@ -9,73 +9,42 @@ on:
       - '.github/workflows/ave-dental-english-demo.yml'
 
 concurrency:
-  group: ave-dental-english-demo
+  group: ave-dental-english-premium
   cancel-in-progress: true
-
-permissions:
-  contents: write
-  actions: read
 
 jobs:
   render:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 45
+    env:
+      DEMO_STUDIO_REQUIRE_PREMIUM_VOICE: "true"
+      ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+      ELEVENLABS_VOICE_ID: ${{ secrets.ELEVENLABS_VOICE_ID }}
+      ELEVENLABS_VOICE_ID_RU: ${{ secrets.ELEVENLABS_VOICE_ID_RU }}
+      ELEVENLABS_VOICE_ID_RU_RU: ${{ secrets.ELEVENLABS_VOICE_ID_RU_RU }}
+      ELEVENLABS_VOICE_ID_EN: ${{ secrets.ELEVENLABS_VOICE_ID_EN }}
+      ELEVENLABS_VOICE_ID_EN_US: ${{ secrets.ELEVENLABS_VOICE_ID_EN_US }}
+      ELEVENLABS_MODEL: ${{ vars.ELEVENLABS_MODEL || 'eleven_v3' }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Publish render start
-        env:
-          RUN_ID: ${{ github.run_id }}
-          RUN_ATTEMPT: ${{ github.run_attempt }}
-          HEAD_SHA: ${{ github.sha }}
-        shell: bash
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git pull --rebase origin main
-          mkdir -p status
-          node --input-type=module <<'NODE'
-          import fs from 'node:fs';
-          const payload = {
-            workflow: "AVE Dental English Demo",
-            status: "in_progress",
-            runId: Number(process.env.RUN_ID),
-            runAttempt: Number(process.env.RUN_ATTEMPT),
-            headSha: process.env.HEAD_SHA,
-            durationSeconds: null,
-            artifact: null,
-            runUrl: `https://github.com/mirozdanie6v/VIIVERSION_Demo_Studio/actions/runs/${process.env.RUN_ID}`,
-            updatedAt: new Date().toISOString()
-          };
-          fs.writeFileSync('status/ave-dental-english-latest.json', JSON.stringify(payload, null, 2) + '\n');
-          NODE
-          git add status/ave-dental-english-latest.json
-          git commit -m "Mark AVE Dental English render in progress" || true
-          git push origin HEAD:main
-
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Validate Demo Studio
-        run: |
-          npm run typecheck
-          npm test
-
-      - name: Install Chromium and media tools
+      - name: Install Chromium and FFmpeg
         run: |
           npx playwright install --with-deps chromium
           sudo apt-get update
-          sudo apt-get install -y ffmpeg espeak-ng
-          python3 -m pip install --quiet numpy piper-tts
+          sudo apt-get install -y ffmpeg
 
-      - name: Capture English AVE Dental patient journey
+      - name: Capture authorized customer journey
         env:
           DEMO_STUDIO_ALLOWED_HOSTS: ave-dental-miniapp.vercel.app
           ALLOW_PRIVATE_TARGETS: "false"
@@ -84,48 +53,32 @@ jobs:
       - name: Resolve run directory
         id: run
         shell: bash
-        run: echo "dir=$(find artifacts -mindepth 1 -maxdepth 1 -type d | sort | tail -n 1)" >> "$GITHUB_OUTPUT"
-
-      - name: Prepare narration segments
-        shell: bash
-        env:
-          RUN_DIR: ${{ steps.run.outputs.dir }}
         run: |
-          mkdir -p "${RUN_DIR}/voices"
-          node --input-type=module <<'NODE'
-          import fs from 'node:fs';
-          import path from 'node:path';
-          const scenario = JSON.parse(fs.readFileSync('examples/ave-dental-english-demo.json', 'utf8'));
-          for (let i = 0; i < scenario.steps.length; i += 1) {
-            const step = scenario.steps[i];
-            if (!step.narration?.trim()) continue;
-            fs.writeFileSync(path.join(process.env.RUN_DIR, 'voices', `text-${i}.txt`), step.narration.trim() + '\n');
-          }
-          NODE
+          set -euo pipefail
+          run_dir=$(find artifacts -type f -name run.json -printf '%h\n' | head -n 1)
+          test -n "$run_dir"
+          test -s "$run_dir/run.json"
+          test -s "$run_dir/capture.webm"
+          echo "dir=$run_dir" >> "$GITHUB_OUTPUT"
 
-      - name: Synthesize English presenter voice
+      - name: Generate approved premium voice segments
+        run: |
+          npm run voice:scenario -- \
+            --scenario examples/ave-dental-english-demo.json \
+            --run "${{ steps.run.outputs.dir }}"
+
+      - name: Verify premium voice provider
         shell: bash
         run: |
           set -euo pipefail
           run_dir="${{ steps.run.outputs.dir }}"
-          python3 -m piper.download_voices --download-dir "${run_dir}/voices" en_US-lessac-medium
-          model="${run_dir}/voices/en_US-lessac-medium.onnx"
-
-          for txt in "${run_dir}"/voices/text-*.txt; do
-            base=$(basename "$txt" .txt)
-            idx=${base#text-}
-            raw="${run_dir}/voices/raw-${idx}.wav"
-            out="${run_dir}/voices/step-${idx}.mp3"
-
-            cat "$txt" | piper --model "$model" --output_file "$raw"
-
-            ffmpeg -y -i "$raw" \
-              -af "volume=0.94,highpass=f=72,lowpass=f=10500,acompressor=threshold=-19dB:ratio=1.8:attack=22:release=210,loudnorm=I=-16:TP=-1.5:LRA=7" \
-              -c:a libmp3lame -b:a 192k "$out"
-          done
+          test -s "${run_dir}/voice-segments.json"
+          jq -e '
+            (.segments | length) > 0
+            and ([.segments[].provider] | all(. == "elevenlabs" or . == "huggingface"))
+          ' "${run_dir}/voice-segments.json" >/dev/null
 
       - name: Synchronize narration and captions
-        shell: bash
         run: |
           npx tsx src/narration-sync-cli.ts \
             --run "${{ steps.run.outputs.dir }}" \
@@ -133,60 +86,15 @@ jobs:
 
       - name: Generate subtle background music
         shell: bash
-        env:
-          RUN_DIR: ${{ steps.run.outputs.dir }}
         run: |
-          python3 - <<'PY'
-          import os, wave
-          import numpy as np
-
-          sr = 44100
-          duration = 120.0
-          n = int(duration * sr)
-          t = np.arange(n, dtype=np.float64) / sr
-          left = np.zeros(n, dtype=np.float64)
-          right = np.zeros(n, dtype=np.float64)
-
-          chords = [
-              (196.00, 246.94, 293.66),
-              (220.00, 261.63, 329.63),
-              (174.61, 220.00, 261.63),
-              (164.81, 196.00, 246.94),
-          ]
-          chord_len = 15.0
-          for ci in range(int(duration / chord_len)):
-              chord = chords[ci % len(chords)]
-              start = int(ci * chord_len * sr)
-              end = min(n, int((ci + 1) * chord_len * sr))
-              tt = np.arange(end - start, dtype=np.float64) / sr
-              fade = np.minimum(1, tt / 2.0) * np.minimum(1, (chord_len - tt) / 2.0)
-              for j, f in enumerate(chord):
-                  amp = 0.025 / (j + 1)
-                  left[start:end] += amp * np.sin(2*np.pi*f*tt + 0.13*j) * fade
-                  right[start:end] += amp * np.sin(2*np.pi*f*tt + 0.21*j) * fade
-
-          pulse = 0.0025 * np.sin(2*np.pi*49*t) * (0.55 + 0.45*np.sin(2*np.pi*(96/60/2)*t)**2)
-          left += pulse
-          right += pulse
-
-          peak = max(np.max(np.abs(left)), np.max(np.abs(right)), 1e-9)
-          stereo = np.stack([left/peak*0.55, right/peak*0.55], axis=1)
-          pcm = (np.clip(stereo, -1, 1) * 32767).astype(np.int16)
-
-          out = os.path.join(os.environ['RUN_DIR'], 'background.wav')
-          with wave.open(out, 'wb') as w:
-              w.setnchannels(2)
-              w.setsampwidth(2)
-              w.setframerate(sr)
-              w.writeframes(pcm.tobytes())
-          PY
-
           run_dir="${{ steps.run.outputs.dir }}"
-          ffmpeg -y -i "${run_dir}/background.wav" \
-            -af "highpass=f=70,lowpass=f=8500,loudnorm=I=-28:TP=-7:LRA=6" \
-            -c:a aac -b:a 160k "${run_dir}/background.m4a"
+          ffmpeg -y \
+            -f lavfi -i "sine=frequency=110:sample_rate=44100:duration=300" \
+            -f lavfi -i "sine=frequency=164.81:sample_rate=44100:duration=300" \
+            -filter_complex "[0:a]volume=0.045[a0];[1:a]volume=0.024[a1];[a0][a1]amix=inputs=2:normalize=0,lowpass=f=1400,highpass=f=70,loudnorm=I=-29:TP=-7:LRA=7[m]" \
+            -map "[m]" -c:a aac -b:a 160k "${run_dir}/background.m4a"
 
-      - name: Render final English presentation
+      - name: Render premium presentation
         run: |
           npm run render -- \
             --run "${{ steps.run.outputs.dir }}" \
@@ -194,74 +102,49 @@ jobs:
             --voiceover "${{ steps.run.outputs.dir }}/voiceover.mp3" \
             --captions-file "${{ steps.run.outputs.dir }}/synced-captions.ass" \
             --music "${{ steps.run.outputs.dir }}/background.m4a" \
-            --music-volume 0.08 \
+            --music-volume 0.07 \
             --music-bpm 96 \
-            --brand "AVE DENTAL CLINIC" \
+            --brand "VIIVERSION" \
             --title "AVE Dental Clinic Mini App" \
-            --intro-seconds 2.2 \
-            --outro-seconds 4.8 \
-            --cta "Services, booking and AI assistance — in one Mini App" \
-            --cta-secondary "AVE Dental Clinic · Nha Trang"
+            --intro-seconds 2.4 \
+            --outro-seconds 5.2 \
+            --cta "Booking and AI assistance in one Mini App" \
+            --cta-secondary "Contact VIIVERSION"
 
-      - name: Verify final video and make QA frames
+      - name: Verify golden video contract
         shell: bash
-        env:
-          RUN_DIR: ${{ steps.run.outputs.dir }}
         run: |
           set -euo pipefail
           run_dir="${{ steps.run.outputs.dir }}"
-          test -s "${run_dir}/capture.webm"
-          test -s "${run_dir}/voiceover.mp3"
-          test -s "${run_dir}/synced-captions.ass"
-          test -s "${run_dir}/final-9x16.mp4"
+          for file in \
+            capture.webm \
+            voice-segments.json \
+            voiceover.mp3 \
+            narration-sync.json \
+            synced-captions.ass \
+            editor_brain.json \
+            editor_critic.json \
+            music_brain.json \
+            captions.json \
+            final-9x16.mp4; do
+            test -s "${run_dir}/${file}"
+          done
+
+          jq -e '.qualityGate.passed == true' "${run_dir}/editor_brain.json" >/dev/null
+          jq -e '.passed == true' "${run_dir}/editor_critic.json" >/dev/null
+          jq -e '.version == "music-brain-v1"' "${run_dir}/music_brain.json" >/dev/null
 
           duration=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "${run_dir}/final-9x16.mp4")
-          awk -v d="$duration" 'BEGIN { exit !(d >= 55 && d <= 210) }'
+          awk -v d="$duration" 'BEGIN { exit !(d >= 55 && d <= 240) }'
           echo "FINAL_DURATION=$duration"
-          echo "FINAL_DURATION=$duration" >> "$GITHUB_ENV"
 
-          ffmpeg -y -ss 3 -i "${run_dir}/final-9x16.mp4" -frames:v 1 "${run_dir}/qa-intro.png"
-          ffmpeg -y -ss 45 -i "${run_dir}/final-9x16.mp4" -frames:v 1 "${run_dir}/qa-booking.png"
-          ffmpeg -y -sseof -8 -i "${run_dir}/final-9x16.mp4" -frames:v 1 "${run_dir}/qa-ai.png"
-          ffmpeg -y -sseof -2 -i "${run_dir}/final-9x16.mp4" -frames:v 1 "${run_dir}/qa-outro.png"
+          ffmpeg -y -ss 1.4 -i "${run_dir}/final-9x16.mp4" -frames:v 1 "${run_dir}/qa-intro.png"
+          ffmpeg -y -ss 20 -i "${run_dir}/final-9x16.mp4" -frames:v 1 "${run_dir}/qa-content.png"
+          ffmpeg -y -sseof -3 -i "${run_dir}/final-9x16.mp4" -frames:v 1 "${run_dir}/qa-outro.png"
 
-      - name: Upload AVE Dental English presentation
+      - name: Upload golden presentation
         uses: actions/upload-artifact@v4
         with:
-          name: ave-dental-english-demo
+          name: golden-ave-dental-en
           path: artifacts/
           if-no-files-found: error
-
-      - name: Publish render status
-        if: always()
-        env:
-          RUN_STATUS: ${{ job.status }}
-          RUN_ID: ${{ github.run_id }}
-          RUN_ATTEMPT: ${{ github.run_attempt }}
-          HEAD_SHA: ${{ github.sha }}
-          FINAL_DURATION: ${{ env.FINAL_DURATION }}
-        shell: bash
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git pull --rebase origin main
-          mkdir -p status
-          node --input-type=module <<'NODE'
-          import fs from 'node:fs';
-          const payload = {
-            workflow: "AVE Dental English Demo",
-            status: process.env.RUN_STATUS,
-            runId: Number(process.env.RUN_ID),
-            runAttempt: Number(process.env.RUN_ATTEMPT),
-            headSha: process.env.HEAD_SHA,
-            durationSeconds: process.env.FINAL_DURATION ? Number(process.env.FINAL_DURATION) : null,
-            artifact: process.env.RUN_STATUS === "success" ? "ave-dental-english-demo" : null,
-            runUrl: `https://github.com/mirozdanie6v/VIIVERSION_Demo_Studio/actions/runs/${process.env.RUN_ID}`,
-            updatedAt: new Date().toISOString()
-          };
-          fs.writeFileSync('status/ave-dental-english-latest.json', JSON.stringify(payload, null, 2) + '\n');
-          NODE
-
-          git add status/ave-dental-english-latest.json
-          git commit -m "Update AVE Dental English render status" || exit 0
-          git push origin HEAD:main
