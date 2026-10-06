@@ -30,9 +30,7 @@ jobs:
         run: python3 -m py_compile scripts/hf_tts.py scripts/pronunciation_preflight.py
 
       - name: Pronunciation preflight
-        run: |
-          python3 -m pip install --quiet "russian_text_stresser>=1.0.5"
-          python3 scripts/pronunciation_preflight.py
+        run: python3 scripts/pronunciation_preflight.py
 
       - name: Test
         run: npm test
