@@ -9,6 +9,7 @@ const ACTIVE_HYBRID_KEY = "active-production-hybrid";
 const ACTIVE_VOICE_CONFIG_KEY = "active-voice-config";
 const ACTIVE_AUTH_CONFIG_KEY = "active-auth-config";
 const INTERNAL_TOKEN_KEY = "internal-storage-token";
+const NIKI_REFERENCE_VERSION = "max-tour-v9-r1";
 const GENERATION_DAILY_LIMIT = 10;
 const INSPECTION_DAILY_LIMIT = 30;
 const ACTIVE_JOB_PREFIX = "active-job:";
@@ -97,7 +98,8 @@ main{max-width:760px;margin:0 auto;padding:56px 24px 88px}
 </main>
 <script>
 const jobId=${JSON.stringify(safeId)};
-const endpoint="/v1/jobs/"+encodeURIComponent(jobId);
+const statusToken=new URLSearchParams(window.location.search).get("status_token");
+const endpoint="/v1/jobs/"+encodeURIComponent(jobId)+(statusToken?"?status_token="+encodeURIComponent(statusToken):"");
 const $=(id)=>document.getElementById(id);
 const age=(iso)=>iso?Math.max(0,Math.floor((Date.now()-Date.parse(iso))/1000)):0;
 function render(job){
@@ -110,7 +112,11 @@ function render(job){
  $("heartbeat").textContent="Heartbeat "+age(job.heartbeatAt)+"s ago";
  $("retry").textContent=job.retryReason?"Automatic recovery: "+job.retryReason:"";
  $("error").textContent=job.error||"";
- $("artifact").innerHTML=job.artifactReady?'<a href="'+endpoint+'/artifact">Open final MP4</a>':"";
+ $("artifact").textContent=job.artifactReady
+   ? (statusToken
+      ? "Video is ready. Return to ChatGPT to open the final MP4."
+      : "Video is ready.")
+   : "";
  const history=$("history");history.innerHTML="";
  for(const item of (job.history||[]).slice().reverse()){
   const li=document.createElement("li");
@@ -570,12 +576,15 @@ export class DemoStudioContainer extends DurableObject {
     const checkpointMatch = url.pathname.match(
       /^\/__internal\/checkpoints\/([0-9a-f-]{36})\/([a-z0-9._-]+)$/i,
     );
+    const voiceReference =
+      url.pathname === "/__internal/voice-references/niki.wav";
 
     if (
       !artifactMatch &&
       !jobMatch &&
       !recoveryMatch &&
-      !checkpointMatch
+      !checkpointMatch &&
+      !voiceReference
     ) {
       return undefined;
     }
@@ -583,6 +592,28 @@ export class DemoStudioContainer extends DurableObject {
     const expected = await this.getInternalToken();
     if (bearerToken(request) !== expected) {
       return new Response("Unauthorized", { status: 401 });
+    }
+
+    if (voiceReference && request.method === "GET") {
+      const object = await this.env.DEMO_STUDIO_ARTIFACTS.get(
+        "voice-references/niki-reference.wav",
+      );
+      if (!object) return new Response("Voice reference not found", { status: 404 });
+
+      return new Response(object.body, {
+        status: 200,
+        headers: {
+          "Content-Type": "audio/wav",
+          "Content-Length": String(object.size),
+          "Cache-Control": "private, max-age=31536000, immutable",
+          ETag: object.httpEtag,
+          "X-Voice-Reference-Version": NIKI_REFERENCE_VERSION,
+        },
+      });
+    }
+
+    if (voiceReference) {
+      return new Response("Method not allowed", { status: 405 });
     }
 
     if (checkpointMatch && request.method === "GET") {
@@ -705,9 +736,6 @@ export class DemoStudioContainer extends DurableObject {
 
     if (!artifactMatch && !jobMatch) return undefined;
 
-    const auth = await this.authenticatePublicRequest(request, ["demo.read"]);
-    if (!auth.ok) return auth.response;
-
     const id = artifactMatch?.[1] ?? jobMatch?.[1];
     const jobObject = await this.env.DEMO_STUDIO_ARTIFACTS.get(
       "jobs/" + id + ".json",
@@ -715,20 +743,40 @@ export class DemoStudioContainer extends DurableObject {
     if (!jobObject) return undefined;
 
     const snapshot = JSON.parse(await jobObject.text());
-    if (
-      !snapshot.ownerIdentityHash ||
-      snapshot.ownerIdentityHash !== auth.identityHash
-    ) {
-      return new Response(
-        JSON.stringify({ error: "Demo job not found." }),
-        {
-          status: 404,
-          headers: {
-            "Content-Type": "application/json; charset=utf-8",
-            "Cache-Control": "no-store",
+    let capabilityAuthorized = false;
+
+    if (!artifactMatch) {
+      const statusToken = url.searchParams.get("status_token");
+      if (statusToken && snapshot.statusTokenHash) {
+        const digest = await crypto.subtle.digest(
+          "SHA-256",
+          new TextEncoder().encode(statusToken),
+        );
+        const tokenHash = Array.from(new Uint8Array(digest))
+          .map((byte) => byte.toString(16).padStart(2, "0"))
+          .join("");
+        capabilityAuthorized = tokenHash === snapshot.statusTokenHash;
+      }
+    }
+
+    if (!capabilityAuthorized) {
+      const auth = await this.authenticatePublicRequest(request, ["demo.read"]);
+      if (!auth.ok) return auth.response;
+      if (
+        !snapshot.ownerIdentityHash ||
+        snapshot.ownerIdentityHash !== auth.identityHash
+      ) {
+        return new Response(
+          JSON.stringify({ error: "Demo job not found." }),
+          {
+            status: 404,
+            headers: {
+              "Content-Type": "application/json; charset=utf-8",
+              "Cache-Control": "no-store",
+            },
           },
-        },
-      );
+        );
+      }
     }
 
     if (artifactMatch) {
@@ -753,6 +801,7 @@ export class DemoStudioContainer extends DurableObject {
     }
 
     delete snapshot.ownerIdentityHash;
+    delete snapshot.statusTokenHash;
 
     const now = Date.now();
     const stageStarted = Date.parse(
@@ -1066,6 +1115,7 @@ export class DemoStudioContainer extends DurableObject {
       this.env.ELEVENLABS_VOICE_ID_EN ?? "",
       this.env.ELEVENLABS_VOICE_ID_EN_US ?? "",
       this.env.ELEVENLABS_MODEL ?? "eleven_v3",
+      NIKI_REFERENCE_VERSION,
     ];
     const digest = await crypto.subtle.digest(
       "SHA-256",
@@ -1174,6 +1224,9 @@ export class DemoStudioContainer extends DurableObject {
         DEMO_STUDIO_REUSE_BROWSER: "true",
         DEMO_STUDIO_REQUIRE_PREMIUM_VOICE: "true",
         HF_TTS_PREMIUM_DEFAULT: "1",
+        HF_TTS_REFERENCE_URL_RU:
+          "https://" + PUBLIC_HOST + "/__internal/voice-references/niki.wav",
+        HF_TTS_REFERENCE_VERSION: NIKI_REFERENCE_VERSION,
         DEMO_STUDIO_FFMPEG_PRESET:
           this.env.DEMO_STUDIO_FFMPEG_PRESET ?? "veryfast",
         DEMO_STUDIO_PRODUCTION_HYBRID: desiredHybrid,

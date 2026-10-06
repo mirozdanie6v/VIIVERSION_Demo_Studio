@@ -95,8 +95,9 @@ export class DemoStudioService {
   getJob(
     id: string,
     identity?: string,
+    statusToken?: string,
   ): PublicDemoJob | undefined {
-    return this.jobs.get(id, identity);
+    return this.jobs.get(id, identity, statusToken);
   }
 
   async getJobDurable(

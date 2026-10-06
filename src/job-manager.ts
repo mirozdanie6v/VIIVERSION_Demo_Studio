@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { buildStoryboard, planDemo } from "./director.js";
@@ -77,6 +77,7 @@ export type DemoJobEvent = {
 export type DemoJob = {
   id: string;
   ownerIdentity: string;
+  statusToken: string;
   status: DemoJobStatus;
   stage: DemoJobStage;
   stageLabel: string;
@@ -103,6 +104,7 @@ export type DemoJob = {
 
 export type PublicDemoJob = {
   id: string;
+  statusToken?: string;
   status: DemoJobStatus;
   stage: DemoJobStage;
   stageLabel: string;
@@ -128,6 +130,7 @@ export type PublicDemoJob = {
 export type DemoJobRecovery = {
   request: DemoJobRequest;
   ownerIdentity: string;
+  statusToken: string;
   createdAt: string;
   attempt: number;
   maxAttempts: number;
@@ -164,7 +167,10 @@ function isTerminal(status: DemoJobStatus): boolean {
   return status === "completed" || status === "failed";
 }
 
-export function toPublicDemoJob(job: DemoJob): PublicDemoJob {
+export function toPublicDemoJob(
+  job: DemoJob,
+  includeStatusToken = false,
+): PublicDemoJob {
   const stage = job.stage ?? (
     job.status === "preflighting"
       ? "preflight"
@@ -198,6 +204,7 @@ export function toPublicDemoJob(job: DemoJob): PublicDemoJob {
 
   return {
     id: job.id,
+    ...(includeStatusToken ? { statusToken: job.statusToken } : {}),
     status: job.status,
     stage,
     stageLabel: job.stageLabel ?? stage,
@@ -283,6 +290,7 @@ export class DemoJobManager {
     const job: DemoJob = {
       id: randomUUID(),
       ownerIdentity,
+      statusToken: randomBytes(24).toString("base64url"),
       status: "queued",
       stage: "queued",
       stageLabel: "Waiting for worker",
@@ -306,7 +314,7 @@ export class DemoJobManager {
     await this.persist(job);
     void this.drain();
 
-    return this.publicJob(job);
+    return this.publicJob(job, true);
   }
 
   async resume(
@@ -325,6 +333,7 @@ export class DemoJobManager {
     const job: DemoJob = {
       id,
       ownerIdentity: recovery.ownerIdentity,
+      statusToken: recovery.statusToken,
       status: "retrying",
       stage: "retry_wait",
       stageLabel: "Recovering job",
@@ -361,10 +370,21 @@ export class DemoJobManager {
   get(
     id: string,
     ownerIdentity?: string,
+    statusToken?: string,
   ): PublicDemoJob | undefined {
     const job = this.jobs.get(id);
     if (!job) return undefined;
-    if (ownerIdentity && job.ownerIdentity !== ownerIdentity) return undefined;
+
+    const ownerMatches =
+      ownerIdentity !== undefined && job.ownerIdentity === ownerIdentity;
+    const tokenMatches =
+      statusToken !== undefined &&
+      statusToken.length >= 24 &&
+      statusToken === job.statusToken;
+
+    if ((ownerIdentity || statusToken) && !ownerMatches && !tokenMatches) {
+      return undefined;
+    }
     return this.publicJob(job);
   }
 
@@ -382,8 +402,11 @@ export class DemoJobManager {
     };
   }
 
-  private publicJob(job: DemoJob): PublicDemoJob {
-    return toPublicDemoJob(job);
+  private publicJob(
+    job: DemoJob,
+    includeStatusToken = false,
+  ): PublicDemoJob {
+    return toPublicDemoJob(job, includeStatusToken);
   }
 
   private pushEvent(job: DemoJob): void {
@@ -474,6 +497,9 @@ export class DemoJobManager {
     await persistJobSnapshot(job.id, {
       ...this.publicJob(job),
       ownerIdentityHash: identityHash(job.ownerIdentity),
+      statusTokenHash: createHash("sha256")
+        .update(job.statusToken)
+        .digest("hex"),
     }).catch(
       (persistenceError) => {
         console.error("[persistence] progress snapshot failed", persistenceError);
@@ -485,6 +511,7 @@ export class DemoJobManager {
     return {
       request: job.request,
       ownerIdentity: job.ownerIdentity,
+      statusToken: job.statusToken,
       createdAt: job.createdAt,
       attempt: job.attempt,
       maxAttempts: job.maxAttempts,

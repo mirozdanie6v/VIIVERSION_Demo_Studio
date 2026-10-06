@@ -14,6 +14,8 @@ test("public job exposes stage, attempts, heartbeat and stalled state", () => {
 
   const job: DemoJob = {
     id: "00000000-0000-0000-0000-000000000001",
+    ownerIdentity: "oauth:https://issuer.example:user-123",
+    statusToken: "status-token-for-test-000000000001",
     status: "capturing",
     stage: "capture",
     stageLabel: "Browser capture",
@@ -63,5 +65,7 @@ test("status page contains live progress and retry UI", () => {
   assert.match(html, /Generation progress/);
   assert.match(html, /Automatic recovery/);
   assert.match(html, /v1\/jobs/);
+  assert.match(html, /status_token/);
+  assert.match(html, /Return to ChatGPT to open the final MP4/);
   assert.match(html, /setTimeout\(poll,\s*2000\)/);
 });

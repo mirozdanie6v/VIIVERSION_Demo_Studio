@@ -53,7 +53,7 @@ test("automatic local engine exposes the union needed for Chatterbox-first fallb
 });
 
 
-test("premium-local default does not auto-enable the rejected Russian local presenter", () => {
+test("premium-local default enables Russian only with an approved reference", () => {
   const provider = new HuggingFaceVoiceProvider();
   const context = { env: { HF_TTS_PREMIUM_DEFAULT: "1" } };
 
@@ -64,6 +64,19 @@ test("premium-local default does not auto-enable the rejected Russian local pres
   assert.equal(
     provider.isConfigured({ ...baseRequest, locale: "ru-RU" }, context),
     false,
+  );
+  assert.equal(
+    provider.isConfigured(
+      { ...baseRequest, locale: "ru-RU" },
+      {
+        env: {
+          HF_TTS_PREMIUM_DEFAULT: "1",
+          HF_TTS_REFERENCE_URL_RU:
+            "https://demostudio.viiversion.com/__internal/voice-references/niki.wav",
+        },
+      },
+    ),
+    true,
   );
   assert.equal(
     provider.isConfigured({ ...baseRequest, locale: "vi-VN" }, context),

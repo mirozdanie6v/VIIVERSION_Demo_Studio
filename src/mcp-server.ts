@@ -211,7 +211,13 @@ export function createDemoStudioMcpHandler(service: DemoStudioService) {
           const auth = await authorizeTool(authHeader, [SCOPE_GENERATE]);
           const created = await service.createScenarioJob(input, auth.identity);
           const statusUrl = publicBaseUrl() + "/v1/jobs/" + created.job.id;
-          const statusPageUrl = publicBaseUrl() + "/jobs/" + created.job.id;
+          const statusPageUrl =
+            publicBaseUrl() +
+            "/jobs/" +
+            created.job.id +
+            (created.job.statusToken
+              ? "?status_token=" + encodeURIComponent(created.job.statusToken)
+              : "");
           return {
             content: [{
               type: "text",
