@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type {
   VoiceProvider,
@@ -36,6 +37,8 @@ function engineFrom(env: NodeJS.ProcessEnv): HuggingFaceEngine {
   return "auto";
 }
 
+const remoteReferenceCache = new Map<string, Promise<string>>();
+
 function referenceKeys(locale: string): string[] {
   const normalized = locale.toUpperCase().replace(/-/g, "_");
   const language = normalized.split("_")[0];
@@ -51,6 +54,68 @@ function resolveReferenceAudio(
   locale: string,
 ): string | undefined {
   return referenceKeys(locale).map((key) => env[key]).find(Boolean);
+}
+
+function referenceUrlKeys(locale: string): string[] {
+  const normalized = locale.toUpperCase().replace(/-/g, "_");
+  const language = normalized.split("_")[0];
+  return [
+    `HF_TTS_REFERENCE_URL_${normalized}`,
+    `HF_TTS_REFERENCE_URL_${language}`,
+    "HF_TTS_REFERENCE_URL",
+  ];
+}
+
+function resolveReferenceUrl(
+  env: NodeJS.ProcessEnv,
+  locale: string,
+): string | undefined {
+  return referenceUrlKeys(locale).map((key) => env[key]).find(Boolean);
+}
+
+async function ensureRemoteReference(
+  env: NodeJS.ProcessEnv,
+  locale: string,
+): Promise<string | undefined> {
+  const url = resolveReferenceUrl(env, locale);
+  if (!url) return undefined;
+
+  let cached = remoteReferenceCache.get(url);
+  if (!cached) {
+    cached = (async () => {
+      const targetDir =
+        env.HF_TTS_REFERENCE_CACHE_DIR ?? "/tmp/viiversion-voice-references";
+      await mkdir(targetDir, { recursive: true });
+      const target = path.join(
+        targetDir,
+        "reference-" + locale.toLowerCase().replace(/[^a-z0-9]+/g, "-") + ".wav",
+      );
+
+      const headers: Record<string, string> = {};
+      if (env.DEMO_STUDIO_INTERNAL_TOKEN) {
+        headers.Authorization = "Bearer " + env.DEMO_STUDIO_INTERNAL_TOKEN;
+      }
+
+      const response = await fetch(url, {
+        headers,
+        signal: AbortSignal.timeout(30_000),
+      });
+      if (!response.ok) {
+        throw new Error(
+          `Approved voice reference download failed (${response.status}).`,
+        );
+      }
+      const bytes = Buffer.from(await response.arrayBuffer());
+      if (bytes.length < 10_000) {
+        throw new Error("Approved voice reference is unexpectedly small.");
+      }
+      await writeFile(target, bytes);
+      return target;
+    })();
+    remoteReferenceCache.set(url, cached);
+  }
+
+  return cached;
 }
 
 async function run(
@@ -106,10 +171,16 @@ export class HuggingFaceVoiceProvider implements VoiceProvider {
     const env = context.env ?? process.env;
     const language = languageOf(request.locale);
     const persona = request.persona ?? "viiversion-presenter";
+    const hasApprovedReference =
+      Boolean(resolveReferenceAudio(env, request.locale)) ||
+      Boolean(resolveReferenceUrl(env, request.locale));
     const premiumPresenterDefault =
       truthy(env.HF_TTS_PREMIUM_DEFAULT) &&
       persona === "viiversion-presenter" &&
-      language === "en";
+      (
+        language === "en" ||
+        (language === "ru" && hasApprovedReference)
+      );
 
     return (
       request.provider === "huggingface" ||
@@ -170,7 +241,9 @@ export class HuggingFaceVoiceProvider implements VoiceProvider {
       env.HF_TTS_DEVICE ?? "auto",
     ];
 
-    const referenceAudio = resolveReferenceAudio(env, directed.locale);
+    const referenceAudio =
+      resolveReferenceAudio(env, directed.locale) ??
+      await ensureRemoteReference(env, directed.locale);
     if (referenceAudio) {
       args.push("--reference-audio", referenceAudio);
     }
