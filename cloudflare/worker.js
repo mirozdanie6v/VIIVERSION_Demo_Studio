@@ -9,6 +9,7 @@ const ACTIVE_HYBRID_KEY = "active-production-hybrid";
 const ACTIVE_VOICE_CONFIG_KEY = "active-voice-config";
 const ACTIVE_AUTH_CONFIG_KEY = "active-auth-config";
 const INTERNAL_TOKEN_KEY = "internal-storage-token";
+const NIKI_REFERENCE_VERSION = "max-tour-v9-r1";
 const GENERATION_DAILY_LIMIT = 10;
 const INSPECTION_DAILY_LIMIT = 30;
 const ACTIVE_JOB_PREFIX = "active-job:";
@@ -570,12 +571,15 @@ export class DemoStudioContainer extends DurableObject {
     const checkpointMatch = url.pathname.match(
       /^\/__internal\/checkpoints\/([0-9a-f-]{36})\/([a-z0-9._-]+)$/i,
     );
+    const voiceReference =
+      url.pathname === "/__internal/voice-references/niki.wav";
 
     if (
       !artifactMatch &&
       !jobMatch &&
       !recoveryMatch &&
-      !checkpointMatch
+      !checkpointMatch &&
+      !voiceReference
     ) {
       return undefined;
     }
@@ -583,6 +587,28 @@ export class DemoStudioContainer extends DurableObject {
     const expected = await this.getInternalToken();
     if (bearerToken(request) !== expected) {
       return new Response("Unauthorized", { status: 401 });
+    }
+
+    if (voiceReference && request.method === "GET") {
+      const object = await this.env.DEMO_STUDIO_ARTIFACTS.get(
+        "voice-references/niki-reference.wav",
+      );
+      if (!object) return new Response("Voice reference not found", { status: 404 });
+
+      return new Response(object.body, {
+        status: 200,
+        headers: {
+          "Content-Type": "audio/wav",
+          "Content-Length": String(object.size),
+          "Cache-Control": "private, max-age=31536000, immutable",
+          ETag: object.httpEtag,
+          "X-Voice-Reference-Version": NIKI_REFERENCE_VERSION,
+        },
+      });
+    }
+
+    if (voiceReference) {
+      return new Response("Method not allowed", { status: 405 });
     }
 
     if (checkpointMatch && request.method === "GET") {
@@ -1066,6 +1092,7 @@ export class DemoStudioContainer extends DurableObject {
       this.env.ELEVENLABS_VOICE_ID_EN ?? "",
       this.env.ELEVENLABS_VOICE_ID_EN_US ?? "",
       this.env.ELEVENLABS_MODEL ?? "eleven_v3",
+      NIKI_REFERENCE_VERSION,
     ];
     const digest = await crypto.subtle.digest(
       "SHA-256",
@@ -1174,6 +1201,9 @@ export class DemoStudioContainer extends DurableObject {
         DEMO_STUDIO_REUSE_BROWSER: "true",
         DEMO_STUDIO_REQUIRE_PREMIUM_VOICE: "true",
         HF_TTS_PREMIUM_DEFAULT: "1",
+        HF_TTS_REFERENCE_URL_RU:
+          "https://" + PUBLIC_HOST + "/__internal/voice-references/niki.wav",
+        HF_TTS_REFERENCE_VERSION: NIKI_REFERENCE_VERSION,
         DEMO_STUDIO_FFMPEG_PRESET:
           this.env.DEMO_STUDIO_FFMPEG_PRESET ?? "veryfast",
         DEMO_STUDIO_PRODUCTION_HYBRID: desiredHybrid,
