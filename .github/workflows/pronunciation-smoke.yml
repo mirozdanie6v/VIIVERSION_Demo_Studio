@@ -1,0 +1,44 @@
+name: Pronunciation Smoke
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'config/pronunciation-registry.json'
+      - 'scripts/hf_tts.py'
+      - 'scripts/pronunciation_preflight.py'
+      - '.github/workflows/pronunciation-smoke.yml'
+
+jobs:
+  pronunciation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      RUACCENT_MODEL: tiny2.1
+      RUACCENT_DEVICE: CPU
+      RUACCENT_WORKDIR: ${{ github.workspace }}/.cache/ruaccent
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Cache RUAccent assets
+        uses: actions/cache@v4
+        with:
+          path: |
+            .cache/ruaccent
+            ~/.cache/huggingface
+          key: pronunciation-ruaccent-${{ runner.os }}-${{ runner.arch }}-tiny2.1-v1
+
+      - name: Install RUAccent
+        run: |
+          python -m pip install --quiet --upgrade pip
+          python -m pip install --quiet ruaccent
+
+      - name: Run full pronunciation preflight
+        run: python scripts/pronunciation_preflight.py --full
