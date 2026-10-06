@@ -1282,7 +1282,7 @@ jobs:
               return json({reply:reply,plan:normalizePlan(parsed&&parsed.plan),source:"workers-ai",model:MODEL});
             }catch(error){
               console.error("LUME concierge inference failed",error);
-              return json({error:"concierge_inference_failed"},502);
+              return json({error:"concierge_inference_failed",detail:cleanText(error&&error.message,500)},502);
             }
           }
           
