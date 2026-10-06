@@ -137,7 +137,7 @@ jobs:
 
           await page.getByRole("link",{name:/Explore menu|Открыть меню|Xem thực đơn/i}).click();
           await page.waitForSelector(".menu-grid");
-          if(!location){}
+
           if(!page.url().includes("#/menu")) throw new Error("Hero Menu route did not update hash");
           if(await page.locator(".menu-card").count()<4) throw new Error("Menu did not render");
           await page.screenshot({path:"02-menu.png",fullPage:true});
@@ -169,7 +169,7 @@ jobs:
           await page.waitForSelector(".space-gallery");
           await page.locator('[data-action="reserve-space"]').click();
           await page.waitForSelector('[data-action="reserve-next-details"]');
-          if(store){}
+
           await page.screenshot({path:"05-conversion.png",fullPage:true});
 
           if(errors.length) throw new Error(errors.join(" | "));
