@@ -17,7 +17,8 @@
     "deploy:cloudflare": "wrangler deploy",
     "voice": "tsx src/voice-engine-cli.ts",
     "voice:cast": "tsx src/voice-cast-cli.ts",
-    "voice:scenario": "tsx src/scenario-voice-cli.ts"
+    "voice:scenario": "tsx src/scenario-voice-cli.ts",
+    "golden:contract": "tsx scripts/golden_video_contract.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/node": "^2.0.0",
