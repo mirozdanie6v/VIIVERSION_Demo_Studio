@@ -1,0 +1,104 @@
+name: LUME v2 Browser QA
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/lume-v2-browser-qa.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Playwright
+        run: |
+          set -euo pipefail
+          npm init -y >/dev/null
+          npm install playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps chromium >/dev/null
+
+      - name: Run mobile QA
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > /tmp/qa.mjs <<'NODE'
+          import { chromium } from "playwright";
+          import fs from "node:fs";
+
+          const browser=await chromium.launch({headless:true});
+          const page=await browser.newPage({
+            viewport:{width:430,height:932},
+            deviceScaleFactor:1,
+            isMobile:true,
+            hasTouch:true
+          });
+
+          const errors=[];
+          page.on("console",msg=>{ if(msg.type()==="error") errors.push("console: "+msg.text()); });
+          page.on("pageerror",err=>errors.push("pageerror: "+err.message));
+
+          await page.goto("https://lume-v2.viiversion.com/",{waitUntil:"networkidle"});
+          await page.waitForSelector(".hero");
+          await page.screenshot({path:"01-home.png",fullPage:true});
+          const homeTitle=await page.locator(".display").textContent();
+
+          await page.locator('[data-action="tab"][data-tab="menu"]').click();
+          await page.waitForSelector(".menu-grid");
+          const menuCards=await page.locator(".menu-card").count();
+          if(menuCards<2) throw new Error("Menu cards did not render");
+          await page.screenshot({path:"02-menu.png",fullPage:true});
+
+          await page.locator('[data-action="tab"][data-tab="concierge"]').click();
+          await page.waitForSelector("#concierge-input");
+          await page.fill("#concierge-input","Romantic dinner for two with seafood around sunset");
+          await page.locator('[data-action="concierge-send"]').click();
+          await page.waitForSelector(".plan",{timeout:30000});
+          const aiMessages=await page.locator(".message").count();
+          if(aiMessages<2) throw new Error("Concierge conversation did not render");
+          await page.screenshot({path:"03-concierge.png",fullPage:true});
+
+          await page.locator('[data-action="lang"][data-lang="ru"]').click();
+          await page.waitForTimeout(300);
+          const askLabel=await page.locator('[data-action="tab"][data-tab="concierge"] span:last-child').textContent();
+          if(!askLabel || !/AI|ИИ|AI/.test(askLabel)) throw new Error("Russian navigation did not render");
+          await page.screenshot({path:"04-ru.png",fullPage:true});
+
+          await page.locator('[data-action="tab"][data-tab="reserve"]').click();
+          await page.waitForSelector('[data-action="reserve-next-details"]');
+          await page.fill('[data-field="name"]',"QA Guest");
+          await page.fill('[data-field="phone"]',"+84900000000");
+          await page.locator('[data-action="reserve-next-details"]').click();
+          await page.waitForSelector('[data-action="select-reserve-space"]');
+          await page.locator('[data-action="select-reserve-space"]').first().click();
+          await page.locator('[data-action="reserve-next-space"]').click();
+          await page.waitForSelector('[data-action="reserve-next-review"]');
+          await page.screenshot({path:"05-reserve-review.png",fullPage:true});
+
+          fs.writeFileSync("qa.json",JSON.stringify({homeTitle,menuCards,aiMessages,errors},null,2));
+          if(errors.length) throw new Error("Browser errors: "+errors.join(" | "));
+          await browser.close();
+          NODE
+          node /tmp/qa.mjs
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lume-v2-browser-qa
+          path: |
+            01-home.png
+            02-menu.png
+            03-concierge.png
+            04-ru.png
+            05-reserve-review.png
+            qa.json
+          if-no-files-found: error
+          retention-days: 7
