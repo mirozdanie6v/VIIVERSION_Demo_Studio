@@ -12,6 +12,7 @@ import importlib.util
 import json
 from pathlib import Path
 import re
+import os
 import sys
 import traceback
 import unicodedata
@@ -61,34 +62,63 @@ def _whole_term_pattern(term: str) -> re.Pattern[str]:
     )
 
 
-def stress_russian_text(text: str, registry: dict) -> str:
+_ruaccent_instance = None
+
+
+def accented_to_ruaccent(value: str) -> str:
+    decomposed = unicodedata.normalize("NFD", value)
+    converted = re.sub(
+        r"([аеёиоуыэюяАЕЁИОУЫЭЮЯ])\u0301",
+        r"+\1",
+        decomposed,
+    )
+    return unicodedata.normalize("NFC", converted)
+
+
+def ruaccent_to_combining_acute(value: str) -> str:
+    converted = re.sub(
+        r"\+([аеёиоуыэюяАЕЁИОУЫЭЮЯ])",
+        lambda match: match.group(1) + "\u0301",
+        value,
+    )
+    return unicodedata.normalize("NFC", converted)
+
+
+def _get_ruaccent(registry: dict):
+    global _ruaccent_instance
+    if _ruaccent_instance is not None:
+        return _ruaccent_instance
+
     try:
-        from russian_text_stresser.text_stresser import RussianTextStresser
+        from ruaccent import RUAccent
     except ImportError as exc:
         raise RuntimeError(
-            "Russian premium TTS requires russian_text_stresser. "
-            "Install russian_text_stresser>=1.0.5."
+            "Russian premium TTS requires RUAccent. Install with: pip install ruaccent"
         ) from exc
 
+    custom_dict = {
+        source.lower(): accented_to_ruaccent(stressed)
+        for source, stressed in registry.get("russianStressOverrides", {}).items()
+    }
+
+    accentizer = RUAccent()
+    accentizer.load(
+        omograph_model_size=os.getenv("RUACCENT_MODEL", "tiny2.1"),
+        use_dictionary=True,
+        custom_dict=custom_dict,
+        device=os.getenv("RUACCENT_DEVICE", "CPU"),
+        workdir=os.getenv("RUACCENT_WORKDIR") or None,
+        tiny_mode=False,
+    )
+    _ruaccent_instance = accentizer
+    return accentizer
+
+
+def stress_russian_text(text: str, registry: dict) -> str:
     clean = strip_stress_marks(text)
-    overrides = registry.get("russianStressOverrides", {})
-    placeholders: dict[str, str] = {}
-
-    for idx, (source, stressed) in enumerate(
-        sorted(overrides.items(), key=lambda item: len(item[0]), reverse=True)
-    ):
-        placeholder = f"ZZRUSTRESS{idx}ZZ"
-        pattern = _whole_term_pattern(source)
-        if pattern.search(clean):
-            clean = pattern.sub(placeholder, clean)
-            placeholders[placeholder] = stressed
-
-    stressed_text = RussianTextStresser().stress_text(clean)
-    for placeholder, stressed in placeholders.items():
-        stressed_text = stressed_text.replace(placeholder, stressed)
-        stressed_text = stressed_text.replace(placeholder.lower(), stressed)
-
-    return stressed_text
+    accentizer = _get_ruaccent(registry)
+    stressed_plus = accentizer.process_all(clean)
+    return ruaccent_to_combining_acute(stressed_plus)
 
 
 def split_brand_segments(text: str, base_language: str, registry: dict) -> list[tuple[str, str]]:
