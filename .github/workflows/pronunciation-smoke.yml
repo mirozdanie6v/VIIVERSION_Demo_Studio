@@ -7,6 +7,7 @@ on:
     paths:
       - 'config/pronunciation-registry.json'
       - 'scripts/hf_tts.py'
+      - 'scripts/hf_tts_batch.py'
       - 'scripts/pronunciation_preflight.py'
       - '.github/workflows/pronunciation-smoke.yml'
 
