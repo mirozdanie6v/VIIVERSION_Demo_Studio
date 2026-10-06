@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 
-from scripts.hf_tts import (
+from hf_tts import (
     accented_to_ruaccent,
     load_pronunciation_registry,
     ruaccent_to_combining_acute,
