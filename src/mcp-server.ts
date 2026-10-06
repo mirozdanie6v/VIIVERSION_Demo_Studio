@@ -1,22 +1,100 @@
 import { createMcpHandler, McpServer } from "@modelcontextprotocol/server";
 import * as z from "zod/v4";
-import { authenticateBearer } from "./auth.js";
+import {
+  authenticateBearer,
+  authenticationMode,
+  oauthChallenge,
+  type AuthResult,
+} from "./auth.js";
 import { DemoStudioService } from "./service.js";
+import { DEMO_STUDIO_VERSION } from "./version.js";
+
+const SCOPE_INSPECT = "demo.inspect";
+const SCOPE_GENERATE = "demo.generate";
+const SCOPE_READ = "demo.read";
 
 function publicBaseUrl(): string {
   return (process.env.PUBLIC_BASE_URL ?? "http://localhost:8787").replace(/\/$/, "");
 }
 
+function oauthSecurity(scope: string) {
+  return [{ type: "oauth2", scopes: [scope] }] as const;
+}
+
+function authErrorResult(error: unknown, scopes: string[]) {
+  const message = error instanceof Error ? error.message : String(error);
+  const output: Record<string, unknown> = {
+    content: [{ type: "text", text: message }],
+    isError: true,
+  };
+
+  if (authenticationMode() === "oauth") {
+    output._meta = {
+      "mcp/www_authenticate": [
+        oauthChallenge(scopes, {
+          error: /scope/i.test(message) ? "insufficient_scope" : "invalid_token",
+          description: message,
+        }),
+      ],
+    };
+  }
+
+  return output as never;
+}
+
+async function authorizeTool(
+  header: string | undefined,
+  scopes: string[],
+): Promise<AuthResult> {
+  return authenticateBearer(header, scopes);
+}
+
 export function createDemoStudioMcpHandler(service: DemoStudioService) {
   return createMcpHandler((ctx) => {
-    const identity = authenticateBearer(
-      ctx.requestInfo?.headers.get("authorization") ?? undefined,
-    ).identity;
+    const authHeader =
+      ctx.requestInfo?.headers.get("authorization") ?? undefined;
 
     const server = new McpServer({
       name: "viiversion-demo-studio",
-      version: "0.13.0",
+      version: DEMO_STUDIO_VERSION,
     });
+
+    server.registerTool(
+      "get_profile",
+      {
+        title: "Get connected Demo Studio profile",
+        description:
+          "Return the stable profile represented by the current OAuth credentials.",
+        inputSchema: z.object({}),
+        outputSchema: z.object({
+          id: z.string().min(1),
+          name: z.string().optional(),
+          email: z.string().optional(),
+          nickname: z.string().optional(),
+        }),
+        annotations: {
+          readOnlyHint: true,
+          openWorldHint: false,
+          destructiveHint: false,
+          idempotentHint: true,
+        },
+        securitySchemes: oauthSecurity(SCOPE_READ),
+        _meta: {
+          "openai/profile": true,
+        },
+      } as never,
+      async () => {
+        try {
+          const auth = await authorizeTool(authHeader, [SCOPE_READ]);
+          return {
+            content: [{ type: "text", text: JSON.stringify(auth.profile) }],
+            structuredContent: auth.profile,
+          } as never;
+        } catch (error) {
+          return authErrorResult(error, [SCOPE_READ]);
+        }
+      },
+    );
 
     server.registerTool(
       "inspect_web_app",
@@ -33,14 +111,21 @@ export function createDemoStudioMcpHandler(service: DemoStudioService) {
           destructiveHint: false,
           idempotentHint: true,
         },
-      },
+        securitySchemes: oauthSecurity(SCOPE_INSPECT),
+      } as never,
       async ({ url }) => {
         try {
+          await authorizeTool(authHeader, [SCOPE_INSPECT]);
           const snapshot = await service.inspect(url);
           return {
             content: [{ type: "text", text: JSON.stringify(snapshot) }],
           };
         } catch (error) {
+          if (/OAuth|bearer|Authentication|required scope/i.test(
+            error instanceof Error ? error.message : String(error)
+          )) {
+            return authErrorResult(error, [SCOPE_INSPECT]);
+          }
           return {
             content: [{
               type: "text",
@@ -67,14 +152,21 @@ export function createDemoStudioMcpHandler(service: DemoStudioService) {
           destructiveHint: false,
           idempotentHint: true,
         },
-      },
+        securitySchemes: oauthSecurity(SCOPE_INSPECT),
+      } as never,
       async ({ url }) => {
         try {
+          await authorizeTool(authHeader, [SCOPE_INSPECT]);
           const result = await service.auditDesign(url);
           return {
             content: [{ type: "text", text: JSON.stringify(result) }],
           };
         } catch (error) {
+          if (/OAuth|bearer|Authentication|required scope/i.test(
+            error instanceof Error ? error.message : String(error)
+          )) {
+            return authErrorResult(error, [SCOPE_INSPECT]);
+          }
           return {
             content: [{
               type: "text",
@@ -108,10 +200,12 @@ export function createDemoStudioMcpHandler(service: DemoStudioService) {
           destructiveHint: true,
           idempotentHint: false,
         },
-      },
+        securitySchemes: oauthSecurity(SCOPE_GENERATE),
+      } as never,
       async (input) => {
         try {
-          const created = await service.createScenarioJob(input, identity);
+          const auth = await authorizeTool(authHeader, [SCOPE_GENERATE]);
+          const created = await service.createScenarioJob(input, auth.identity);
           const statusUrl = publicBaseUrl() + "/v1/jobs/" + created.job.id;
           const statusPageUrl = publicBaseUrl() + "/jobs/" + created.job.id;
           return {
@@ -131,6 +225,11 @@ export function createDemoStudioMcpHandler(service: DemoStudioService) {
             }],
           };
         } catch (error) {
+          if (/OAuth|bearer|Authentication|required scope/i.test(
+            error instanceof Error ? error.message : String(error)
+          )) {
+            return authErrorResult(error, [SCOPE_GENERATE]);
+          }
           return {
             content: [{
               type: "text",
@@ -166,10 +265,12 @@ export function createDemoStudioMcpHandler(service: DemoStudioService) {
           destructiveHint: true,
           idempotentHint: false,
         },
-      },
+        securitySchemes: oauthSecurity(SCOPE_GENERATE),
+      } as never,
       async (input) => {
         try {
-          const created = await service.createJob(input, identity);
+          const auth = await authorizeTool(authHeader, [SCOPE_GENERATE]);
+          const created = await service.createJob(input, auth.identity);
           const statusUrl = publicBaseUrl() + "/v1/jobs/" + created.job.id;
           const statusPageUrl = publicBaseUrl() + "/jobs/" + created.job.id;
 
@@ -192,6 +293,11 @@ export function createDemoStudioMcpHandler(service: DemoStudioService) {
             ],
           };
         } catch (error) {
+          if (/OAuth|bearer|Authentication|required scope/i.test(
+            error instanceof Error ? error.message : String(error)
+          )) {
+            return authErrorResult(error, [SCOPE_GENERATE]);
+          }
           return {
             content: [
               {
@@ -220,30 +326,40 @@ export function createDemoStudioMcpHandler(service: DemoStudioService) {
           destructiveHint: false,
           idempotentHint: true,
         },
-      },
+        securitySchemes: oauthSecurity(SCOPE_READ),
+      } as never,
       async ({ job_id }) => {
-        const job = await service.getJobDurable(job_id, identity);
+        try {
+          const auth = await authorizeTool(authHeader, [SCOPE_READ]);
+          const job = await service.getJobDurable(
+            job_id,
+            auth.identity,
+            auth.bearerToken,
+          );
 
-        if (!job) {
-          return {
-            content: [{ type: "text", text: "Demo job not found." }],
-            isError: true,
+          if (!job) {
+            return {
+              content: [{ type: "text", text: "Demo job not found." }],
+              isError: true,
+            };
+          }
+
+          const output: Record<string, unknown> = {
+            ...job,
+            status_page_url:
+              publicBaseUrl() + "/jobs/" + job.id,
           };
-        }
+          if (job.artifactReady) {
+            output.artifact_url =
+              publicBaseUrl() + "/v1/jobs/" + job.id + "/artifact";
+          }
 
-        const output: Record<string, unknown> = {
-          ...job,
-          status_page_url:
-            publicBaseUrl() + "/jobs/" + job.id,
-        };
-        if (job.artifactReady) {
-          output.artifact_url =
-            publicBaseUrl() + "/v1/jobs/" + job.id + "/artifact";
+          return {
+            content: [{ type: "text", text: JSON.stringify(output) }],
+          };
+        } catch (error) {
+          return authErrorResult(error, [SCOPE_READ]);
         }
-
-        return {
-          content: [{ type: "text", text: JSON.stringify(output) }],
-        };
       },
     );
 
