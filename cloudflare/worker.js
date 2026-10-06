@@ -6,6 +6,7 @@ const CONTAINER_PORT = 8080;
 const INACTIVITY_TIMEOUT_MS = 60 * 60 * 1000;
 const ACTIVE_IMAGE_KEY = "active-container-image";
 const ACTIVE_HYBRID_KEY = "active-production-hybrid";
+const ACTIVE_VOICE_CONFIG_KEY = "active-voice-config";
 const INTERNAL_TOKEN_KEY = "internal-storage-token";
 const GENERATION_DAILY_LIMIT = 10;
 const INSPECTION_DAILY_LIMIT = 30;
@@ -916,6 +917,26 @@ export class DemoStudioContainer extends DurableObject {
     return this.ctx.container.getTcpPort(CONTAINER_PORT).fetch(forwarded);
   }
 
+  async voiceConfigFingerprint() {
+    const values = [
+      this.env.ELEVENLABS_API_KEY ?? "",
+      this.env.ELEVENLABS_VOICE_ID ?? "",
+      this.env.ELEVENLABS_VOICE_ID_RU ?? "",
+      this.env.ELEVENLABS_VOICE_ID_RU_RU ?? "",
+      this.env.ELEVENLABS_VOICE_ID_EN ?? "",
+      this.env.ELEVENLABS_VOICE_ID_EN_US ?? "",
+      this.env.ELEVENLABS_MODEL ?? "eleven_v3",
+    ];
+    const digest = await crypto.subtle.digest(
+      "SHA-256",
+      new TextEncoder().encode(values.join("\n")),
+    );
+    return Array.from(new Uint8Array(digest))
+      .slice(0, 12)
+      .map((byte) => byte.toString(16).padStart(2, "0"))
+      .join("");
+  }
+
   async ensureCurrentRuntime(container) {
     const desiredImage = container.images.app;
     const desiredHybrid =
@@ -924,14 +945,20 @@ export class DemoStudioContainer extends DurableObject {
         .toLowerCase() === "false"
         ? "false"
         : "true";
-    const [activeImage, activeHybrid] = await Promise.all([
+    const desiredVoiceConfig = await this.voiceConfigFingerprint();
+    const [activeImage, activeHybrid, activeVoiceConfig] = await Promise.all([
       this.ctx.storage.get(ACTIVE_IMAGE_KEY),
       this.ctx.storage.get(ACTIVE_HYBRID_KEY),
+      this.ctx.storage.get(ACTIVE_VOICE_CONFIG_KEY),
     ]);
 
     if (
       container.running &&
-      (activeImage !== desiredImage || activeHybrid !== desiredHybrid)
+      (
+        activeImage !== desiredImage ||
+        activeHybrid !== desiredHybrid ||
+        activeVoiceConfig !== desiredVoiceConfig
+      )
     ) {
       await container.destroy(
         "Replacing stale Demo Studio container runtime",
@@ -939,10 +966,11 @@ export class DemoStudioContainer extends DurableObject {
       await Promise.all([
         this.ctx.storage.delete(ACTIVE_IMAGE_KEY),
         this.ctx.storage.delete(ACTIVE_HYBRID_KEY),
+        this.ctx.storage.delete(ACTIVE_VOICE_CONFIG_KEY),
       ]);
     }
 
-    return { desiredImage, desiredHybrid };
+    return { desiredImage, desiredHybrid, desiredVoiceConfig };
   }
 
   async startAndWaitForPort() {
@@ -951,7 +979,8 @@ export class DemoStudioContainer extends DurableObject {
       throw new Error("Cloudflare Container binding is unavailable.");
     }
 
-    const { desiredImage, desiredHybrid } = await this.ensureCurrentRuntime(container);
+    const { desiredImage, desiredHybrid, desiredVoiceConfig } =
+      await this.ensureCurrentRuntime(container);
 
     if (!container.running) {
       const internalToken = await this.getInternalToken();
@@ -967,6 +996,8 @@ export class DemoStudioContainer extends DurableObject {
           PUBLIC_HOST + ",container,localhost,127.0.0.1",
         DEMO_STUDIO_ALLOWED_ORIGINS: "https://" + PUBLIC_HOST,
         DEMO_STUDIO_REUSE_BROWSER: "true",
+        DEMO_STUDIO_REQUIRE_PREMIUM_VOICE: "true",
+        HF_TTS_PREMIUM_DEFAULT: "1",
         DEMO_STUDIO_FFMPEG_PRESET:
           this.env.DEMO_STUDIO_FFMPEG_PRESET ?? "veryfast",
         DEMO_STUDIO_PRODUCTION_HYBRID: desiredHybrid,
@@ -984,6 +1015,20 @@ export class DemoStudioContainer extends DurableObject {
 
       if (this.env.OPENAI_API_KEY) {
         env.OPENAI_API_KEY = this.env.OPENAI_API_KEY;
+      }
+
+      for (const key of [
+        "ELEVENLABS_API_KEY",
+        "ELEVENLABS_VOICE_ID",
+        "ELEVENLABS_VOICE_ID_RU",
+        "ELEVENLABS_VOICE_ID_RU_RU",
+        "ELEVENLABS_VOICE_ID_EN",
+        "ELEVENLABS_VOICE_ID_EN_US",
+        "ELEVENLABS_MODEL",
+      ]) {
+        if (this.env[key]) {
+          env[key] = this.env[key];
+        }
       }
 
       if (this.env.DEMO_STUDIO_API_KEY) {
@@ -1014,6 +1059,7 @@ export class DemoStudioContainer extends DurableObject {
           await Promise.all([
             this.ctx.storage.put(ACTIVE_IMAGE_KEY, desiredImage),
             this.ctx.storage.put(ACTIVE_HYBRID_KEY, desiredHybrid),
+            this.ctx.storage.put(ACTIVE_VOICE_CONFIG_KEY, desiredVoiceConfig),
           ]);
           return;
         }
