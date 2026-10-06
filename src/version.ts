@@ -22,8 +22,8 @@ export function demoStudioGenerationMode(): "hybrid" | "standard" {
     : "hybrid";
 }
 
-export function demoStudioAccessMode(): "authenticated" | "anonymous" {
-  return process.env.DEMO_STUDIO_API_KEY?.trim()
-    ? "authenticated"
-    : "anonymous";
+export function demoStudioAccessMode(): "oauth" | "api-key" | "anonymous" {
+  if (process.env.DEMO_STUDIO_OAUTH_ISSUER?.trim()) return "oauth";
+  if (process.env.DEMO_STUDIO_API_KEY?.trim()) return "api-key";
+  return "anonymous";
 }
