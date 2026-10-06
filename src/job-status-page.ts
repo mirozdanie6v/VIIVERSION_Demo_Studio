@@ -57,7 +57,11 @@ export function buildJobStatusPage(jobId: string): string {
   </main>
 <script>
 const jobId = ${JSON.stringify(jobId)};
-const endpoint = "/v1/jobs/" + encodeURIComponent(jobId);
+const statusToken = new URLSearchParams(window.location.search).get("status_token");
+const endpoint =
+  "/v1/jobs/" +
+  encodeURIComponent(jobId) +
+  (statusToken ? "?status_token=" + encodeURIComponent(statusToken) : "");
 const $ = (id) => document.getElementById(id);
 
 function seconds(iso) {
@@ -84,8 +88,12 @@ function render(job) {
 
   const artifact = $("artifact");
   if (job.artifact_url || job.artifactReady) {
-    const href = job.artifact_url || (endpoint + "/artifact");
-    artifact.innerHTML = '<a href="' + href + '">Open final MP4</a>';
+    if (statusToken) {
+      artifact.textContent = "Video is ready. Return to ChatGPT to open the final MP4.";
+    } else {
+      const href = job.artifact_url || ("/v1/jobs/" + encodeURIComponent(jobId) + "/artifact");
+      artifact.innerHTML = '<a href="' + href + '">Open final MP4</a>';
+    }
   } else {
     artifact.textContent = "";
   }
