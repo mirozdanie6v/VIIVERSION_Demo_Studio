@@ -383,17 +383,15 @@ export function createDemoStudioHttpServer(
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       const status = errorStatus(error);
-      const headers =
-        status === 401 && authenticationMode() === "oauth"
-          ? {
-              "WWW-Authenticate": oauthChallenge([], {
-                error: /scope/i.test(message)
-                  ? "insufficient_scope"
-                  : "invalid_token",
-                description: message,
-              }),
-            }
-          : {};
+      const headers: Record<string, string> = {};
+      if (status === 401 && authenticationMode() === "oauth") {
+        headers["WWW-Authenticate"] = oauthChallenge([], {
+          error: /scope/i.test(message)
+            ? "insufficient_scope"
+            : "invalid_token",
+          description: message,
+        });
+      }
       sendJson(response, status, { error: message }, headers);
     }
   });
