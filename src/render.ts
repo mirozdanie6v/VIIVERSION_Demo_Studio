@@ -16,6 +16,7 @@ import {
   type HybridRenderManifest,
 } from "./hybrid-compose.js";
 import { alignScenesToBeatGrid } from "./music-brain.js";
+import { MAX_AUTOMATIC_NARRATION_TAIL_HOLD_SECONDS } from "./narration-timing.js";
 import { resolvePresentationDesign } from "./presentation-design-brain.js";
 import type { DesignContract, UxPreflight } from "./ux-design-brain.js";
 import type {
@@ -388,6 +389,30 @@ export async function renderRun(options: RenderOptions): Promise<string> {
   });
   const scenes = musicBrain.scenes;
 
+  let narrationTailHoldSeconds = 0;
+  try {
+    const narrationSync = JSON.parse(
+      await readFile(path.join(runDir, "narration-sync.json"), "utf8"),
+    ) as { tailHoldSeconds?: number };
+    const requestedTailHold = Number(narrationSync.tailHoldSeconds ?? 0);
+    if (
+      !Number.isFinite(requestedTailHold) ||
+      requestedTailHold < 0 ||
+      requestedTailHold > MAX_AUTOMATIC_NARRATION_TAIL_HOLD_SECONDS + 1e-6
+    ) {
+      throw new Error(
+        `Invalid narration tail hold: ${String(narrationSync.tailHoldSeconds)}`,
+      );
+    }
+    narrationTailHoldSeconds = requestedTailHold;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+
+  const editorContentDurationSeconds = scenes.at(-1)?.outputEnd ?? 0;
+  const contentDurationSeconds =
+    editorContentDurationSeconds + narrationTailHoldSeconds;
+
   await Promise.all([
     writeFile(
       path.join(runDir, "editor_brain.json"),
@@ -414,8 +439,9 @@ export async function renderRun(options: RenderOptions): Promise<string> {
               manifest.timeline.at(-1)?.finishedAt ??
               manifest.startedAt,
           ),
-          editedDurationSeconds:
-            scenes.at(-1)?.outputEnd ?? 0,
+          editedDurationSeconds: editorContentDurationSeconds,
+          narrationTailHoldSeconds,
+          finalContentDurationSeconds: contentDurationSeconds,
           editorBrainVersion: editorBrain.version,
           criticVersion: critic.version,
           musicBrainVersion: musicBrain.version,
@@ -499,6 +525,13 @@ export async function renderRun(options: RenderOptions): Promise<string> {
       hybridComposition ? "hybridsrc" : "0:v",
     ),
   ];
+  let mainVideoLabel = "mainraw";
+  if (narrationTailHoldSeconds > 0) {
+    filterParts.push(
+      `[mainraw]tpad=stop_mode=clone:stop_duration=${number(narrationTailHoldSeconds)}[mainrawheld]`,
+    );
+    mainVideoLabel = "mainrawheld";
+  }
   const mainDecor: string[] = [];
   const captionPlacement = visualCritic.plan.captionPlacement;
   const captionStyle = {
@@ -579,8 +612,8 @@ export async function renderRun(options: RenderOptions): Promise<string> {
 
   filterParts.push(
     mainDecor.length > 0
-      ? `[mainraw]${mainDecor.join(",")}[main]`
-      : "[mainraw]null[main]",
+      ? `[${mainVideoLabel}]${mainDecor.join(",")}[main]`
+      : `[${mainVideoLabel}]null[main]`,
   );
 
   const introEnabled = options.intro !== false;
@@ -640,7 +673,6 @@ export async function renderRun(options: RenderOptions): Promise<string> {
   }
 
   const voiceDelayMs = Math.round(introSeconds * 1000);
-  const contentDurationSeconds = scenes.at(-1)?.outputEnd ?? 0;
   const finalDurationSeconds =
     introSeconds + contentDurationSeconds + outroSeconds;
 
