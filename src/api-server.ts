@@ -320,23 +320,36 @@ export function createDemoStudioHttpServer(
         );
         const input = parseJobRequest(await readJson(request));
         const created = await service.createJob(input, auth.identity);
+        const { statusToken, ...publicJob } = created.job;
+        const statusPageUrl =
+          "/jobs/" +
+          created.job.id +
+          (statusToken
+            ? "?status_token=" + encodeURIComponent(statusToken)
+            : "");
 
         sendJson(response, 202, {
-          job: created.job,
+          job: publicJob,
           quota: created.quota,
           status_url: "/v1/jobs/" + created.job.id,
-          status_page_url: "/jobs/" + created.job.id,
+          status_page_url: statusPageUrl,
         });
         return;
       }
 
       const jobPath = matchJobPath(pathname);
       if (request.method === "GET" && jobPath && !jobPath.artifact) {
-        const auth = await authenticateBearer(
-          request.headers.authorization,
-          ["demo.read"],
-        );
-        const job = service.getJob(jobPath.id, auth.identity);
+        const statusToken = url.searchParams.get("status_token") ?? undefined;
+        let job;
+        if (statusToken) {
+          job = service.getJob(jobPath.id, undefined, statusToken);
+        } else {
+          const auth = await authenticateBearer(
+            request.headers.authorization,
+            ["demo.read"],
+          );
+          job = service.getJob(jobPath.id, auth.identity);
+        }
         if (!job) {
           sendJson(response, 404, { error: "Demo job not found." });
           return;
@@ -344,9 +357,10 @@ export function createDemoStudioHttpServer(
 
         sendJson(response, 200, {
           ...job,
-          artifact_url: job.artifactReady
-            ? "/v1/jobs/" + job.id + "/artifact"
-            : undefined,
+          artifact_url:
+            job.artifactReady && !statusToken
+              ? "/v1/jobs/" + job.id + "/artifact"
+              : undefined,
         });
         return;
       }
