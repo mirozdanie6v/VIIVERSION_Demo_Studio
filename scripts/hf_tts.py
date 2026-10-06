@@ -9,9 +9,12 @@ from __future__ import annotations
 
 import argparse
 import importlib.util
+import json
 from pathlib import Path
+import re
 import sys
 import traceback
+import unicodedata
 
 
 def parse_args() -> argparse.Namespace:
@@ -35,6 +38,104 @@ CHATTERBOX_LANGUAGES = {
 
 def module_available(name: str) -> bool:
     return importlib.util.find_spec(name) is not None
+
+
+REGISTRY_PATH = Path(__file__).resolve().parents[1] / "config" / "pronunciation-registry.json"
+
+
+def load_pronunciation_registry() -> dict:
+    with REGISTRY_PATH.open("r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def strip_stress_marks(text: str) -> str:
+    decomposed = unicodedata.normalize("NFD", text)
+    cleaned = "".join(ch for ch in decomposed if ch not in {"\u0301", "\u0300"})
+    return unicodedata.normalize("NFC", cleaned)
+
+
+def _whole_term_pattern(term: str) -> re.Pattern[str]:
+    return re.compile(
+        r"(?<![\w])" + re.escape(term) + r"(?![\w])",
+        flags=re.IGNORECASE | re.UNICODE,
+    )
+
+
+def stress_russian_text(text: str, registry: dict) -> str:
+    try:
+        from russian_text_stresser.text_stresser import RussianTextStresser
+    except ImportError as exc:
+        raise RuntimeError(
+            "Russian premium TTS requires russian_text_stresser. "
+            "Install russian_text_stresser>=1.0.5."
+        ) from exc
+
+    clean = strip_stress_marks(text)
+    overrides = registry.get("russianStressOverrides", {})
+    placeholders: dict[str, str] = {}
+
+    for idx, (source, stressed) in enumerate(
+        sorted(overrides.items(), key=lambda item: len(item[0]), reverse=True)
+    ):
+        placeholder = f"ZZRUSTRESS{idx}ZZ"
+        pattern = _whole_term_pattern(source)
+        if pattern.search(clean):
+            clean = pattern.sub(placeholder, clean)
+            placeholders[placeholder] = stressed
+
+    stressed_text = RussianTextStresser().stress_text(clean)
+    for placeholder, stressed in placeholders.items():
+        stressed_text = stressed_text.replace(placeholder, stressed)
+        stressed_text = stressed_text.replace(placeholder.lower(), stressed)
+
+    return stressed_text
+
+
+def split_brand_segments(text: str, base_language: str, registry: dict) -> list[tuple[str, str]]:
+    brands = registry.get("brands", [])
+    aliases: list[tuple[str, dict]] = []
+    for brand in brands:
+        for alias in brand.get("aliases", []):
+            aliases.append((alias, brand))
+    aliases.sort(key=lambda item: len(item[0]), reverse=True)
+
+    if not aliases:
+        return [(base_language, text)]
+
+    pattern = re.compile(
+        "|".join(f"({re.escape(alias)})" for alias, _ in aliases),
+        flags=re.IGNORECASE | re.UNICODE,
+    )
+    alias_map = {alias.casefold(): brand for alias, brand in aliases}
+
+    segments: list[tuple[str, str]] = []
+    cursor = 0
+    for match in pattern.finditer(text):
+        if match.start() > cursor:
+            segments.append((base_language, text[cursor:match.start()]))
+
+        matched = match.group(0)
+        brand = alias_map.get(matched.casefold())
+        if brand:
+            spoken = brand.get("spoken", {})
+            brand_locale = str(spoken.get("locale", "en-US"))
+            brand_language = brand_locale.split("-")[0].lower()
+            segments.append((brand_language, str(spoken.get("text", matched))))
+        else:
+            segments.append((base_language, matched))
+        cursor = match.end()
+
+    if cursor < len(text):
+        segments.append((base_language, text[cursor:]))
+
+    return [(language, part) for language, part in segments if part.strip()]
+
+
+def prepare_segment_text(text: str, language: str, registry: dict) -> str:
+    prepared = text.strip()
+    if language == "ru":
+        prepared = stress_russian_text(prepared, registry)
+    return prepared
 
 
 def resolve_engine(requested: str, language: str) -> str:
@@ -112,16 +213,43 @@ def synthesize_chatterbox(args: argparse.Namespace, text: str) -> None:
     except TypeError:
         model = ChatterboxMultilingualTTS.from_pretrained(device=device)
 
-    kwargs = {}
-    if args.reference_audio:
-        kwargs["audio_prompt_path"] = args.reference_audio
+    registry = load_pronunciation_registry()
+    segments = split_brand_segments(text, args.language, registry)
+    rendered = []
 
-    wav = model.generate(
-        text,
-        language_id=args.language,
-        **kwargs,
-    )
-    ta.save(args.output, wav, model.sr)
+    if args.reference_audio:
+        model.prepare_conditionals(args.reference_audio)
+
+    for index, (segment_language, segment_text) in enumerate(segments):
+        prepared = prepare_segment_text(segment_text, segment_language, registry)
+        if not prepared:
+            continue
+
+        # Avoid a hard full-stop between language spans. Chatterbox's punc_norm
+        # adds punctuation automatically, so comma-terminate non-final spans.
+        if index < len(segments) - 1 and prepared[-1] not in ",.!?-":
+            prepared += ","
+
+        wav = model.generate(
+            prepared,
+            language_id=segment_language,
+            audio_prompt_path=None,
+            cfg_weight=0.0 if segment_language != args.language else 0.5,
+        )
+        rendered.append(wav)
+
+    if not rendered:
+        raise RuntimeError("No speech segments were produced.")
+
+    import torch
+    gap = torch.zeros((1, int(model.sr * 0.025)), dtype=rendered[0].dtype)
+    pieces = []
+    for index, wav in enumerate(rendered):
+        if index:
+            pieces.append(gap)
+        pieces.append(wav)
+    combined = torch.cat(pieces, dim=1)
+    ta.save(args.output, combined, model.sr)
 
 
 def main() -> int:
