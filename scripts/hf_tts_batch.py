@@ -98,7 +98,7 @@ def main() -> int:
 
     print(f"PREMIUM_VOICE_DEVICE={device}")
     print(f"PREMIUM_VOICE_SEGMENTS={len(text_files)}")
-    print("PRONUNCIATION_PIPELINE=ruaccent-single-pass+brand-language-spans")
+    print("PRONUNCIATION_PIPELINE=stressonnx-single-pass+approved-overrides+brand-language-spans")
     return 0
 
 
