@@ -17,8 +17,19 @@ function publicBaseUrl(): string {
   return (process.env.PUBLIC_BASE_URL ?? "http://localhost:8787").replace(/\/$/, "");
 }
 
-function oauthSecurity(scope: string) {
-  return [{ type: "oauth2", scopes: [scope] }] as const;
+function securedTool<T extends object>(
+  config: T,
+  scope: string,
+  meta?: Record<string, unknown>,
+): T {
+  return Object.assign(
+    {},
+    config,
+    {
+      securitySchemes: [{ type: "oauth2", scopes: [scope] }],
+    },
+    meta ? { _meta: meta } : {},
+  ) as T;
 }
 
 function authErrorResult(error: unknown, scopes: string[]) {
@@ -61,7 +72,7 @@ export function createDemoStudioMcpHandler(service: DemoStudioService) {
 
     server.registerTool(
       "get_profile",
-      {
+      securedTool({
         title: "Get connected Demo Studio profile",
         description:
           "Return the stable profile represented by the current OAuth credentials.",
@@ -78,11 +89,7 @@ export function createDemoStudioMcpHandler(service: DemoStudioService) {
           destructiveHint: false,
           idempotentHint: true,
         },
-        securitySchemes: oauthSecurity(SCOPE_READ),
-        _meta: {
-          "openai/profile": true,
-        },
-      } as never,
+      }, SCOPE_READ, { "openai/profile": true }),
       async () => {
         try {
           const auth = await authorizeTool(authHeader, [SCOPE_READ]);
@@ -98,7 +105,7 @@ export function createDemoStudioMcpHandler(service: DemoStudioService) {
 
     server.registerTool(
       "inspect_web_app",
-      {
+      securedTool({
         title: "Inspect web application",
         description:
           "Inspect a public web application and return headings plus visible interactive elements with suggested stable targets.",
@@ -111,8 +118,7 @@ export function createDemoStudioMcpHandler(service: DemoStudioService) {
           destructiveHint: false,
           idempotentHint: true,
         },
-        securitySchemes: oauthSecurity(SCOPE_INSPECT),
-      } as never,
+      }, SCOPE_INSPECT),
       async ({ url }) => {
         try {
           await authorizeTool(authHeader, [SCOPE_INSPECT]);
@@ -139,7 +145,7 @@ export function createDemoStudioMcpHandler(service: DemoStudioService) {
 
     server.registerTool(
       "audit_web_app_design",
-      {
+      securedTool({
         title: "Audit web application UX and visual system",
         description:
           "Run the reusable VIIVERSION UX/Design Brain against a public web application. Returns desktop/mobile QA, inferred design profile and overlay design contract.",
@@ -152,8 +158,7 @@ export function createDemoStudioMcpHandler(service: DemoStudioService) {
           destructiveHint: false,
           idempotentHint: true,
         },
-        securitySchemes: oauthSecurity(SCOPE_INSPECT),
-      } as never,
+      }, SCOPE_INSPECT),
       async ({ url }) => {
         try {
           await authorizeTool(authHeader, [SCOPE_INSPECT]);
@@ -180,7 +185,7 @@ export function createDemoStudioMcpHandler(service: DemoStudioService) {
 
     server.registerTool(
       "create_demo_video_from_scenario",
-      {
+      securedTool({
         title: "Render web app demo from scenario",
         description:
           "Render a presentation video from a Demo Studio scenario built from inspect_web_app results.",
@@ -200,8 +205,7 @@ export function createDemoStudioMcpHandler(service: DemoStudioService) {
           destructiveHint: true,
           idempotentHint: false,
         },
-        securitySchemes: oauthSecurity(SCOPE_GENERATE),
-      } as never,
+      }, SCOPE_GENERATE),
       async (input) => {
         try {
           const auth = await authorizeTool(authHeader, [SCOPE_GENERATE]);
@@ -243,7 +247,7 @@ export function createDemoStudioMcpHandler(service: DemoStudioService) {
 
     server.registerTool(
       "create_demo_video",
-      {
+      securedTool({
         title: "Create web app demo video",
         description:
           "Create a presentation video of a web application from its URL and a plain-language demo goal. Returns a job ID immediately; use get_demo_job to monitor it.",
@@ -265,8 +269,7 @@ export function createDemoStudioMcpHandler(service: DemoStudioService) {
           destructiveHint: true,
           idempotentHint: false,
         },
-        securitySchemes: oauthSecurity(SCOPE_GENERATE),
-      } as never,
+      }, SCOPE_GENERATE),
       async (input) => {
         try {
           const auth = await authorizeTool(authHeader, [SCOPE_GENERATE]);
@@ -313,7 +316,7 @@ export function createDemoStudioMcpHandler(service: DemoStudioService) {
 
     server.registerTool(
       "get_demo_job",
-      {
+      securedTool({
         title: "Get demo video job",
         description:
           "Check a Demo Studio generation job. When completed, returns the MP4 download URL.",
@@ -326,8 +329,7 @@ export function createDemoStudioMcpHandler(service: DemoStudioService) {
           destructiveHint: false,
           idempotentHint: true,
         },
-        securitySchemes: oauthSecurity(SCOPE_READ),
-      } as never,
+      }, SCOPE_READ),
       async ({ job_id }) => {
         try {
           const auth = await authorizeTool(authHeader, [SCOPE_READ]);
