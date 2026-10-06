@@ -30,17 +30,32 @@ jobs:
           import { chromium } from "playwright";
           import fs from "node:fs";
           const browser=await chromium.launch({headless:true});
-          const page=await browser.newPage({viewport:{width:1440,height:1200}});
-          await page.goto("https://www.lumenhatrang.com/",{waitUntil:"networkidle",timeout:60000});
+          const page=await browser.newPage({viewport:{width:1440,height:1000}});
+          await page.goto("https://www.lumenhatrang.com/",{waitUntil:"domcontentloaded",timeout:60000});
+          const fullHeight=await page.evaluate(()=>document.documentElement.scrollHeight);
+          for(let y=0;y<fullHeight;y+=800){
+            await page.evaluate(y=>window.scrollTo(0,y),y);
+            await page.waitForTimeout(250);
+          }
+          await page.evaluate(()=>window.scrollTo(0,0));
+          await page.waitForTimeout(500);
           await page.screenshot({path:"official-home.png",fullPage:false});
           const data=await page.evaluate(()=>{
-            const imgs=[...document.images].map((img,i)=>({i,src:img.currentSrc||img.src,alt:img.alt,w:img.naturalWidth,h:img.naturalHeight,rect:img.getBoundingClientRect().toJSON()}));
-            const svgs=[...document.querySelectorAll("svg")].slice(0,30).map((svg,i)=>({i,html:svg.outerHTML.slice(0,5000),rect:svg.getBoundingClientRect().toJSON()}));
-            const bg=[...document.querySelectorAll("*")].map((el,i)=>({i,tag:el.tagName,cls:el.className,id:el.id,bg:getComputedStyle(el).backgroundImage,rect:el.getBoundingClientRect().toJSON()})).filter(x=>x.bg&&x.bg!=="none").slice(0,100);
-            return {title:document.title,url:location.href,imgs,svgs,bg};
+            const extractUrl=bg=>{
+              const match=/url\(["']?(.*?)["']?\)/.exec(bg||"");
+              return match?.[1]||null;
+            };
+            const bg=[...document.querySelectorAll("*")].map((el,i)=>{
+              const cs=getComputedStyle(el),rect=el.getBoundingClientRect();
+              return {i,tag:el.tagName,cls:String(el.className||""),id:el.id||"",bg:cs.backgroundImage,url:extractUrl(cs.backgroundImage),x:rect.x,y:rect.y+scrollY,w:rect.width,h:rect.height};
+            }).filter(x=>x.url);
+            const unique=[...new Map(bg.map(x=>[x.url,x])).values()];
+            const logo=unique.filter(x=>/logo/i.test(x.url));
+            return {title:document.title,url:location.href,height:document.documentElement.scrollHeight,logo,backgrounds:unique};
           });
           fs.writeFileSync("brand-assets.json",JSON.stringify(data,null,2));
-          console.log(JSON.stringify(data,null,2));
+          console.log("LOGOS="+JSON.stringify(data.logo));
+          console.log("BACKGROUNDS="+JSON.stringify(data.backgrounds));
           await browser.close();
           NODE
           node inspect.mjs
