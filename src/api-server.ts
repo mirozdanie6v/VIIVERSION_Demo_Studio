@@ -339,7 +339,12 @@ export function createDemoStudioHttpServer(
 
       const jobPath = matchJobPath(pathname);
       if (request.method === "GET" && jobPath && !jobPath.artifact) {
-        const statusToken = url.searchParams.get("status_token") ?? undefined;
+        const requestUrl = new URL(
+          request.url ?? "/",
+          "http://localhost",
+        );
+        const statusToken =
+          requestUrl.searchParams.get("status_token") ?? undefined;
         let job;
         if (statusToken) {
           job = service.getJob(jobPath.id, undefined, statusToken);
