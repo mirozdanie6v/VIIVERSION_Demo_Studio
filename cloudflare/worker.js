@@ -314,8 +314,91 @@ export class DemoStudioContainer extends DurableObject {
     }
   }
 
-  async consumeDailyQuota(request, kind, limit) {
-    const identity = await quotaIdentity(request);
+  async authenticatePublicRequest(request, scopes = []) {
+    this.starting ??= this.startAndWaitForPort().finally(() => {
+      this.starting = undefined;
+    });
+    await this.starting;
+
+    const internalToken = await this.getInternalToken();
+    const authorization = request.headers.get("authorization") ?? "";
+    const response = await this.ctx.container
+      .getTcpPort(CONTAINER_PORT)
+      .fetch("http://container/__internal/auth-check", {
+        method: "GET",
+        headers: {
+          Authorization: authorization,
+          "x-demo-studio-internal-token": internalToken,
+          "x-demo-studio-required-scopes": scopes.join(" "),
+          "x-forwarded-host": PUBLIC_HOST,
+          "x-forwarded-proto": "https",
+        },
+        signal: AbortSignal.timeout(10_000),
+      });
+
+    if (!response.ok) {
+      const detail = await response.text();
+      const status = response.status === 401 ? 401 : 503;
+      return {
+        ok: false,
+        response: new Response(
+          JSON.stringify({
+            error: detail || "Authentication failed.",
+          }),
+          {
+            status,
+            headers: {
+              "Content-Type": "application/json; charset=utf-8",
+              "Cache-Control": "no-store",
+              ...(status === 401
+                ? {
+                    "WWW-Authenticate": oauthChallenge(scopes.join(" ")),
+                  }
+                : {}),
+            },
+          },
+        ),
+      };
+    }
+
+    const payload = await response.json();
+    if (!payload?.identityHash) {
+      return {
+        ok: false,
+        response: new Response(
+          JSON.stringify({ error: "Authenticated identity is unavailable." }),
+          {
+            status: 503,
+            headers: {
+              "Content-Type": "application/json; charset=utf-8",
+              "Cache-Control": "no-store",
+            },
+          },
+        ),
+      };
+    }
+
+    return {
+      ok: true,
+      identityHash: String(payload.identityHash),
+      mode: payload.mode,
+      scopes: Array.isArray(payload.scopes) ? payload.scopes : [],
+    };
+  }
+
+  async consumeDailyQuota(request, kind, limit, scopes = []) {
+    const auth = await this.authenticatePublicRequest(request, scopes);
+    if (!auth.ok) {
+      return {
+        allowed: false,
+        used: 0,
+        limit,
+        remaining: 0,
+        authResponse: auth.response,
+      };
+    }
+
+    const identity = auth.identityHash;
     const day = new Date().toISOString().slice(0, 10);
     const key = "quota:" + day + ":" + kind + ":" + identity;
 
@@ -383,7 +466,9 @@ export class DemoStudioContainer extends DurableObject {
         request,
         "generation",
         GENERATION_DAILY_LIMIT,
+        ["demo.generate"],
       );
+      if (quota.authResponse) return quota.authResponse;
       return quota.allowed
         ? undefined
         : this.quotaErrorResponse(undefined, "generation", quota);
@@ -414,7 +499,9 @@ export class DemoStudioContainer extends DurableObject {
         request,
         "generation",
         GENERATION_DAILY_LIMIT,
+        ["demo.generate"],
       );
+      if (quota.authResponse) return quota.authResponse;
       return quota.allowed
         ? undefined
         : this.quotaErrorResponse(payload, "generation", quota);
@@ -428,7 +515,9 @@ export class DemoStudioContainer extends DurableObject {
         request,
         "inspection",
         INSPECTION_DAILY_LIMIT,
+        ["demo.inspect"],
       );
+      if (quota.authResponse) return quota.authResponse;
       return quota.allowed
         ? undefined
         : this.quotaErrorResponse(payload, "inspection", quota);
@@ -446,12 +535,6 @@ export class DemoStudioContainer extends DurableObject {
     }
 
     return token;
-  }
-
-  isPublicAuthorized(request) {
-    const configured = this.env.DEMO_STUDIO_API_KEY;
-    if (!configured) return true;
-    return bearerToken(request) === configured;
   }
 
   async scheduleWatchdog() {
