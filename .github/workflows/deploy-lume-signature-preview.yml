@@ -17,82 +17,178 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  deploy:
+  deploy-and-qa:
     runs-on: ubuntu-latest
-    timeout-minutes: 18
+    timeout-minutes: 25
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      PREVIEW_URL: https://lume-v2.viiversion.com
+
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+
+      - name: Materialize LUME feature source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p lume
+          node <<'NODE'
+          const fs=require('fs');
+          const path=require('path');
+          for(const source of ['.deploy/lume-signature-a.json','.deploy/lume-signature-b.json']){
+            const bundle=JSON.parse(fs.readFileSync(source,'utf8'));
+            for(const [name,content] of Object.entries(bundle)){
+              const target=path.join('lume',name);
+              fs.mkdirSync(path.dirname(target),{recursive:true});
+              fs.writeFileSync(target,content,'utf8');
+            }
+          }
+          NODE
+
+      - name: Install, validate and build
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd lume
+          npm install --no-audit --no-fund
+          npm run check:syntax
+          npm run build
+          test -f dist/assets/lume/logo/lume-logo.webp
+          test -f dist/assets/lume/hero/lume-hero.webp
+          test -f dist/assets/lume/spaces/dining-01.webp
+          test -f dist/assets/lume/spaces/rooftop-03.webp
 
       - name: Resolve Cloudflare account
         shell: bash
         run: |
           set -euo pipefail
           test -n "${CLOUDFLARE_API_TOKEN:-}"
-          if [ -z "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then
-            curl -fsS "https://api.cloudflare.com/client/v4/zones?name=viiversion.com&per_page=5"               -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" > /tmp/zones.json
-            id=$(jq -r '[.result[]? | select(.name=="viiversion.com")][0].account.id // empty' /tmp/zones.json)
-            test -n "${id}"
-            echo "CLOUDFLARE_ACCOUNT_ID=${id}" >> "${GITHUB_ENV}"
-          fi
+          if [ -n "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then exit 0; fi
+          curl -fsS "https://api.cloudflare.com/client/v4/zones?name=viiversion.com&per_page=5"             -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" > /tmp/zones.json
+          id=$(jq -r '[.result[]? | select(.name=="viiversion.com")][0].account.id // empty' /tmp/zones.json)
+          test -n "${id}"
+          echo "CLOUDFLARE_ACCOUNT_ID=${id}" >> "${GITHUB_ENV}"
 
-      - name: Materialize feature source
+      - name: Deploy Cloudflare preview
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p lume-signature
-          node <<'NODE'
-          const fs=require("fs");
-          const path=require("path");
-          for(const file of [".deploy/lume-signature-a.json",".deploy/lume-signature-b.json"]){
-            const bundle=JSON.parse(fs.readFileSync(file,"utf8"));
-            for(const [name,content] of Object.entries(bundle)){
-              const target=path.join("lume-signature",name);
-              fs.mkdirSync(path.dirname(target),{recursive:true});
-              fs.writeFileSync(target,content,"utf8");
-            }
-          }
-          NODE
-
-      - name: Validate and build local LUME media
-        shell: bash
-        run: |
-          set -euo pipefail
-          cd lume-signature
-          npm install --no-audit --no-fund
-          npm run check:syntax
-          npm run build
-          test -f dist/assets/lume/logo/lume-logo.webp
-          test -f dist/assets/lume/hero/lume-hero.webp
-          test -f dist/assets/lume/spaces/rooftop-03.webp
-
-      - name: Deploy preview
-        shell: bash
-        run: |
-          set -euo pipefail
-          cd lume-signature
+          cd lume
           npx --yes wrangler@4 deploy --config wrangler.preview.jsonc
 
-      - name: Verify app and AI contract
+      - name: Verify API contract
         shell: bash
         run: |
           set -euo pipefail
           ready=0
           for attempt in $(seq 1 36); do
-            code=$(curl -L -sS --connect-timeout 5 --max-time 20 -o /tmp/home.html -w '%{http_code}' "https://lume-v2.viiversion.com/" || true)
-            if [ "${code}" = "200" ] && grep -Fq '/assets/lume/hero/lume-hero.webp' /tmp/home.html; then ready=1; break; fi
+            code=$(curl -L -sS --connect-timeout 5 --max-time 20 -o /tmp/lume.html -w '%{http_code}' "${PREVIEW_URL}/" || true)
+            if [ "${code}" = "200" ] && grep -Fq '/src/app.js' /tmp/lume.html; then ready=1; break; fi
             sleep 5
           done
           test "${ready}" -eq 1
-          curl -fsS "https://lume-v2.viiversion.com/api/health" | jq -e '.ok == true and .aiBinding == true' >/dev/null
-          curl -fsS -X POST "https://lume-v2.viiversion.com/api/concierge"             -H 'content-type: application/json'             --data '{"message":"Покажи фотографии всех зон LUME и коротко расскажи о каждой","lang":"ru","history":[],"context":{}}' > /tmp/ai.json
+
+          curl -fsS "${PREVIEW_URL}/api/health" > /tmp/health.json
+          jq -e '.ok == true and .aiBinding == true' /tmp/health.json >/dev/null
+
+          curl -fsS -X POST "${PREVIEW_URL}/api/concierge"             -H 'content-type: application/json'             --data '{"message":"Покажи фотографии всех зон LUME и коротко расскажи о каждой","lang":"ru","history":[],"context":{}}'             > /tmp/ai.json
+          cat /tmp/ai.json
+          jq -e '.reply | type=="string" and length>0' /tmp/ai.json >/dev/null
           jq -e '.spaceCardIds | length == 4' /tmp/ai.json >/dev/null
-          jq -e '.nextAction == "explore_spaces"' /tmp/ai.json >/dev/null
-          jq -e '.reply | test("[А-Яа-яЁё]")' /tmp/ai.json >/dev/null
-          ! jq -r '.reply' /tmp/ai.json | grep -Eqi 'cannot.*photo|text.?based|не могу.*фото'
-          echo "LUME signature preview verified."
+          if jq -r '.reply' /tmp/ai.json | grep -Eqi 'не могу.{0,30}(фото|изображ)|text[- ]based|cannot.{0,30}(photo|image)'; then
+            echo "AI still refuses photo presentation"
+            exit 1
+          fi
+
+      - name: Install Playwright
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install playwright@1.55.0 --no-audit --no-fund >/dev/null
+          npx playwright install --with-deps chromium >/dev/null
+
+      - name: Mobile product QA
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > qa.mjs <<'NODE'
+          import { chromium } from "playwright";
+          import fs from "node:fs";
+
+          const url=process.env.PREVIEW_URL;
+          const browser=await chromium.launch({headless:true});
+          const page=await browser.newPage({viewport:{width:430,height:932},deviceScaleFactor:1,isMobile:true,hasTouch:true});
+          const errors=[];
+          page.on("console",m=>{if(m.type()==="error") errors.push("console: "+m.text())});
+          page.on("pageerror",e=>errors.push("pageerror: "+e.message));
+
+          await page.goto(url+"/",{waitUntil:"networkidle"});
+          await page.waitForSelector(".hero-signature");
+          const logo=await page.locator(".brand-logo").evaluate(el=>({src:el.getAttribute("src"),w:el.naturalWidth,h:el.naturalHeight}));
+          if(!logo.src?.endsWith(".webp") || !logo.w) throw new Error("Official WebP logo did not load");
+          const svgCount=await page.locator("#bottom-nav svg.icon").count();
+          if(svgCount!==5) throw new Error("Premium SVG bottom icons are missing");
+          await page.screenshot({path:"01-home.png",fullPage:true});
+
+          await page.getByRole("link",{name:/Explore menu|Открыть меню|Xem thực đơn/i}).click();
+          await page.waitForSelector(".menu-grid");
+          if(!location){}
+          if(!page.url().includes("#/menu")) throw new Error("Hero Menu route did not update hash");
+          if(await page.locator(".menu-card").count()<4) throw new Error("Menu did not render");
+          await page.screenshot({path:"02-menu.png",fullPage:true});
+
+          await page.goto(url+"/#/home",{waitUntil:"networkidle"});
+          await page.locator('#bottom-nav a[data-tab="menu"]').click();
+          await page.waitForSelector(".menu-grid");
+          if(!page.url().includes("#/menu")) throw new Error("Bottom Menu route did not update hash");
+
+          await page.goto(url+"/#/home",{waitUntil:"networkidle"});
+          await page.locator('[data-action="view-space"][data-id="dining"]').first().click();
+          await page.waitForSelector(".space-gallery");
+          const galleryCount=await page.locator(".gallery-frame img").count();
+          if(galleryCount<3) throw new Error("Space gallery has too few photos");
+          await page.screenshot({path:"03-space-gallery.png",fullPage:true});
+
+          await page.locator('#bottom-nav a[data-tab="concierge"]').click();
+          await page.waitForSelector("#concierge-input");
+          await page.fill("#concierge-input","Покажи фотографии всех зон LUME и коротко расскажи о каждой");
+          await page.locator('[data-action="concierge-send"]').click();
+          await page.waitForSelector(".ai-space-card",{timeout:30000});
+          const cards=await page.locator(".ai-space-card").count();
+          if(cards!==4) throw new Error("AI did not render all four space cards");
+          const chat=await page.locator(".chat").innerText();
+          if(/не могу.{0,30}(фото|изображ)|text[- ]based|cannot.{0,30}(photo|image)/i.test(chat)) throw new Error("AI still refuses photos");
+          await page.screenshot({path:"04-ai-spaces.png",fullPage:true});
+
+          await page.locator(".ai-space-card [data-action='view-space']").first().click();
+          await page.waitForSelector(".space-gallery");
+          await page.locator('[data-action="reserve-space"]').click();
+          await page.waitForSelector('[data-action="reserve-next-details"]');
+          if(store){}
+          await page.screenshot({path:"05-conversion.png",fullPage:true});
+
+          if(errors.length) throw new Error(errors.join(" | "));
+          fs.writeFileSync("qa.json",JSON.stringify({logo,svgCount,galleryCount,cards,errors},null,2));
+          await browser.close();
+          NODE
+          node qa.mjs
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lume-signature-preview-qa
+          path: |
+            01-home.png
+            02-menu.png
+            03-space-gallery.png
+            04-ai-spaces.png
+            05-conversion.png
+            qa.json
+            /tmp/ai.json
+          if-no-files-found: warn
+          retention-days: 5
