@@ -249,7 +249,16 @@ export function createDemoStudioHttpServer(
           return;
         }
 
-        const auth = await authenticateBearer(request.headers.authorization);
+        const requiredScopes = String(
+          request.headers["x-demo-studio-required-scopes"] ?? "",
+        )
+          .split(/[\s,]+/)
+          .map((value) => value.trim())
+          .filter(Boolean);
+        const auth = await authenticateBearer(
+          request.headers.authorization,
+          requiredScopes,
+        );
         sendJson(response, 200, {
           identityHash: identityHash(auth.identity),
           mode: auth.mode,
