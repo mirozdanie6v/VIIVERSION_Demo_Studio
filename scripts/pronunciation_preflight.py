@@ -61,11 +61,11 @@ def main() -> int:
         missing = [word for word in required if word not in lowered]
         if missing:
             raise SystemExit(
-                "RUAccent full preflight failed; missing approved forms: "
+                "StressONNX full preflight failed; missing approved forms: "
                 + ", ".join(missing)
                 + f"\nActual: {stressed}"
             )
-        print("RUACCENT_FULL_PREFLIGHT=ok")
+        print("STRESSONNX_FULL_PREFLIGHT=ok")
         print(f"STRESSED_SAMPLE={stressed}")
 
     return 0

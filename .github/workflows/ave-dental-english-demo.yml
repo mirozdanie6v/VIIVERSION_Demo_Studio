@@ -53,8 +53,7 @@ jobs:
         with:
           path: |
             ~/.cache/huggingface
-            ~/.cache/ruaccent
-            ~/.cache/pip
+                        ~/.cache/pip
           key: demo-studio-premium-tts-${{ runner.os }}-v2
 
       - name: Install Chromium, FFmpeg and premium local TTS
@@ -64,7 +63,7 @@ jobs:
           sudo apt-get install -y ffmpeg espeak-ng
           python -m pip install --quiet --upgrade pip
           python -m pip install --quiet torch==2.6.0 torchaudio==2.6.0 --index-url https://download.pytorch.org/whl/cpu
-          python -m pip install --quiet "setuptools<82" resemble-perth numpy "git+https://github.com/resemble-ai/chatterbox.git@master" ruaccent
+          python -m pip install --quiet "setuptools<82" resemble-perth numpy "git+https://github.com/resemble-ai/chatterbox.git@master" stressonnx==0.0.2
 
       - name: Download approved Niki reference
         uses: actions/download-artifact@v4
