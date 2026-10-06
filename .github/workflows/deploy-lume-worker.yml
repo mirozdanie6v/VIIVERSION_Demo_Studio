@@ -10,16 +10,18 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: lume-production-worker
+  cancel-in-progress: true
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 15
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       TARGET_DOMAIN: lume.viiversion.com
-      PAGES_PROJECT: lume-mini-app
-      WORKER_NAME: lume-mini-app-site
 
     steps:
       - name: Resolve Cloudflare account
@@ -28,37 +30,26 @@ jobs:
           set -euo pipefail
           test -n "${CLOUDFLARE_API_TOKEN:-}"
           if [ -z "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then
-            curl -fsS "https://api.cloudflare.com/client/v4/zones?name=viiversion.com&per_page=5"               -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" > /tmp/zones.json
+            curl -fsS "https://api.cloudflare.com/client/v4/zones?name=viiversion.com&per_page=5" \
+              -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" > /tmp/zones.json
             id=$(jq -r '[.result[]? | select(.name=="viiversion.com")][0].account.id // empty' /tmp/zones.json)
             test -n "${id}"
             echo "CLOUDFLARE_ACCOUNT_ID=${id}" >> "${GITHUB_ENV}"
           fi
 
-      - name: Remove pending Pages domain binding
-        shell: bash
-        run: |
-          set -euo pipefail
-          api="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/${PAGES_PROJECT}/domains/${TARGET_DOMAIN}"
-          code=$(curl -sS -o /tmp/pages-domain-delete.json -w '%{http_code}' -X DELETE "${api}"             -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" || true)
-          if [ "${code}" = "200" ] || [ "${code}" = "404" ]; then
-            echo "Pages custom-domain binding cleared."
-          else
-            cat /tmp/pages-domain-delete.json || true
-            exit 1
-          fi
-
-      - name: Materialize LUME static assets
+      - name: Materialize LUME source
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p site
-          cat > site/index.html <<'LUME_EOF'
+          cat > site/index.html <<'LUME_HTML'
           <!doctype html>
           <html lang="en">
           <head>
           <meta charset="utf-8"/>
           <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
-          <title>LUME</title>\n<link rel="canonical" href="https://lume.viiversion.com/">
+          <title>LUME</title>
+          <link rel="canonical" href="https://lume.viiversion.com/">
           <style>
           :root{
             --bg:#070604; --text:#fff8ed; --muted:rgba(255,248,237,.68);
@@ -132,6 +123,26 @@ jobs:
           linear-gradient(45deg,rgba(255,255,255,.12) 25%,transparent 25% 50%,rgba(255,255,255,.12) 50% 75%,transparent 75%),
           rgba(255,255,255,.08);background-size:18px 18px;margin:10px auto}
           
+          
+          /* LUME premium brand pass */
+          :root{--bg:#080706;--text:#f8f1e6;--muted:rgba(248,241,230,.66);--line:rgba(240,211,161,.16);--panel:rgba(14,12,10,.78);--panel2:rgba(255,255,255,.055);--gold:#d9b56d;--gold2:#8a6534;--green:#a7d6b6;--danger:#ff9a86;--r:26px;--shadow:0 30px 90px rgba(0,0,0,.52);--hero:url("https://images2.thanhnien.vn/528068263637045248/2026/5/15/lume-gardentwilight1-17788331464582114233393.jpg")}
+          html,body{background:#050403}.app{max-width:460px;background:radial-gradient(circle at 50% -16%,rgba(218,181,109,.18),transparent 32%),linear-gradient(180deg,#0b0907 0%,#070605 42%,#050403 100%)}
+          .top{height:68px;padding:10px 15px;background:linear-gradient(180deg,rgba(0,0,0,.38),transparent)}.logo{display:flex;align-items:center;gap:8px;letter-spacing:.22em;font-family:Georgia,ui-serif,serif;font-size:13px;font-weight:600}.logo::before{content:"✦";width:29px;height:29px;border:1px solid rgba(217,181,109,.42);border-radius:50%;display:grid;place-items:center;color:var(--gold);font-size:15px;box-shadow:0 0 26px rgba(217,181,109,.18)}
+          .langs{background:rgba(8,6,4,.42);border-color:rgba(240,211,161,.18)}.langs button.active{background:rgba(217,181,109,.20);color:#fff9ef}.view{padding-top:72px}
+          .hero{min-height:540px;margin-top:-72px;border-radius:0 0 38px 38px;background-image:linear-gradient(180deg,rgba(0,0,0,.16) 0%,rgba(0,0,0,.02) 26%,rgba(6,5,4,.36) 58%,#080706 100%),var(--hero);background-position:center 48%;box-shadow:0 26px 70px rgba(0,0,0,.44)}
+          .hero::after{background:radial-gradient(circle at 68% 18%,transparent 0 20%,rgba(0,0,0,.22) 62%,rgba(0,0,0,.58) 100%),linear-gradient(90deg,rgba(5,4,3,.48),transparent 64%)}.hero-copy{bottom:30px}.hero-copy::before{content:"LUME · NHA TRANG";display:block;color:rgba(248,241,230,.82);font-size:10px;letter-spacing:.26em;margin-bottom:12px;font-weight:700}
+          h1,h2{font-family:Georgia,"Times New Roman",ui-serif,serif;font-weight:400}h1{font-size:51px;line-height:.92;max-width:340px}.hero .lead{font-size:16px;max-width:350px;color:rgba(248,241,230,.86)}.eyebrow{color:#e8c983}
+          .btn{background:linear-gradient(135deg,#eccb87,#b78443);box-shadow:0 14px 34px rgba(204,160,86,.20);font-weight:750}.btn.secondary{background:rgba(9,8,7,.46);border-color:rgba(240,211,161,.26);backdrop-filter:blur(18px)}.btn.ghost{color:#e8c983;border-color:rgba(232,201,131,.30)}
+          .section{margin:24px 0}.head h2{font-size:34px}.exp-grid{gap:12px}.exp-card{min-height:205px;border-radius:26px;border-color:rgba(240,211,161,.16);box-shadow:0 24px 60px rgba(0,0,0,.42)}.exp-card .shade{background:linear-gradient(180deg,rgba(0,0,0,.02),rgba(0,0,0,.18) 38%,rgba(4,3,2,.92) 100%)}.exp-card h3{font-family:Georgia,ui-serif,serif;font-size:22px;font-weight:400}.exp-card p{font-size:11.5px;line-height:1.38;color:rgba(248,241,230,.74)}
+          .panel,.zone,.item{border-color:rgba(240,211,161,.14);background:linear-gradient(180deg,rgba(255,255,255,.055),rgba(255,255,255,.028)),rgba(10,8,6,.72)}.item{border-radius:22px}.item img{height:138px}.item h3{font-family:Georgia,ui-serif,serif;font-size:18px;font-weight:400}.chip{border-color:rgba(240,211,161,.15);background:rgba(255,255,255,.035)}.chip.active{background:linear-gradient(135deg,#e6c37d,#ab7a3f);color:#140f09}
+          .bottom{background:rgba(7,6,5,.86);border-color:rgba(240,211,161,.14);box-shadow:0 -18px 60px rgba(0,0,0,.34)}.nav{font-size:9.5px}.nav svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.65;stroke-linecap:round;stroke-linejoin:round}.nav.active{background:rgba(217,181,109,.12);color:#f6e5bd}
+          .sheet-card{background:linear-gradient(180deg,#15110c,#0c0a08);border-color:rgba(240,211,161,.18)}.zone.selected{border-color:rgba(232,201,131,.72);box-shadow:0 0 0 1px rgba(232,201,131,.22),0 20px 55px rgba(0,0,0,.34)}
+          .brand-statement{padding:16px 4px 2px}.brand-statement p:last-child{font-family:Georgia,ui-serif,serif;font-size:20px;line-height:1.35;color:rgba(248,241,230,.88)}.private-card{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px;border:1px solid rgba(232,201,131,.18);border-radius:24px;background:linear-gradient(120deg,rgba(217,181,109,.10),rgba(255,255,255,.025))}.private-card h3{font-family:Georgia,ui-serif,serif;font-size:18px;line-height:1.25;font-weight:400}
+          .concierge-hero{position:relative;overflow:hidden;border-radius:30px;padding:22px 18px 20px;margin:0 0 18px;min-height:184px;background:linear-gradient(180deg,rgba(0,0,0,.16),rgba(7,6,5,.84)),url("https://images2.thanhnien.vn/528068263637045248/2026/5/15/lume-gardengolden-hour2-1778833146454533308569.jpg") center/cover}.concierge-hero::before{content:"✦";display:grid;place-items:center;width:38px;height:38px;border:1px solid rgba(232,201,131,.42);border-radius:50%;color:#edcf8c;margin-bottom:30px;background:rgba(7,6,5,.34);backdrop-filter:blur(12px)}.concierge-hero h2{font-size:39px;margin-bottom:7px}.concierge-hero .muted{font-size:13px;color:rgba(248,241,230,.80);max-width:300px}
+          .chat{gap:12px}.msg{max-width:91%;padding:13px 14px;border:1px solid rgba(240,211,161,.11);background:rgba(255,255,255,.045);font-size:13.5px;line-height:1.48}.msg.ai{border-top-left-radius:7px;background:linear-gradient(180deg,rgba(217,181,109,.08),rgba(255,255,255,.035))}.msg.me{background:rgba(217,181,109,.13);border-color:rgba(217,181,109,.17)}
+          .ai-thinking{display:flex;gap:6px;align-items:center;color:var(--muted)}.ai-thinking i{width:5px;height:5px;border-radius:50%;background:#e4c37d;animation:pulse 1s infinite alternate}.ai-thinking i:nth-child(2){animation-delay:.18s}.ai-thinking i:nth-child(3){animation-delay:.36s}@keyframes pulse{to{opacity:.25;transform:translateY(-2px)}}.ai-plan{margin-top:11px;border:1px solid rgba(232,201,131,.22);border-radius:21px;overflow:hidden;background:rgba(7,6,5,.64)}.ai-plan-top{padding:14px;background:linear-gradient(135deg,rgba(217,181,109,.15),rgba(255,255,255,.03))}.ai-plan-top .eyebrow{margin-bottom:7px}.ai-plan-top h3{font-family:Georgia,ui-serif,serif;font-size:23px;font-weight:400}.ai-plan-grid{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:rgba(232,201,131,.10)}.ai-plan-cell{padding:11px;background:#0c0a08}.ai-plan-cell b{display:block;color:#e4c37d;font-size:10px;letter-spacing:.12em;text-transform:uppercase;margin-bottom:4px}.ai-plan-cell span{font-size:12px;line-height:1.35}.ai-plan-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:11px;background:#0c0a08}.chatbox{bottom:-1px;background:linear-gradient(180deg,transparent,#080706 24%)}#chatInput{border-color:rgba(240,211,161,.17)!important;background:rgba(255,255,255,.045)!important}
+          @media(max-width:360px){.hero{min-height:515px}.exp-grid{grid-template-columns:1fr}.hero-copy h1{font-size:46px}}
+          
           </style>
           </head>
           <body>
@@ -141,7 +152,7 @@ jobs:
               <section class="hero">
                 <div class="hero-copy">
                   <p class="eyebrow" data-k="common.open"></p>
-                  <h1>LUME</h1>
+                  <h1 data-k="home.heroTitle"></h1>
                   <p class="lead" data-k="home.heroText"></p>
                   <div class="quick">
                     <button class="btn" data-act="tab" data-tab="reserve" data-k="home.reserveTable"></button>
@@ -149,10 +160,18 @@ jobs:
                   </div>
                 </div>
               </section>
+              <section class="brand-statement">
+                <p class="eyebrow" data-k="home.brandKicker"></p>
+                <p data-k="home.brandStatement"></p>
+              </section>
               <section class="section">
                 <div class="head"><div><p class="eyebrow" data-k="common.start"></p><h2 data-k="home.chooseExperience"></h2></div></div>
                 <p class="muted" data-k="home.experienceHint"></p>
                 <div class="exp-grid" id="experiences"></div>
+              </section>
+              <section class="section private-card">
+                <div><p class="eyebrow" data-k="events.eventTitle"></p><h3 data-k="events.eventHint"></h3></div>
+                <button class="btn small" onclick="startEventRequest('private')" data-k="events.requestProposal"></button>
               </section>
             </main>
           
@@ -173,12 +192,12 @@ jobs:
           
             <main id="concierge" class="view">
               <section class="section">
-                <div class="head"><div><p class="eyebrow">Concierge</p><h2 data-k="concierge.askLume"></h2><p class="muted" data-k="concierge.conciergeHint"></p></div></div>
+                <div class="concierge-hero"><p class="eyebrow">LUME CONCIERGE</p><h2 data-k="concierge.askLume"></h2><p class="muted" data-k="concierge.conciergeHint"></p></div>
                 <div class="chips" id="prompts"></div>
                 <div id="chat" class="chat"></div>
                 <div class="chatbox">
                   <div class="row">
-                    <input id="chatInput" placeholder="" style="flex:1;min-height:48px;border-radius:999px;border:1px solid var(--line);background:rgba(255,255,255,.07);color:var(--text);padding:0 16px;outline:none">
+                    <input id="chatInput" placeholder="" style="flex:1;min-height:48px;border-radius:999px;color:var(--text);padding:0 16px;outline:none">
                     <button class="btn small" id="sendChat">Send</button>
                   </div>
                 </div>
@@ -199,11 +218,11 @@ jobs:
             </div>
           
             <nav class="bottom">
-              <button class="nav active" data-act="tab" data-tab="home"><b>⌂</b><span data-k="nav.home"></span></button>
-              <button class="nav" data-act="tab" data-tab="menu"><b>≋</b><span data-k="nav.menu"></span></button>
-              <button class="nav" data-act="tab" data-tab="guest"><b>◌</b><span data-k="nav.guest"></span></button>
-              <button class="nav" data-act="tab" data-tab="reserve"><b>⌁</b><span data-k="nav.reserve"></span></button>
-              <button class="nav" data-act="tab" data-tab="concierge"><b>✦</b><span data-k="nav.ask"></span></button>
+              <button class="nav active" data-act="tab" data-tab="home"><svg viewBox="0 0 24 24"><path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10.5V20h13v-9.5"/></svg><span data-k="nav.home"></span></button>
+              <button class="nav" data-act="tab" data-tab="menu"><svg viewBox="0 0 24 24"><path d="M6 3v8M9 3v8M6 7h3M7.5 11v10M16 3v18M19 3v7c0 2-1 3-3 3"/></svg><span data-k="nav.menu"></span></button>
+              <button class="nav" data-act="tab" data-tab="guest"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.2"/><path d="M5.5 20c.8-4 3-6 6.5-6s5.7 2 6.5 6"/></svg><span data-k="nav.guest"></span></button>
+              <button class="nav" data-act="tab" data-tab="reserve"><svg viewBox="0 0 24 24"><rect x="4" y="5.5" width="16" height="14" rx="2"/><path d="M8 3v5M16 3v5M4 10h16"/></svg><span data-k="nav.reserve"></span></button>
+              <button class="nav" data-act="tab" data-tab="concierge"><svg viewBox="0 0 24 24"><path d="M5 5h14v11H9l-4 3z"/><path d="m12 8 .6 1.4L14 10l-1.4.6L12 12l-.6-1.4L10 10l1.4-.6z"/></svg><span data-k="nav.ask"></span></button>
             </nav>
           
             <div class="sheet" id="sheet" aria-hidden="true"></div>
@@ -213,7 +232,7 @@ jobs:
           const I18N={
             "en": {
               "common": {
-                "open": "Open today · 17:00–22:00",
+                "open": "Dinner service · 17:00–22:00",
                 "start": "Start",
                 "optional": "Optional",
                 "view": "View",
@@ -236,11 +255,14 @@ jobs:
                 "keepBrowsing": "Keep browsing"
               },
               "home": {
-                "heroText": "Sky dining above Nha Trang. Choose the mood, explore the menu, or reserve a table in a few focused steps.",
+                "heroTitle": "Elevate every moment",
+                "heroText": "Sky dining above Nha Trang. Panoramic views, refined cuisine and an evening shaped around you.",
+                "brandKicker": "Nha Trang · From a higher perspective",
+                "brandStatement": "A rooftop destination where city, sea and mountains become part of the evening.",
                 "reserveTable": "Reserve a table",
                 "exploreMenu": "Explore menu",
                 "chooseExperience": "Choose the experience",
-                "experienceHint": "These are evening formats, not seating zones. Seating is selected later during reservation.",
+                "experienceHint": "Explore LUME’s signature spaces. Choose one now or refine the plan with the concierge.",
                 "reserveThis": "Reserve this",
                 "notNow": "Not now"
               },
@@ -260,10 +282,18 @@ jobs:
               },
               "concierge": {
                 "askLume": "Ask LUME",
-                "conciergeHint": "Ask for pairing, timing or seating ideas. Your selected preferences are considered.",
+                "conciergeHint": "Describe the evening you want. LUME Concierge considers your party, budget, selected menu preferences and the character of each space.",
                 "reservePlan": "Reserve this plan",
                 "addSuggested": "Add suggested items",
-                "inputPlaceholder": "Type your request",
+                "inputPlaceholder": "Tell LUME what kind of evening you want",
+                "thinking": "Curating your evening",
+                "error": "The concierge is temporarily unavailable. Please try again.",
+                "planTitle": "Your LUME plan",
+                "space": "Space",
+                "timeLabel": "Time",
+                "moodLabel": "Mood",
+                "pairingLabel": "Pairing",
+                "whyLabel": "Why it fits",
                 "prompts": {
                   "romantic": "Romantic dinner for two",
                   "cocktails": "Best cocktails for sunset",
@@ -385,7 +415,7 @@ jobs:
             },
             "ru": {
               "common": {
-                "open": "Сегодня открыто · 17:00–22:00",
+                "open": "Вечерний сервис · 17:00–22:00",
                 "start": "Начало",
                 "optional": "Опционально",
                 "view": "Смотреть",
@@ -408,11 +438,14 @@ jobs:
                 "keepBrowsing": "Смотреть дальше"
               },
               "home": {
-                "heroText": "Ужин над Нячангом. Выберите настроение, посмотрите меню или забронируйте стол за несколько понятных шагов.",
+                "heroTitle": "Поднять каждый момент выше",
+                "heroText": "Ужин над Нячангом: панорамный вид, продуманная кухня и вечер, собранный вокруг ваших пожеланий.",
+                "brandKicker": "Нячанг · взгляд с высоты",
+                "brandStatement": "Rooftop-пространство, где город, море и горы становятся частью вечера.",
                 "reserveTable": "Забронировать стол",
                 "exploreMenu": "Открыть меню",
-                "chooseExperience": "Выберите формат вечера",
-                "experienceHint": "Это форматы вечера, не зоны посадки. Зону можно выбрать позже в бронировании.",
+                "chooseExperience": "Выберите пространство",
+                "experienceHint": "Познакомьтесь с ключевыми пространствами LUME. Выберите сразу или уточните план с AI-консьержем.",
                 "reserveThis": "Бронировать этот формат",
                 "notNow": "Не выбирать"
               },
@@ -432,10 +465,18 @@ jobs:
               },
               "concierge": {
                 "askLume": "Спросить LUME",
-                "conciergeHint": "Спросите о сочетаниях, времени или зоне. Выбранные предпочтения учитываются.",
+                "conciergeHint": "Опишите желаемый вечер. LUME Concierge учитывает компанию, бюджет, выбранные блюда и характер каждого пространства.",
                 "reservePlan": "Забронировать этот план",
                 "addSuggested": "Добавить рекомендации",
-                "inputPlaceholder": "Напишите запрос",
+                "inputPlaceholder": "Опишите, какой вечер вы хотите",
+                "thinking": "Собираю ваш вечер",
+                "error": "Консьерж временно недоступен. Попробуйте ещё раз.",
+                "planTitle": "Ваш план LUME",
+                "space": "Пространство",
+                "timeLabel": "Время",
+                "moodLabel": "Настроение",
+                "pairingLabel": "Сочетание",
+                "whyLabel": "Почему подходит",
                 "prompts": {
                   "romantic": "Романтический ужин на двоих",
                   "cocktails": "Лучшие коктейли на закате",
@@ -557,7 +598,7 @@ jobs:
             },
             "vi": {
               "common": {
-                "open": "Mở cửa hôm nay · 17:00–22:00",
+                "open": "Phục vụ buổi tối · 17:00–22:00",
                 "start": "Bắt đầu",
                 "optional": "Tùy chọn",
                 "view": "Xem",
@@ -580,11 +621,14 @@ jobs:
                 "keepBrowsing": "Tiếp tục xem"
               },
               "home": {
-                "heroText": "Ăn tối trên cao tại Nha Trang. Chọn trải nghiệm, xem thực đơn hoặc đặt bàn trong vài bước rõ ràng.",
+                "heroTitle": "Nâng tầm từng khoảnh khắc",
+                "heroText": "Trải nghiệm ẩm thực trên cao tại Nha Trang với tầm nhìn toàn cảnh, ẩm thực tinh tế và một buổi tối được thiết kế theo mong muốn của bạn.",
+                "brandKicker": "Nha Trang · góc nhìn trên cao",
+                "brandStatement": "Không gian rooftop nơi thành phố, biển và núi trở thành một phần của trải nghiệm.",
                 "reserveTable": "Đặt bàn",
                 "exploreMenu": "Xem thực đơn",
-                "chooseExperience": "Chọn trải nghiệm",
-                "experienceHint": "Đây là kiểu buổi tối, không phải khu vực ngồi. Khu vực được chọn khi đặt bàn.",
+                "chooseExperience": "Chọn không gian",
+                "experienceHint": "Khám phá các không gian đặc trưng của LUME. Chọn ngay hoặc để AI Concierge tinh chỉnh kế hoạch.",
                 "reserveThis": "Đặt trải nghiệm này",
                 "notNow": "Để sau"
               },
@@ -604,10 +648,18 @@ jobs:
               },
               "concierge": {
                 "askLume": "Hỏi LUME",
-                "conciergeHint": "Hỏi về pairing, thời gian hoặc khu vực ngồi. Các lựa chọn của bạn sẽ được tính đến.",
+                "conciergeHint": "Hãy mô tả buổi tối bạn muốn. LUME Concierge cân nhắc số khách, ngân sách, món đã chọn và tính cách của từng không gian.",
                 "reservePlan": "Đặt kế hoạch này",
                 "addSuggested": "Thêm gợi ý",
-                "inputPlaceholder": "Nhập câu hỏi",
+                "inputPlaceholder": "Hãy mô tả buổi tối bạn mong muốn",
+                "thinking": "Đang thiết kế buổi tối của bạn",
+                "error": "Concierge tạm thời chưa khả dụng. Vui lòng thử lại.",
+                "planTitle": "Kế hoạch LUME của bạn",
+                "space": "Không gian",
+                "timeLabel": "Thời gian",
+                "moodLabel": "Không khí",
+                "pairingLabel": "Gợi ý kết hợp",
+                "whyLabel": "Vì sao phù hợp",
                 "prompts": {
                   "romantic": "Bữa tối lãng mạn cho hai người",
                   "cocktails": "Cocktail đẹp nhất lúc hoàng hôn",
@@ -901,10 +953,10 @@ jobs:
           {id:"private",img:"https://images.unsplash.com/photo-1551218808-94e220e084d2?auto=format&fit=crop&w=900&q=82",title:{en:"Private celebration",ru:"Частный праздник",vi:"Tiệc riêng"},text:{en:"For birthdays, business dinners or special moments.",ru:"Для дней рождения, деловых ужинов и событий.",vi:"Sinh nhật, gặp gỡ công việc, dịp đặc biệt."}}
           ],
           areas:[
-          {id:"dining",img:"https://images.unsplash.com/photo-1559339352-11d035aa65de?auto=format&fit=crop&w=900&q=82",title:{en:"Sky Dining",ru:"Sky Dining",vi:"Sky Dining"},text:{en:"Elegant dinner setting with the strongest evening mood.",ru:"Элегантная зона ужина с главным вечерним настроением.",vi:"Không gian ăn tối sang trọng."}},
-          {id:"bar",img:"https://images.unsplash.com/photo-1572116469696-31de0f17cc34?auto=format&fit=crop&w=900&q=82",title:{en:"Sky Bar",ru:"Sky Bar",vi:"Sky Bar"},text:{en:"Cocktails, city lights and a more social rhythm.",ru:"Коктейли, огни города и более живой ритм.",vi:"Cocktail, ánh đèn thành phố, không khí sôi động."}},
-          {id:"garden",img:"https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=900&q=82",title:{en:"Sky Garden",ru:"Sky Garden",vi:"Sky Garden"},text:{en:"Softer open-air atmosphere for families and groups.",ru:"Более мягкая открытая атмосфера для семьи и компаний.",vi:"Không khí ngoài trời nhẹ nhàng cho gia đình, nhóm."}},
-          {id:"private",img:"https://images.unsplash.com/photo-1414235077428-338989a2e8c0?auto=format&fit=crop&w=900&q=82",title:{en:"Private Dining",ru:"Private Dining",vi:"Private Dining"},text:{en:"A focused setting for birthdays and private dinners.",ru:"Отдельный формат для праздников и частных ужинов.",vi:"Không gian riêng cho sinh nhật và tiệc tối."}}
+          {id:"dining",img:"https://images2.thanhnien.vn/528068263637045248/2026/5/15/lume-gardentwilight1-17788331464582114233393.jpg",title:{en:"Sky Dining",ru:"Sky Dining",vi:"Sky Dining"},text:{en:"Refined rooftop dining with the city and bay opening beyond the table.",ru:"Изысканный ужин на высоте с панорамой города и залива.",vi:"Không gian ẩm thực tinh tế trên cao với toàn cảnh thành phố và vịnh."}},
+          {id:"garden",img:"https://images2.thanhnien.vn/528068263637045248/2026/5/15/lume-gardengolden-hour2-1778833146454533308569.jpg",title:{en:"Sky Garden",ru:"Sky Garden",vi:"Sky Garden"},text:{en:"An open-air garden atmosphere with greenery, sunset light and a softer rhythm.",ru:"Открытый сад, зелень, закатный свет и более спокойный ритм.",vi:"Khu vườn ngoài trời với cây xanh, ánh hoàng hôn và nhịp điệu thư thái."}},
+          {id:"bar",img:"https://images.unsplash.com/photo-1544145945-f90425340c7e?auto=format&fit=crop&w=900&q=82",title:{en:"Sky Bar",ru:"Sky Bar",vi:"Sky Bar"},text:{en:"Signature cocktails, music and a social evening above Nha Trang.",ru:"Авторские коктейли, музыка и живой вечер над Нячангом.",vi:"Cocktail đặc trưng, âm nhạc và không khí sôi động trên cao."}},
+          {id:"rooftop",img:"https://dynamic-media-cdn.tripadvisor.com/media/photo-o/33/4b/ec/91/bar.jpg?h=1200&s=1&w=1200",title:{en:"Rooftop",ru:"Rooftop",vi:"Rooftop"},text:{en:"The broadest panorama: city lights, mountains, river and sea in one view.",ru:"Самая широкая панорама: огни города, горы, река и море.",vi:"Tầm nhìn rộng nhất: thành phố, núi, sông và biển trong cùng một khung cảnh."}}
           ],
           cats:["Signature","Sky Bar","Wine","Set"],
           items:[
@@ -928,10 +980,9 @@ jobs:
           function setLang(l){ if(!SUPPORTED_LANGS.includes(l)) l=DEFAULT_LANG; lang=l; localStorage.setItem("lume_lang", lang); renderAll(); }
           function switchTab(id){ tab=id; if(id!=="reserve" && reserveMode==="event") reserveMode="table"; $$(".view").forEach(v=>v.classList.toggle("active",v.id===id)); $$(".nav").forEach(n=>n.classList.toggle("active",n.dataset.tab===id)); renderReserve(); renderGuest(); renderEveningBar();}
           
-          function renderExperiences(){ $("#experiences").innerHTML=DATA.experiences.map(x=>`<button class="exp-card" onclick="openExperience('${x.id}')"><img src="${x.img}" alt=""><span class="shade"></span><span class="txt"><h3>${tr(x.title)}</h3><p>${tr(x.text)}</p></span></button>`).join("");}
-          function openExperience(id){ const x=DATA.experiences.find(e=>e.id===id); const eventBtn=id==="private"?`<button class="btn secondary full" onclick="startEventRequest('${x.id}')">${t("events.requestProposal")}</button>`:`<button class="btn secondary full" onclick="closeSheet();switchTab('menu')">${t("menu.exploreMatching")}</button>`; openSheet(`<div class="sheet-hero"><img src="${x.img}" alt=""><button class="x" onclick="closeSheet()">×</button></div><p class="eyebrow">${t("home.chooseExperience")}</p><h2>${tr(x.title)}</h2><p class="muted">${tr(x.text)}</p><div class="row" style="margin-top:14px"><button class="btn full" onclick="selectExperience('${x.id}');closeSheet();switchTab('reserve')">${t("home.reserveThis")}</button>${eventBtn}<button class="btn secondary full" onclick="closeSheet()">${t("home.notNow")}</button></div>`)}
-          
-          function selectExperience(id){selectedExp=id}
+          function renderExperiences(){ $("#experiences").innerHTML=DATA.areas.map(x=>`<button class="exp-card" onclick="openExperience('${x.id}')"><img src="${x.img}" alt=""><span class="shade"></span><span class="txt"><h3>${tr(x.title)}</h3><p>${tr(x.text)}</p></span></button>`).join("");}
+          function openExperience(id){ const x=DATA.areas.find(e=>e.id===id); openSheet(`<div class="sheet-hero"><img src="${x.img}" alt=""><button class="x" onclick="closeSheet()">×</button></div><p class="eyebrow">${t("home.chooseExperience")}</p><h2>${tr(x.title)}</h2><p class="muted">${tr(x.text)}</p><div class="row" style="margin-top:14px"><button class="btn full" onclick="selectExperience('${x.id}');closeSheet();switchTab('reserve')">${t("home.reserveThis")}</button><button class="btn secondary full" onclick="closeSheet();switchTab('menu')">${t("menu.exploreMatching")}</button></div>`)}
+          function selectExperience(id){selectedArea=id}
           function renderChips(){ $("#chips").innerHTML=DATA.cats.map(c=>`<button class="chip ${c===cat?'active':''}" onclick="cat='${c}';renderMenu()">${c}</button>`).join("");}
           function renderMenu(){ renderChips(); $("#menuGrid").innerHTML=DATA.items.filter(i=>i.cat===cat).map(i=>`<button class="item" onclick="openItem('${i.id}')"><img src="${i.img}" alt=""><div class="pad"><h3>${tr(i.title)}</h3><p class="muted">${tr(i.desc)}</p><p class="price">${i.price}</p></div></button>`).join("");}
           function openItem(id){ const i=DATA.items.find(x=>x.id===id); const added=evening.includes(id); openSheet(`<div class="sheet-hero"><img src="${i.img}" alt=""><button class="x" onclick="closeSheet()">×</button></div><p class="eyebrow">${i.cat}</p><h2>${tr(i.title)}</h2><p class="muted">${tr(i.desc)}</p><div class="panel" style="margin:14px 0"><p class="eyebrow">${t("common.ingredients")}</p><p>${tr(i.ing)}</p></div><div class="panel"><p class="eyebrow">${t("common.pairs")}</p><p>${tr(i.rec)}</p></div><div class="row" style="margin-top:14px"><button class="btn full" onclick="addEvening('${id}');closeSheet()">${added?t("menu.added"):t("common.add")}</button><button class="btn secondary" onclick="closeSheet()">${t("common.close")}</button></div>`)}
@@ -986,27 +1037,81 @@ jobs:
               t("concierge.prompts.wine"),
               t("concierge.prompts.budget")
             ];
-            $("#prompts").innerHTML=p.map(x=>`<button class="chip" onclick="ask('${x.replace(/'/g,"")}')">${x}</button>`).join("");
+            $("#prompts").innerHTML=p.map((x,i)=>'<button class="chip" data-prompt="'+i+'">'+escapeHtml(x)+'</button>').join("");
+            $$("#prompts [data-prompt]").forEach((b,i)=>b.onclick=()=>ask(p[i]));
           }
-          function conciergeAnswerKey(q){
-            const lower=q.toLowerCase();
-            if(lower.includes("birthday") || lower.includes("12") || lower.includes("день") || lower.includes("sinh nhật")) return "concierge.answers.birthday";
-            if(lower.includes("wine") || lower.includes("seafood") || lower.includes("вино") || lower.includes("морепр") || lower.includes("rượu") || lower.includes("hải sản")) return "concierge.answers.wine";
-            if(lower.includes("budget") || lower.includes("2,000,000") || lower.includes("бюджет") || lower.includes("dưới")) return "concierge.answers.budget";
-            return "concierge.answers.default";
+          let chatHistory=[], lastConciergePlan=null, conciergeBusy=false;
+          function escapeHtml(value){return String(value??"").replace(/[&<>"']/g,ch=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]))}
+          function conciergeAreaTitle(id){const a=DATA.areas.find(x=>x.id===id);return a?tr(a.title):""}
+          function renderConciergePlan(plan){
+            if(!plan) return "";
+            const area=conciergeAreaTitle(plan.areaId);
+            return '<div class="ai-plan">'+
+              '<div class="ai-plan-top"><p class="eyebrow">'+escapeHtml(t("concierge.planTitle"))+'</p><h3>'+escapeHtml(plan.title||t("concierge.planTitle"))+'</h3></div>'+
+              '<div class="ai-plan-grid">'+
+                '<div class="ai-plan-cell"><b>'+escapeHtml(t("concierge.space"))+'</b><span>'+escapeHtml(area||plan.areaId||"—")+'</span></div>'+
+                '<div class="ai-plan-cell"><b>'+escapeHtml(t("concierge.timeLabel"))+'</b><span>'+escapeHtml(plan.time||"—")+'</span></div>'+
+                '<div class="ai-plan-cell"><b>'+escapeHtml(t("concierge.moodLabel"))+'</b><span>'+escapeHtml(plan.mood||"—")+'</span></div>'+
+                '<div class="ai-plan-cell"><b>'+escapeHtml(t("concierge.pairingLabel"))+'</b><span>'+escapeHtml(plan.pairing||"—")+'</span></div>'+
+              '</div>'+
+              '<div class="ai-plan-top"><b style="font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#e4c37d">'+escapeHtml(t("concierge.whyLabel"))+'</b><p class="muted" style="margin-top:6px">'+escapeHtml(plan.reason||"")+'</p></div>'+
+              '<div class="ai-plan-actions"><button class="btn small" onclick="reserveConciergePlan()">'+escapeHtml(t("concierge.reservePlan"))+'</button><button class="btn secondary small" onclick="addConciergeItems()">'+escapeHtml(t("concierge.addSuggested"))+'</button></div>'+
+            '</div>';
           }
-          function ask(q){
+          function addMsg(text,type,opts={}){
+            const node=document.createElement("div");
+            node.className="msg "+type;
+            if(opts.id) node.id=opts.id;
+            if(opts.html) node.innerHTML=text; else node.textContent=text;
+            $("#chat").appendChild(node);
+            node.scrollIntoView({behavior:"smooth",block:"end"});
+          }
+          function addThinking(){addMsg('<div class="ai-thinking"><span>'+escapeHtml(t("concierge.thinking"))+'</span><i></i><i></i><i></i></div>',"ai",{html:true,id:"aiThinking"})}
+          function removeThinking(){document.querySelector("#aiThinking")?.remove()}
+          function conciergeContext(){return {selectedArea,selectedExperience:selectedExp,selectedMenuItemIds:[...evening],details:window.details||null,guest:{name:guest.name||"",preferences:guest.preferences||""}}}
+          async function ask(q){
+            q=String(q||"").trim();
+            if(!q||conciergeBusy) return;
+            conciergeBusy=true;
             addMsg(q,"me");
-            setTimeout(()=>{
-              const picks=evening.map(id=>tr(DATA.items.find(i=>i.id===id).title));
-              let txt=t(conciergeAnswerKey(q));
-              if(picks.length) txt += " " + t("concierge.answers.preferencesPrefix") + picks.join(", ") + ".";
-              addMsg(txt+`<div class="row" style="margin-top:10px"><button class="btn small" onclick="switchTab('reserve')">${t("concierge.reservePlan")}</button><button class="btn secondary small" onclick="switchTab('menu')">${t("menu.exploreMatching")}</button></div>`,"ai");
-            },250)
+            chatHistory.push({role:"user",content:q});
+            chatHistory=chatHistory.slice(-8);
+            addThinking();
+            try{
+              const res=await fetch("/api/concierge",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({message:q,lang,history:chatHistory,context:conciergeContext()})});
+              if(!res.ok) throw new Error("HTTP "+res.status);
+              const data=await res.json();
+              removeThinking();
+              lastConciergePlan=data.plan||null;
+              addMsg(escapeHtml(data.reply||"")+renderConciergePlan(lastConciergePlan),"ai",{html:true});
+              chatHistory.push({role:"assistant",content:data.reply||""});
+              chatHistory=chatHistory.slice(-8);
+            }catch(err){
+              removeThinking();
+              addMsg(t("concierge.error"),"ai");
+              console.error("Concierge error",err);
+            }finally{
+              conciergeBusy=false;
+            }
           }
-          
-          function addMsg(text,type){ $("#chat").insertAdjacentHTML("beforeend",`<div class="msg ${type}">${text}</div>`); $("#chat").scrollIntoView(false)}
-          $("#sendChat").onclick=()=>{ const v=$("#chatInput").value.trim(); if(v){$("#chatInput").value=""; ask(v)}};
+          function addConciergeItems(){
+            const ids=Array.isArray(lastConciergePlan?.menuItemIds)?lastConciergePlan.menuItemIds:[];
+            ids.forEach(id=>{if(DATA.items.some(x=>x.id===id)&&!evening.includes(id)) evening.push(id)});
+            renderEvening();renderEveningBar();renderReserve();switchTab("menu");
+          }
+          function reserveConciergePlan(){
+            const p=lastConciergePlan;
+            if(!p) return;
+            if(DATA.areas.some(x=>x.id===p.areaId)) selectedArea=p.areaId;
+            if(DATA.experiences.some(x=>x.id===p.experienceId)) selectedExp=p.experienceId;
+            const base=window.details||{};
+            window.details={...base,time:p.time||base.time||"19:00",guests:String(p.guests||base.guests||"2"),occ:base.occ||"",note:base.note||""};
+            const ids=Array.isArray(p.menuItemIds)?p.menuItemIds:[];
+            ids.forEach(id=>{if(DATA.items.some(x=>x.id===id)&&!evening.includes(id)) evening.push(id)});
+            step=0;switchTab("reserve");renderReserve();
+          }
+          $("#sendChat").onclick=()=>{const v=$("#chatInput").value.trim();if(v){$("#chatInput").value="";ask(v)}};
+          $("#chatInput").addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();$("#sendChat").click()}});
           document.addEventListener("click",e=>{ const b=e.target.closest("[data-act='tab']"); if(b) switchTab(b.dataset.tab);});
           function renderAll(){renderLangs();renderText();renderExperiences();renderMenu();renderEvening();renderEveningBar();renderPrompts();renderReserve();renderGuest();}
           validateI18n();
@@ -1014,17 +1119,179 @@ jobs:
           </script>
           </body>
           </html>
-          LUME_EOF
-          grep -Fq '<title>LUME</title>' site/index.html
-          grep -Fq 'https://lume.viiversion.com/' site/index.html
-
-      - name: Write Wrangler config
-        shell: bash
-        run: |
-          set -euo pipefail
-          cat > wrangler-lume.jsonc <<'JSON'
+          LUME_HTML
+          cat > worker.js <<'LUME_WORKER'
+          const MODEL = "@cf/google/gemma-4-26b-a4b-it";
+          
+          const VENUE = {
+            name: "LUME Sky Dining & Bar",
+            city: "Nha Trang",
+            address: "29 Phan Chu Trinh, Nha Trang, Khanh Hoa, Vietnam",
+            hours: { breakfast: "08:00–10:30", lunch: "11:00–14:30", dinner: "17:00–22:00" },
+            spaces: {
+              dining: "Sky Dining — refined rooftop dining, strongest fit for a composed dinner and wine pairing.",
+              garden: "Sky Garden — open-air greenery, sunset light, softer rhythm for families and relaxed groups.",
+              bar: "Sky Bar — signature cocktails, music, city lights and a more social evening.",
+              rooftop: "Rooftop — the widest panorama across city, mountains, river and sea."
+            },
+            specialSpaces: [
+              "Private Dining — for important meetings, birthdays and intimate celebrations.",
+              "Wine Cellar — a private wine-focused setting."
+            ]
+          };
+          
+          const MENU = [
+            {id:"lobster",category:"Signature",title:"Nha Trang lobster",price:"1,450,000 VND",note:"grilled local lobster with citrus butter; pairs with Sauvignon Blanc"},
+            {id:"beef",category:"Signature",title:"Wagyu striploin",price:"890,000 VND",note:"charcoal grilled with truffle jus"},
+            {id:"tuna",category:"Signature",title:"Tuna tartare",price:"420,000 VND",note:"fresh tuna, avocado and ponzu"},
+            {id:"duck",category:"Signature",title:"Five-spice duck",price:"690,000 VND",note:"crisp skin, plum glaze and greens; pairs with medium red wine"},
+            {id:"sunset",category:"Sky Bar",title:"Sunset Negroni",price:"260,000 VND",note:"bitter orange, vermouth and rooftop mood"},
+            {id:"spritz",category:"Sky Bar",title:"LUME Spritz",price:"240,000 VND",note:"light aperitif, sparkling wine and soda"},
+            {id:"martini",category:"Sky Bar",title:"Lychee Martini",price:"280,000 VND",note:"floral vodka, lychee and citrus"},
+            {id:"sauv",category:"Wine",title:"Sauvignon Blanc",price:"320,000 VND / glass",note:"crisp white wine for seafood"},
+            {id:"pinot",category:"Wine",title:"Pinot Noir",price:"390,000 VND / glass",note:"elegant red for duck"},
+            {id:"champagne",category:"Wine",title:"Champagne",price:"2,200,000 VND / bottle",note:"for celebrations and first toast"},
+            {id:"family",category:"Set",title:"Family sharing set",price:"1,950,000 VND",note:"shared plates for four to six guests"},
+            {id:"celebration",category:"Set",title:"Celebration menu",price:"from 4,500,000 VND",note:"custom courses, wine and dessert"}
+          ];
+          
+          const EXPERIENCE_IDS = new Set(["romantic","sunset","family","private"]);
+          const AREA_IDS = new Set(["dining","garden","bar","rooftop"]);
+          const MENU_IDS = new Set(MENU.map(function(x){return x.id;}));
+          
+          function json(data,status){
+            return new Response(JSON.stringify(data),{
+              status:status||200,
+              headers:{
+                "content-type":"application/json; charset=utf-8",
+                "cache-control":"no-store",
+                "x-content-type-options":"nosniff"
+              }
+            });
+          }
+          
+          function cleanText(value,max){
+            return String(value==null?"":value).replace(/\0/g,"").trim().slice(0,max||1200);
+          }
+          
+          function safeHistory(value){
+            if(!Array.isArray(value)) return [];
+            return value.slice(-8).map(function(x){
+              return { role:x&&x.role==="assistant"?"assistant":"user", content:cleanText(x&&x.content,800) };
+            }).filter(function(x){return Boolean(x.content);});
+          }
+          
+          function extractJson(value){
+            const raw=typeof value==="string"?value:JSON.stringify(value==null?{}:value);
+            const first=raw.indexOf("{");
+            const last=raw.lastIndexOf("}");
+            if(first<0||last<first) throw new Error("Model did not return JSON");
+            return JSON.parse(raw.slice(first,last+1));
+          }
+          
+          function normalizePlan(plan){
+            if(!plan||typeof plan!=="object") return null;
+            const areaId=AREA_IDS.has(plan.areaId)?plan.areaId:null;
+            const experienceId=EXPERIENCE_IDS.has(plan.experienceId)?plan.experienceId:null;
+            const menuItemIds=Array.isArray(plan.menuItemIds)?plan.menuItemIds.filter(function(id){return MENU_IDS.has(id);}).slice(0,5):[];
+            const guests=Number.isFinite(Number(plan.guests))?Math.min(50,Math.max(1,Number(plan.guests))):null;
+            const time=/^(1[7-9]|20):[0-5]\d$/.test(String(plan.time||""))?String(plan.time):null;
+            if(!areaId&&!experienceId&&!menuItemIds.length&&!plan.title) return null;
+            return {
+              title:cleanText(plan.title,100),
+              areaId:areaId,
+              experienceId:experienceId,
+              time:time,
+              guests:guests,
+              mood:cleanText(plan.mood,140),
+              pairing:cleanText(plan.pairing,180),
+              reason:cleanText(plan.reason,280),
+              menuItemIds:menuItemIds
+            };
+          }
+          
+          function buildPrompt(input){
+            const language=input.lang==="ru"?"Russian":input.lang==="vi"?"Vietnamese":"English";
+            const menu=MENU.map(function(x){return x.id+": "+x.title+" — "+x.price+"; "+x.note;}).join("\n");
+            const spaces=Object.entries(VENUE.spaces).map(function(pair){return pair[0]+": "+pair[1];}).join("\n");
+            const prior=input.history.map(function(x){return x.role.toUpperCase()+": "+x.content;}).join("\n");
+            return [
+              "You are LUME Concierge, a premium restaurant concierge for "+VENUE.name+" in "+VENUE.city+".",
+              "Reply in "+language+". Be concise, elegant, useful and concrete.",
+              "",
+              "AUTHORITATIVE VENUE FACTS",
+              "Address: "+VENUE.address,
+              "Hours: breakfast "+VENUE.hours.breakfast+"; lunch "+VENUE.hours.lunch+"; dinner "+VENUE.hours.dinner+".",
+              "Spaces:",
+              spaces,
+              "Special spaces:",
+              "- "+VENUE.specialSpaces.join("\n- "),
+              "",
+              "DEMO MENU — use only these item IDs and titles when making menu recommendations:",
+              menu,
+              "",
+              "SAFETY / TRUTH RULES",
+              "- Never claim live table availability, confirmed booking, confirmed payment or real-time inventory. The demo currently creates a reservation request only.",
+              "- If the guest asks about availability, say live availability is not connected yet and offer a recommended request plan.",
+              "- Never invent menu items, prices, spaces, opening hours or policies.",
+              "- Recommendations may combine space, time, mood and the demo menu.",
+              "- Respect any budget, dietary preference, party size, occasion and current selected menu items in context.",
+              "- If the request is broad, still be helpful and propose one best-fit plan.",
+              "- Return ONLY valid JSON, with no markdown.",
+              "",
+              "JSON SCHEMA",
+              '{"reply":"natural concierge response","plan":{"title":"short plan title","areaId":"dining|garden|bar|rooftop","experienceId":"romantic|sunset|family|private|null","time":"HH:MM between 17:00 and 20:59 or null","guests":"number_or_null","mood":"short mood","pairing":"short pairing recommendation","reason":"short reason this plan fits","menuItemIds":["zero or more valid menu IDs"]}}',
+              "",
+              "CURRENT APP CONTEXT",
+              JSON.stringify(input.context||{}),
+              "",
+              "RECENT CONVERSATION",
+              prior||"(none)",
+              "",
+              "CURRENT USER MESSAGE",
+              input.message
+            ].join("\n");
+          }
+          
+          async function concierge(request,env){
+            let body;
+            try{ body=await request.json(); }catch(e){ return json({error:"invalid_json"},400); }
+            const message=cleanText(body&&body.message,1200);
+            if(!message) return json({error:"message_required"},400);
+            if(!env.AI) return json({error:"ai_binding_unavailable"},503);
+            const history=safeHistory(body&&body.history);
+            const context=body&&body.context&&typeof body.context==="object"?body.context:{};
+            const prompt=buildPrompt({message:message,lang:body&&body.lang,history:history,context:context});
+            try{
+              const result=await env.AI.run(MODEL,{prompt:prompt,max_tokens:700,temperature:0.35});
+              const parsed=extractJson(result&&result.response!=null?result.response:result);
+              const reply=cleanText(parsed&&parsed.reply,900);
+              if(!reply) throw new Error("Empty reply");
+              return json({reply:reply,plan:normalizePlan(parsed&&parsed.plan),source:"workers-ai",model:MODEL});
+            }catch(error){
+              console.error("LUME concierge inference failed",error);
+              return json({error:"concierge_inference_failed"},502);
+            }
+          }
+          
+          export default {
+            async fetch(request,env){
+              const url=new URL(request.url);
+              if(url.pathname==="/api/health") return json({ok:true,service:"lume-mini-app",aiBinding:Boolean(env.AI),model:MODEL});
+              if(url.pathname==="/api/concierge"){
+                if(request.method!=="POST") return json({error:"method_not_allowed"},405);
+                return concierge(request,env);
+              }
+              return env.ASSETS.fetch(request);
+            }
+          };
+          
+          LUME_WORKER
+          cat > wrangler-lume.jsonc <<'LUME_WRANGLER'
           {
+            "$schema": "./node_modules/wrangler/config-schema.json",
             "name": "lume-mini-app-site",
+            "main": "worker.js",
             "compatibility_date": "2026-10-06",
             "workers_dev": true,
             "routes": [
@@ -1034,30 +1301,70 @@ jobs:
               }
             ],
             "assets": {
-              "directory": "./site"
+              "directory": "./site",
+              "binding": "ASSETS",
+              "run_worker_first": [
+                "/api/*"
+              ]
+            },
+            "ai": {
+              "binding": "AI"
+            },
+            "observability": {
+              "enabled": true
             }
           }
-          JSON
+          LUME_WRANGLER
+          grep -Fq '<title>LUME</title>' site/index.html
+          grep -Fq 'fetch("/api/concierge"' site/index.html
+          grep -Fq 'env.AI.run' worker.js
+          grep -Fq '"binding": "AI"' wrangler-lume.jsonc
 
-      - name: Deploy LUME Worker
+      - name: Deploy LUME full-stack Worker
         shell: bash
         run: |
           set -euo pipefail
           npx --yes wrangler@4 deploy --config wrangler-lume.jsonc
 
-      - name: Verify custom domain
+      - name: Verify Worker health
         shell: bash
         run: |
           set -euo pipefail
           ready=0
-          for attempt in $(seq 1 48); do
-            code=$(curl -L -sS --connect-timeout 5 --max-time 20 -o /tmp/lume-live.html -w '%{http_code}' "https://${TARGET_DOMAIN}/" || true)
-            if [ "${code}" = "200" ] && grep -Fq '<title>LUME</title>' /tmp/lume-live.html && grep -Fq 'https://lume.viiversion.com/' /tmp/lume-live.html; then
+          for attempt in $(seq 1 36); do
+            code=$(curl -L -sS --connect-timeout 5 --max-time 20 -o /tmp/lume-health.json -w '%{http_code}' "https://${TARGET_DOMAIN}/api/health" || true)
+            if [ "${code}" = "200" ] && jq -e '.ok == true and .service == "lume-mini-app" and .aiBinding == true' /tmp/lume-health.json >/dev/null 2>&1; then
               ready=1
               break
             fi
-            echo "Waiting for ${TARGET_DOMAIN} (attempt ${attempt}, HTTP ${code})"
+            echo "Waiting for LUME Worker (attempt ${attempt}, HTTP ${code})"
             sleep 5
           done
           test "${ready}" -eq 1
+          jq . /tmp/lume-health.json
+
+      - name: Verify real AI concierge
+        shell: bash
+        run: |
+          set -euo pipefail
+          payload='{"message":"Romantic dinner for two with seafood around sunset. Recommend the best LUME plan.","lang":"en","history":[],"context":{"selectedMenuItemIds":[]}}'
+          code=$(curl -L -sS --connect-timeout 8 --max-time 60 -o /tmp/lume-concierge.json -w '%{http_code}' \
+            -X POST "https://${TARGET_DOMAIN}/api/concierge" \
+            -H 'content-type: application/json' \
+            --data "${payload}" || true)
+          cat /tmp/lume-concierge.json
+          test "${code}" = "200"
+          jq -e '.source == "workers-ai" and (.reply | type == "string") and (.reply | length > 15) and (.plan | type == "object")' /tmp/lume-concierge.json >/dev/null
+          jq -e '.plan.areaId == "dining" or .plan.areaId == "garden" or .plan.areaId == "bar" or .plan.areaId == "rooftop"' /tmp/lume-concierge.json >/dev/null
+          echo "Real Workers AI concierge verified."
+
+      - name: Verify live application
+        shell: bash
+        run: |
+          set -euo pipefail
+          code=$(curl -L -sS --connect-timeout 5 --max-time 30 -o /tmp/lume-live.html -w '%{http_code}' "https://${TARGET_DOMAIN}/")
+          test "${code}" = "200"
+          grep -Fq '<title>LUME</title>' /tmp/lume-live.html
+          grep -Fq 'home.heroTitle' /tmp/lume-live.html
+          grep -Fq 'fetch("/api/concierge"' /tmp/lume-live.html
           echo "LUME live: https://${TARGET_DOMAIN}"
