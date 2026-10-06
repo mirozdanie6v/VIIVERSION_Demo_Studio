@@ -26,6 +26,10 @@ jobs:
       ELEVENLABS_VOICE_ID_EN: ${{ secrets.ELEVENLABS_VOICE_ID_EN }}
       ELEVENLABS_VOICE_ID_EN_US: ${{ secrets.ELEVENLABS_VOICE_ID_EN_US }}
       ELEVENLABS_MODEL: ${{ vars.ELEVENLABS_MODEL || 'eleven_v3' }}
+      HF_TTS_ENABLED: "1"
+      HF_TTS_PREMIUM_DEFAULT: "1"
+      HF_TTS_ENGINE: chatterbox
+      HF_TTS_DEVICE: cpu
 
     steps:
       - name: Checkout
@@ -39,11 +43,47 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Install Chromium and FFmpeg
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Cache premium TTS models
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/huggingface
+            ~/.cache/ruaccent
+            ~/.cache/pip
+          key: demo-studio-premium-tts-${{ runner.os }}-v2
+
+      - name: Install Chromium, FFmpeg and premium local TTS
         run: |
           npx playwright install --with-deps chromium
           sudo apt-get update
-          sudo apt-get install -y ffmpeg
+          sudo apt-get install -y ffmpeg espeak-ng
+          python -m pip install --quiet --upgrade pip
+          python -m pip install --quiet torch==2.6.0 torchaudio==2.6.0 --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install --quiet "setuptools<82" resemble-perth numpy "git+https://github.com/resemble-ai/chatterbox.git@master" ruaccent
+
+      - name: Download approved Niki reference
+        uses: actions/download-artifact@v4
+        with:
+          name: max-tour-premium-russian-v9-final
+          path: reference-source
+          github-token: ${{ github.token }}
+          run-id: 37353860935
+
+      - name: Prepare canonical Niki reference
+        run: |
+          set -euo pipefail
+          test -s reference-source/voiceover_ru.wav
+          ffmpeg -y -hide_banner -loglevel error \
+            -i reference-source/voiceover_ru.wav \
+            -t 8.8 \
+            -af "highpass=f=70,lowpass=f=11500,loudnorm=I=-17:TP=-2:LRA=8" \
+            -ar 24000 -ac 1 /tmp/niki-reference.wav
+          test -s /tmp/niki-reference.wav
 
       - name: Capture authorized customer journey
         env:
@@ -65,6 +105,7 @@ jobs:
       - name: Generate approved premium voice segments
         run: |
           npm run voice:scenario -- \
+            --reference-audio /tmp/niki-reference.wav \
             --scenario examples/ave-dental-russian-demo.json \
             --run "${{ steps.run.outputs.dir }}"
 
