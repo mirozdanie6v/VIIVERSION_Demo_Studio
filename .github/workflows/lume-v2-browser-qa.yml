@@ -51,13 +51,13 @@ jobs:
           await page.screenshot({path:"01-home.png",fullPage:true});
           const homeTitle=await page.locator(".display").textContent();
 
-          await page.locator('[data-action="tab"][data-tab="menu"]').click();
+          await page.locator('#bottom-nav [data-action="tab"][data-tab="menu"]').click();
           await page.waitForSelector(".menu-grid");
           const menuCards=await page.locator(".menu-card").count();
           if(menuCards<2) throw new Error("Menu cards did not render");
           await page.screenshot({path:"02-menu.png",fullPage:true});
 
-          await page.locator('[data-action="tab"][data-tab="concierge"]').click();
+          await page.locator('#bottom-nav [data-action="tab"][data-tab="concierge"]').click();
           await page.waitForSelector("#concierge-input");
           await page.fill("#concierge-input","Romantic dinner for two with seafood around sunset");
           await page.locator('[data-action="concierge-send"]').click();
@@ -68,11 +68,11 @@ jobs:
 
           await page.locator('[data-action="lang"][data-lang="ru"]').click();
           await page.waitForTimeout(300);
-          const askLabel=await page.locator('[data-action="tab"][data-tab="concierge"] span:last-child').textContent();
+          const askLabel=await page.locator('#bottom-nav [data-action="tab"][data-tab="concierge"] span:last-child').textContent();
           if(!askLabel || !/AI|ИИ|AI/.test(askLabel)) throw new Error("Russian navigation did not render");
           await page.screenshot({path:"04-ru.png",fullPage:true});
 
-          await page.locator('[data-action="tab"][data-tab="reserve"]').click();
+          await page.locator('#bottom-nav [data-action="tab"][data-tab="reserve"]').click();
           await page.waitForSelector('[data-action="reserve-next-details"]');
           await page.fill('[data-field="name"]',"QA Guest");
           await page.fill('[data-field="phone"]',"+84900000000");
