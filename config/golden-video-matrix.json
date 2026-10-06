@@ -1,0 +1,35 @@
+{
+  "version": "golden-video-v1",
+  "cases": [
+    {
+      "id": "max-tour-ru",
+      "scenario": "examples/max-tour-russian-premium.json",
+      "workflow": ".github/workflows/max-tour-russian-premium.yml",
+      "locale": "ru-RU"
+    },
+    {
+      "id": "max-tour-en",
+      "scenario": "examples/max-tour-english-2min.json",
+      "workflow": ".github/workflows/max-tour-english-2min.yml",
+      "locale": "en-US"
+    },
+    {
+      "id": "ave-dental-ru",
+      "scenario": "examples/ave-dental-russian-demo.json",
+      "workflow": ".github/workflows/ave-dental-russian-demo.yml",
+      "locale": "ru-RU"
+    },
+    {
+      "id": "ave-dental-en",
+      "scenario": "examples/ave-dental-english-demo.json",
+      "workflow": ".github/workflows/ave-dental-english-demo.yml",
+      "locale": "en-US"
+    },
+    {
+      "id": "the-cloud-ru",
+      "scenario": "examples/the-cloud-russian-demo.json",
+      "workflow": ".github/workflows/the-cloud-demo.yml",
+      "locale": "ru-RU"
+    }
+  ]
+}
