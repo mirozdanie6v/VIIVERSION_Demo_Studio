@@ -100,7 +100,7 @@ function safeZoneFor(preset: CaptionPreset): CaptionPlan["safeZone"] {
   if (preset === "9:16") {
     return {
       alignment: subtitleAlignmentForPlacement("top"),
-      fontSize: 28,
+      fontSize: 50,
       marginV: 96,
       marginH: 84,
       outline: 0,
@@ -110,7 +110,7 @@ function safeZoneFor(preset: CaptionPreset): CaptionPlan["safeZone"] {
   if (preset === "1:1") {
     return {
       alignment: 2,
-      fontSize: 9,
+      fontSize: 40,
       marginV: 54,
       marginH: 44,
       outline: 1,
@@ -119,7 +119,7 @@ function safeZoneFor(preset: CaptionPreset): CaptionPlan["safeZone"] {
 
   return {
     alignment: 2,
-    fontSize: 11,
+    fontSize: 36,
     marginV: 42,
     marginH: 48,
     outline: 1,
