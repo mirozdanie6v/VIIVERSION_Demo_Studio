@@ -7,12 +7,90 @@ import type {
   VoiceTiming,
 } from "./voice-engine-types.js";
 import { directVoiceRequest } from "./voice-director.js";
+import { applyBrandSpokenAliases, brandPronunciationRules } from "./pronunciation-registry.js";
 
 type Alignment = {
   characters?: string[];
   character_start_times_seconds?: number[];
   character_end_times_seconds?: number[];
 };
+
+type PronunciationDictionaryLocator = {
+  pronunciation_dictionary_id: string;
+  version_id: string;
+};
+
+const BRAND_DICTIONARY_NAME = "VIIVERSION Brand Pronunciations";
+let brandDictionaryPromise: Promise<PronunciationDictionaryLocator | undefined> | undefined;
+
+async function ensureBrandPronunciationDictionary(
+  apiKey: string,
+): Promise<PronunciationDictionaryLocator | undefined> {
+  if (brandDictionaryPromise) return brandDictionaryPromise;
+
+  brandDictionaryPromise = (async () => {
+    const headers = {
+      "xi-api-key": apiKey,
+      "Content-Type": "application/json",
+    };
+
+    const listResponse = await fetch(
+      "https://api.elevenlabs.io/v1/pronunciation-dictionaries?page_size=100",
+      { headers },
+    );
+    if (!listResponse.ok) return undefined;
+
+    const listPayload = (await listResponse.json()) as {
+      pronunciation_dictionaries?: Array<{
+        id: string;
+        name: string;
+        latest_version_id?: string;
+      }>;
+    };
+    const existing = listPayload.pronunciation_dictionaries?.find(
+      (item) => item.name === BRAND_DICTIONARY_NAME,
+    );
+    const rules = brandPronunciationRules();
+
+    if (existing) {
+      const update = await fetch(
+        `https://api.elevenlabs.io/v1/pronunciation-dictionaries/${encodeURIComponent(existing.id)}/set-rules`,
+        {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ rules }),
+        },
+      );
+      if (!update.ok) return undefined;
+      const payload = (await update.json()) as { id: string; version_id: string };
+      return {
+        pronunciation_dictionary_id: payload.id,
+        version_id: payload.version_id,
+      };
+    }
+
+    const create = await fetch(
+      "https://api.elevenlabs.io/v1/pronunciation-dictionaries/add-from-rules",
+      {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          name: BRAND_DICTIONARY_NAME,
+          description: "Canonical VIIVERSION product and client brand pronunciations.",
+          rules,
+        }),
+      },
+    );
+    if (!create.ok) return undefined;
+    const payload = (await create.json()) as { id: string; version_id: string };
+    return {
+      pronunciation_dictionary_id: payload.id,
+      version_id: payload.version_id,
+    };
+  })();
+
+  return brandDictionaryPromise;
+}
 
 function localeEnvKey(prefix: string, locale: string): string[] {
   const normalized = locale.toUpperCase().replace(/-/g, "_");
@@ -67,6 +145,14 @@ export class ElevenLabsVoiceProvider implements VoiceProvider {
       resolveEnv(env, "ELEVENLABS_MODEL", directed.locale) ??
       "eleven_v3";
 
+    const brandDictionary =
+      model === "eleven_v3" || model === "eleven_v4"
+        ? await ensureBrandPronunciationDictionary(apiKey)
+        : undefined;
+    const providerText = brandDictionary
+      ? directed.directedText
+      : applyBrandSpokenAliases(directed.directedText);
+
     const response = await fetch(
       `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceId)}/with-timestamps?output_format=mp3_44100_128`,
       {
@@ -77,11 +163,14 @@ export class ElevenLabsVoiceProvider implements VoiceProvider {
         },
         body: JSON.stringify({
           text: model === "eleven_v3"
-            ? `[warm] [confident] [conversational] ${directed.directedText}`
-            : directed.directedText,
+            ? `[warm] [confident] [conversational] ${providerText}`
+            : providerText,
           model_id: model,
-          ...(model === "eleven_v3"
+          ...(model === "eleven_v3" || model === "eleven_v4"
             ? { language_code: directed.locale.split("-")[0].toLowerCase() }
+            : {}),
+          ...(brandDictionary
+            ? { pronunciation_dictionary_locators: [brandDictionary] }
             : {}),
           voice_settings: {
             stability: Number(env.ELEVENLABS_STABILITY ?? "0.43"),
