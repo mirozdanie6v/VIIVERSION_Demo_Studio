@@ -1,0 +1,93 @@
+name: Prepare LUME Production Assets
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/prepare-lume-assets.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Prepare optimized WebP assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet pillow requests
+          cat > /tmp/prepare.py <<'PY'
+          from PIL import Image
+          import requests, io, os
+
+          assets = {
+            "logo/lume-logo.webp": ("https://w.ladicdn.com/s550x400/693f86466a3f62001486b48c/lume-logo-01-20260310060906-9houh.png", 1200, True),
+            "hero/lume-hero.webp": ("https://w.ladicdn.com/s1440x658/693f86466a3f62001486b48c/1-20260411065010-sybcc.jpg", 1600, False),
+
+            "spaces/dining-01.webp": ("https://w.ladicdn.com/s1000x750/693f86466a3f62001486b48c/6-20260411064707-iwjym.jpg", 1400, False),
+            "spaces/dining-02.webp": ("https://w.ladicdn.com/s650x800/693f86466a3f62001486b48c/food-1-20260311041757-oplii.jpg", 1200, False),
+            "spaces/dining-03.webp": ("https://w.ladicdn.com/s1000x750/693f86466a3f62001486b48c/7-20260411064708-qdsux.jpg", 1400, False),
+            "spaces/dining-04.webp": ("https://w.ladicdn.com/s700x800/693f86466a3f62001486b48c/food-20260311032625-yb5fn.jpg", 1200, False),
+
+            "spaces/garden-01.webp": ("https://w.ladicdn.com/s800x700/693f86466a3f62001486b48c/5-20260411064707-_x_fj.jpg", 1400, False),
+            "spaces/garden-02.webp": ("https://w.ladicdn.com/s900x650/693f86466a3f62001486b48c/4-20260411064705-08icc.jpg", 1400, False),
+            "spaces/garden-03.webp": ("https://w.ladicdn.com/s900x650/693f86466a3f62001486b48c/42-20260411064706-ruwyi.jpg", 1400, False),
+
+            "spaces/bar-01.webp": ("https://w.ladicdn.com/s650x800/693f86466a3f62001486b48c/fb_5-20260411064959-yxtad.jpg", 1200, False),
+            "spaces/bar-02.webp": ("https://w.ladicdn.com/s1150x900/693f86466a3f62001486b48c/11-20260411064949-9znhg.jpg", 1400, False),
+            "spaces/bar-03.webp": ("https://w.ladicdn.com/s1000x750/693f86466a3f62001486b48c/img_4578-20260411065814-kvkvc.jpg", 1400, False),
+            "spaces/bar-04.webp": ("https://w.ladicdn.com/s850x650/693f86466a3f62001486b48c/img_4114-20260411065904-l7h9u.jpg", 1400, False),
+
+            "spaces/rooftop-01.webp": ("https://w.ladicdn.com/s1300x850/693f86466a3f62001486b48c/img_4129-20260411065905-skqcq.jpg", 1600, False),
+            "spaces/rooftop-02.webp": ("https://w.ladicdn.com/s900x650/693f86466a3f62001486b48c/apr03lume_20-20260411065813-xp3o1.jpg", 1400, False),
+            "spaces/rooftop-03.webp": ("https://w.ladicdn.com/s1440x506/693f86466a3f62001486b48c/lume-restaurant_outdoor_3-20260310063041-nh2z-.jpg", 1600, False),
+
+            "spaces/private-01.webp": ("https://w.ladicdn.com/s1050x800/693f86466a3f62001486b48c/lume-vip-room_17-20260311035647-lw0mr.jpg", 1400, False),
+            "spaces/private-02.webp": ("https://w.ladicdn.com/s1100x700/693f86466a3f62001486b48c/lume-vip-room_14-20260311035721-q3jh3.jpg", 1400, False),
+
+            "spaces/wine-01.webp": ("https://w.ladicdn.com/s750x700/693f86466a3f62001486b48c/14-20260411064950-qs0ou.jpg", 1400, False),
+            "spaces/wine-02.webp": ("https://w.ladicdn.com/s600x700/693f86466a3f62001486b48c/wine-20260311032438-sautl.jpg", 1200, False)
+          }
+
+          out_root="lume-assets"
+          os.makedirs(out_root, exist_ok=True)
+
+          for rel,(url,maxw,is_logo) in assets.items():
+            response=requests.get(url,timeout=30)
+            response.raise_for_status()
+            image=Image.open(io.BytesIO(response.content)).convert("RGBA" if is_logo else "RGB")
+            if is_logo:
+              alpha=image.getchannel("A")
+              bbox=alpha.getbbox()
+              if bbox:
+                image=image.crop(bbox)
+              scale=maxw/image.width
+              image=image.resize((maxw,round(image.height*scale)),Image.Resampling.LANCZOS)
+            elif image.width>maxw:
+              scale=maxw/image.width
+              image=image.resize((maxw,round(image.height*scale)),Image.Resampling.LANCZOS)
+
+            path=os.path.join(out_root,rel)
+            os.makedirs(os.path.dirname(path),exist_ok=True)
+            if is_logo:
+              image.save(path,"WEBP",lossless=True,method=6)
+            else:
+              image.save(path,"WEBP",quality=84,method=6)
+            print(rel, image.size, os.path.getsize(path))
+          PY
+          python /tmp/prepare.py
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lume-production-assets
+          path: lume-assets
+          if-no-files-found: error
+          retention-days: 3
