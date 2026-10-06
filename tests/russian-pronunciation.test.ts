@@ -1,38 +1,52 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { directVoiceRequest } from "../src/voice-director.js";
-import { applyDefaultLocalePronunciation } from "../src/russian-pronunciation.js";
+import {
+  applyBrandSpokenAliases,
+  brandPronunciationRules,
+  loadPronunciationRegistry,
+} from "../src/pronunciation-registry.js";
 
-test("applies approved Russian stress marks to business-demo vocabulary", () => {
-  assert.equal(
-    applyDefaultLocalePronunciation(
-      "Запись, каталог, стоматологиям, салонам, клиникам, консультант, компанией.",
-      "ru-RU",
-    ),
-    "За́пись, катало́г, стоматоло́гиям, сало́нам, кли́никам, консульта́нт, компа́нией.",
-  );
-});
-
-test("preserves non-Russian text", () => {
-  assert.equal(
-    applyDefaultLocalePronunciation("catalog consultant", "en-US"),
-    "catalog consultant",
-  );
-});
-
-test("applies scenario pronunciation before Russian stress normalization", () => {
+test("Voice Director does not pre-stress Russian before the provider", () => {
   const result = directVoiceRequest({
-    text: "Свяжитесь с VIIVERSION. AVE Dental принимает запись.",
+    text: "Запись, каталог и консультация.",
     locale: "ru-RU",
     outputPath: "/tmp/test.mp3",
-    pronunciation: {
-      VIIVERSION: "Виверсион",
-      "AVE Dental": "Эй-ви-и Дентал",
-    },
   });
 
+  assert.equal(result.directedText, "Запись, каталог и консультация.");
+});
+
+test("central brand registry owns VIIVERSION pronunciation", () => {
   assert.equal(
-    result.directedText,
-    "Свяжитесь с Виве́рсион. Эй-ви-и Де́нтал принимает за́пись.",
+    applyBrandSpokenAliases(
+      "VIIVERSION, Viversion, Viiversion и Виверсион.",
+    ),
+    "Vee Version, Vee Version, Vee Version и Vee Version.",
   );
+});
+
+test("VIIVERSION has an English spoken locale and IPA", () => {
+  const brand = loadPronunciationRegistry().brands.find(
+    (item) => item.id === "viiversion",
+  );
+  assert.ok(brand);
+  assert.equal(brand.spoken.locale, "en-US");
+  assert.equal(brand.spoken.text, "Vee Version");
+  assert.equal(brand.spoken.ipa, "viː ˈvɝːʒən");
+});
+
+test("ElevenLabs dictionary rules include every VIIVERSION alias", () => {
+  const rules = brandPronunciationRules();
+  const variants = ["VIIVERSION", "Viversion", "Viiversion", "Виверсион"];
+  for (const variant of variants) {
+    assert.ok(
+      rules.some(
+        (rule) =>
+          rule.string_to_replace === variant &&
+          rule.type === "phoneme" &&
+          rule.phoneme === "viː ˈvɝːʒən",
+      ),
+    );
+  }
 });
