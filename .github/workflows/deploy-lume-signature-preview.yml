@@ -140,6 +140,12 @@ jobs:
 
           if(!page.url().includes("#/menu")) throw new Error("Hero Menu route did not update hash");
           if(await page.locator(".menu-card").count()<4) throw new Error("Menu did not render");
+          await page.waitForFunction(() => {
+            const images=[...document.querySelectorAll(".menu-card img")];
+            return images.length>=4 && images.every(img=>img.complete && img.naturalWidth>0);
+          },{timeout:20000});
+          const menuImages=await page.locator(".menu-card img").evaluateAll(images=>images.map(img=>({src:img.currentSrc||img.src,w:img.naturalWidth,h:img.naturalHeight})));
+          if(menuImages.some(img=>!img.w || !img.src.includes("/assets/lume/menu/"))) throw new Error("Menu images are not local loaded WebP assets");
           await page.screenshot({path:"02-menu.png",fullPage:true});
 
           await page.goto(url+"/#/home",{waitUntil:"networkidle"});
@@ -173,7 +179,7 @@ jobs:
           await page.screenshot({path:"05-conversion.png",fullPage:true});
 
           if(errors.length) throw new Error(errors.join(" | "));
-          fs.writeFileSync("qa.json",JSON.stringify({logo,svgCount,galleryCount,cards,errors},null,2));
+          fs.writeFileSync("qa.json",JSON.stringify({logo,svgCount,menuImages,galleryCount,cards,errors},null,2));
           await browser.close();
           NODE
           node qa.mjs
