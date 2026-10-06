@@ -41,7 +41,7 @@ export class DemoStudioService {
     }
 
     const quota = this.quota.consume(identity);
-    const job = await this.jobs.submit(request);
+    const job = await this.jobs.submit(request, identity);
     return { job, quota };
   }
 
@@ -87,28 +87,32 @@ export class DemoStudioService {
       voice: input.voice,
       brand: input.brand,
       cta: input.cta,
-    });
+    }, identity);
 
     return { job, quota };
   }
 
-  getJob(id: string): PublicDemoJob | undefined {
-    return this.jobs.get(id);
+  getJob(
+    id: string,
+    identity?: string,
+  ): PublicDemoJob | undefined {
+    return this.jobs.get(id, identity);
   }
 
   async getJobDurable(
     id: string,
     identity: string,
+    bearerToken?: string,
   ): Promise<PublicDemoJob | undefined> {
-    const local = this.jobs.get(id);
+    const local = this.jobs.get(id, identity);
     if (local) return local;
 
     const base = process.env.PUBLIC_BASE_URL?.replace(/\/$/, "");
     if (!base) return undefined;
 
     const headers: Record<string, string> = {};
-    if (identity !== "development") {
-      headers.Authorization = "Bearer " + identity;
+    if (bearerToken) {
+      headers.Authorization = "Bearer " + bearerToken;
     }
 
     try {
