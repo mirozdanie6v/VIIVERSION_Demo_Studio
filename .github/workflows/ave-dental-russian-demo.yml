@@ -42,6 +42,7 @@ jobs:
           python -m pip install --quiet --upgrade pip
           python -m pip install --quiet torch==2.6.0 torchaudio==2.6.0 --index-url https://download.pytorch.org/whl/cpu
           python -m pip install --quiet "git+https://github.com/resemble-ai/chatterbox.git@master"
+          python -m pip install --quiet "russian_text_stresser>=1.0.5"
 
       - name: Capture AVE Dental patient journey
         env:
@@ -81,12 +82,10 @@ jobs:
           import fs from 'node:fs';
           import path from 'node:path';
           import { applyPronunciation } from './src/voice-director.ts';
-          import { applyDefaultLocalePronunciation } from './src/russian-pronunciation.ts';
 
           const scenario = JSON.parse(
             fs.readFileSync('examples/ave-dental-russian-demo.json', 'utf8'),
           );
-          const locale = scenario.voice?.locale || 'ru-RU';
           const pronunciation = scenario.voice?.pronunciation || {};
 
           for (let i = 0; i < scenario.steps.length; i += 1) {
@@ -94,8 +93,7 @@ jobs:
             if (!step.narration?.trim()) continue;
 
             const source = (step.voiceText || step.narration).trim();
-            const custom = applyPronunciation(source, pronunciation);
-            const spoken = applyDefaultLocalePronunciation(custom, locale);
+            const spoken = applyPronunciation(source, pronunciation);
 
             fs.writeFileSync(
               path.join(process.env.RUN_DIR, 'voices', `text-${i}.txt`),
@@ -119,60 +117,30 @@ jobs:
           RUN_DIR: ${{ steps.run.outputs.dir }}
         run: |
           set -euo pipefail
-          python - <<'PY'
-          import os
-          from pathlib import Path
-
-          import torch
-          import torchaudio as ta
-          import perth
-
-          if not callable(getattr(perth, "PerthImplicitWatermarker", None)):
-              perth.PerthImplicitWatermarker = perth.DummyWatermarker
-
-          from chatterbox.mtl_tts import ChatterboxMultilingualTTS
-
-          run_dir = Path(os.environ["RUN_DIR"])
-          voices = run_dir / "voices"
-          reference = str(Path("artifacts/niki-reference.wav").resolve())
-          device = "cuda" if torch.cuda.is_available() else "cpu"
-
-          try:
-              model = ChatterboxMultilingualTTS.from_pretrained(device=device, t3_model="v3")
-          except TypeError:
-              model = ChatterboxMultilingualTTS.from_pretrained(device=device)
-
-          text_files = sorted(
-              voices.glob("text-*.txt"),
-              key=lambda p: int(p.stem.split("-")[-1]),
-          )
-
-          for txt in text_files:
-              idx = txt.stem.split("-")[-1]
-              text = txt.read_text(encoding="utf-8").strip()
-              if not text:
-                  continue
-              wav = model.generate(
-                  text,
-                  language_id="ru",
-                  audio_prompt_path=reference,
-              )
-              ta.save(str(voices / f"raw-{idx}.wav"), wav, model.sr)
-
-          print(f"APPROVED_RU_VOICE=Niki reference / MAX TOUR v9")
-          print(f"PREMIUM_VOICE_DEVICE={device}")
-          print(f"PREMIUM_VOICE_SEGMENTS={len(text_files)}")
-          PY
-
-          run_dir="${{ steps.run.outputs.dir }}"
-          for raw in "${run_dir}"/voices/raw-*.wav; do
-            base=$(basename "$raw" .wav)
-            idx=${base#raw-}
+          run_dir="${RUN_DIR}"
+          for txt in "${run_dir}"/voices/text-*.txt; do
+            base=$(basename "$txt" .txt)
+            idx=${base#text-}
+            raw="${run_dir}/voices/raw-${idx}.wav"
             out="${run_dir}/voices/step-${idx}.mp3"
+
+            python scripts/hf_tts.py \
+              --engine chatterbox \
+              --locale ru-RU \
+              --language ru \
+              --output "$raw" \
+              --voice default \
+              --reference-audio artifacts/niki-reference.wav \
+              < "$txt"
+
             ffmpeg -y -i "$raw" \
               -af "highpass=f=70,lowpass=f=11500,acompressor=threshold=-18dB:ratio=1.55:attack=18:release=220,loudnorm=I=-16:TP=-1.5:LRA=8" \
               -c:a libmp3lame -b:a 224k "$out"
           done
+
+          echo "APPROVED_RU_VOICE=Niki reference / MAX TOUR v9"
+          echo "PRONUNCIATION_PIPELINE=single-pass-russian-stress+brand-language-registry"
+
 
       - name: Synchronize narration and captions
         shell: bash
