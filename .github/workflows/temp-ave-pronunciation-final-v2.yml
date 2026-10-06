@@ -1,0 +1,174 @@
+name: TEMP AVE Pronunciation Final v2
+
+on:
+  push:
+    branches: [temp-ave-pronunciation-final-v2]
+    paths:
+      - '.github/workflows/temp-ave-pronunciation-final-v2.yml'
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      RUACCENT_MODEL: tiny2.1
+      RUACCENT_DEVICE: CPU
+      RUACCENT_WORKDIR: ${{ github.workspace }}/.cache/ruaccent
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          python -m pip install --quiet --upgrade pip
+          python -m pip install --quiet torch==2.6.0 torchaudio==2.6.0 --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install --quiet "git+https://github.com/resemble-ai/chatterbox.git@master"
+          python -m pip install --quiet ruaccent
+
+      - name: Download verified AVE visual master
+        uses: actions/download-artifact@v4
+        with:
+          name: ave-dental-russian-niki-accented-final
+          path: artifacts/source
+          github-token: ${{ github.token }}
+          run-id: 37372025873
+
+      - name: Download approved MAX TOUR Niki reference
+        uses: actions/download-artifact@v4
+        with:
+          name: max-tour-premium-russian-v9-final
+          path: artifacts/max-tour-reference
+          github-token: ${{ github.token }}
+          run-id: 37353860935
+
+      - name: Restore AVE run directory
+        id: run
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s artifacts/source/run.json
+          test -s artifacts/source/capture.webm
+          base="$(node -e "const r=require('./artifacts/source/run.json'); const p=r.videoPath; if(!p) process.exit(2); console.log(p.split('/').slice(-2,-1)[0])")"
+          run_dir="artifacts/$base"
+          rm -rf "$run_dir"
+          mkdir -p "$run_dir"
+          cp -a artifacts/source/. "$run_dir/"
+          rm -f "$run_dir"/voices/text-*.txt "$run_dir"/voices/raw-*.wav "$run_dir"/voices/step-*.mp3
+          rm -f "$run_dir"/voiceover.mp3 "$run_dir"/synced-captions.ass "$run_dir"/final-9x16.mp4
+          mkdir -p "$run_dir/voices"
+          test -s "$run_dir/capture.webm"
+          echo "dir=$run_dir" >> "$GITHUB_OUTPUT"
+          echo "AVE_RUN_DIR=$run_dir"
+
+      - name: Prepare narration text
+        shell: bash
+        env:
+          RUN_DIR: ${{ steps.run.outputs.dir }}
+        run: |
+          node --import tsx --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import path from 'node:path';
+          import { applyPronunciation } from './src/voice-director.ts';
+
+          const scenario = JSON.parse(
+            fs.readFileSync('examples/ave-dental-russian-demo.json', 'utf8'),
+          );
+          const pronunciation = scenario.voice?.pronunciation || {};
+
+          for (let i = 0; i < scenario.steps.length; i += 1) {
+            const step = scenario.steps[i];
+            if (!step.narration?.trim()) continue;
+            const source = (step.voiceText || step.narration).trim();
+            const spoken = applyPronunciation(source, pronunciation);
+            fs.writeFileSync(
+              path.join(process.env.RUN_DIR, 'voices', `text-${i}.txt`),
+              spoken + '\n',
+            );
+          }
+          NODE
+
+      - name: Prepare Niki reference
+        run: |
+          set -euo pipefail
+          test -s artifacts/max-tour-reference/voiceover_ru.wav
+          ffmpeg -y -i artifacts/max-tour-reference/voiceover_ru.wav -t 8.8 \
+            -af "highpass=f=70,lowpass=f=11500,loudnorm=I=-17:TP=-2:LRA=8" \
+            -ar 24000 -ac 1 artifacts/niki-reference.wav
+
+      - name: Synthesize RUAccent + brand-aware Niki narration
+        shell: bash
+        env:
+          RUN_DIR: ${{ steps.run.outputs.dir }}
+        run: |
+          set -euo pipefail
+          python scripts/hf_tts_batch.py \
+            --voices-dir "${RUN_DIR}/voices" \
+            --reference-audio artifacts/niki-reference.wav \
+            --base-language ru
+
+          for raw in "${RUN_DIR}"/voices/raw-*.wav; do
+            base=$(basename "$raw" .wav)
+            idx=${base#raw-}
+            out="${RUN_DIR}/voices/step-${idx}.mp3"
+            ffmpeg -y -i "$raw" \
+              -af "highpass=f=70,lowpass=f=11500,acompressor=threshold=-18dB:ratio=1.55:attack=18:release=220,loudnorm=I=-16:TP=-1.5:LRA=8" \
+              -c:a libmp3lame -b:a 224k "$out"
+          done
+
+      - name: Synchronize narration and captions
+        run: npx tsx src/narration-sync-cli.ts --run "${{ steps.run.outputs.dir }}" --bpm 96
+
+      - name: Render final
+        shell: bash
+        env:
+          RUN_DIR: ${{ steps.run.outputs.dir }}
+        run: |
+          set -euo pipefail
+          test -s "$RUN_DIR/background.m4a"
+          npm run render -- \
+            --run "$RUN_DIR" \
+            --preset 9:16 \
+            --voiceover "$RUN_DIR/voiceover.mp3" \
+            --captions-file "$RUN_DIR/synced-captions.ass" \
+            --music "$RUN_DIR/background.m4a" \
+            --music-volume 0.07 \
+            --music-bpm 96 \
+            --brand "VIIVERSION" \
+            --title "Запись + AI-консультант" \
+            --intro-seconds 3.4 \
+            --outro-seconds 6.5 \
+            --cta "Свяжитесь с VIIVERSION" \
+            --cta-secondary "Запись 24/7 · AI-консультант · автоматизация"
+
+      - name: Verify final
+        shell: bash
+        env:
+          RUN_DIR: ${{ steps.run.outputs.dir }}
+        run: |
+          set -euo pipefail
+          test -s "$RUN_DIR/final-9x16.mp4"
+          ffmpeg -v error -i "$RUN_DIR/final-9x16.mp4" -f null -
+          ffprobe -v error -show_entries format=duration -of csv=p=0 "$RUN_DIR/final-9x16.mp4"
+          ffmpeg -y -ss 1.6 -i "$RUN_DIR/final-9x16.mp4" -frames:v 1 "$RUN_DIR/qa-pronunciation-intro.png"
+          ffmpeg -y -sseof -3 -i "$RUN_DIR/final-9x16.mp4" -frames:v 1 "$RUN_DIR/qa-pronunciation-outro.png"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ave-dental-ru-pronunciation-v2-final
+          path: ${{ steps.run.outputs.dir }}/
+          if-no-files-found: error
