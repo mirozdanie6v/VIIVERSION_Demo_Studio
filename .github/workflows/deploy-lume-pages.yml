@@ -72,7 +72,7 @@ jobs:
           <head>
           <meta charset="utf-8"/>
           <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
-          <title>LUME</title>
+          <title>LUME</title>\n<link rel="canonical" href="https://lume.viiversion.com/">
           <style>
           :root{
             --bg:#070604; --text:#fff8ed; --muted:rgba(255,248,237,.68);
@@ -936,11 +936,11 @@ jobs:
           {id:"celebration",cat:"Set",img:"https://images.unsplash.com/photo-1555243896-c709bfa0b564?auto=format&fit=crop&w=900&q=82",price:"from 4,500,000 VND",title:{en:"Celebration menu",ru:"Праздничное меню",vi:"Menu tiệc"},desc:{en:"For birthdays and private dinners.",ru:"Для дней рождения и частных ужинов.",vi:"Cho sinh nhật và tiệc riêng."},ing:{en:"Custom courses, wine, dessert",ru:"Курсы, вино, десерт",vi:"Món theo set, rượu, tráng miệng"},rec:{en:"Choose Private Dining.",ru:"Выберите Private Dining.",vi:"Chọn Private Dining."}}
           ]};
           let lang=localStorage.getItem("lume_lang") || DEFAULT_LANG, tab="home", cat="Signature", evening=[], selectedExp=null, selectedArea=null, step=0, payMethod="card", reservations=[], eventRequests=[], currentReservation=null, reserveMode="table", areaError=false, guest={name:"",phone:"",email:"",preferences:"",consent:true};
-          const $=s=>document.querySelector(s); const $$=s=>Array.from(document.querySelectorAll(s));
-          function renderText(){ $$("[data-k]").forEach(el=>el.textContent=t(el.dataset.k)); $("#chatInput").placeholder=t("concierge.inputPlaceholder"); $("#sendChat").textContent=t("common.send"); document.documentElement.lang=lang; }
+          const $=s=>document.querySelector(s); const $=s=>Array.from(document.querySelectorAll(s));
+          function renderText(){ $("[data-k]").forEach(el=>el.textContent=t(el.dataset.k)); $("#chatInput").placeholder=t("concierge.inputPlaceholder"); $("#sendChat").textContent=t("common.send"); document.documentElement.lang=lang; }
           function renderLangs(){ $("#langs").innerHTML=["en","ru","vi"].map(l=>`<button class="${l===lang?'active':''}" onclick="setLang('${l}')">${l.toUpperCase()}</button>`).join("");}
           function setLang(l){ if(!SUPPORTED_LANGS.includes(l)) l=DEFAULT_LANG; lang=l; localStorage.setItem("lume_lang", lang); renderAll(); }
-          function switchTab(id){ tab=id; if(id!=="reserve" && reserveMode==="event") reserveMode="table"; $$(".view").forEach(v=>v.classList.toggle("active",v.id===id)); $$(".nav").forEach(n=>n.classList.toggle("active",n.dataset.tab===id)); renderReserve(); renderGuest(); renderEveningBar();}
+          function switchTab(id){ tab=id; if(id!=="reserve" && reserveMode==="event") reserveMode="table"; $(".view").forEach(v=>v.classList.toggle("active",v.id===id)); $(".nav").forEach(n=>n.classList.toggle("active",n.dataset.tab===id)); renderReserve(); renderGuest(); renderEveningBar();}
           
           function renderExperiences(){ $("#experiences").innerHTML=DATA.experiences.map(x=>`<button class="exp-card" onclick="openExperience('${x.id}')"><img src="${x.img}" alt=""><span class="shade"></span><span class="txt"><h3>${tr(x.title)}</h3><p>${tr(x.text)}</p></span></button>`).join("");}
           function openExperience(id){ const x=DATA.experiences.find(e=>e.id===id); const eventBtn=id==="private"?`<button class="btn secondary full" onclick="startEventRequest('${x.id}')">${t("events.requestProposal")}</button>`:`<button class="btn secondary full" onclick="closeSheet();switchTab('menu')">${t("menu.exploreMatching")}</button>`; openSheet(`<div class="sheet-hero"><img src="${x.img}" alt=""><button class="x" onclick="closeSheet()">×</button></div><p class="eyebrow">${t("home.chooseExperience")}</p><h2>${tr(x.title)}</h2><p class="muted">${tr(x.text)}</p><div class="row" style="margin-top:14px"><button class="btn full" onclick="selectExperience('${x.id}');closeSheet();switchTab('reserve')">${t("home.reserveThis")}</button>${eventBtn}<button class="btn secondary full" onclick="closeSheet()">${t("home.notNow")}</button></div>`)}
@@ -962,7 +962,7 @@ jobs:
           function openSheet(html){$("#sheet").innerHTML=`<div class="sheet-card">${html}</div>`; $("#sheet").classList.add("open"); $("#sheet").setAttribute("aria-hidden","false")}
           function closeSheet(){$("#sheet").classList.remove("open"); $("#sheet").setAttribute("aria-hidden","true")}
           $("#sheet").addEventListener("click",e=>{if(e.target.id==="sheet") closeSheet()});
-          function renderReserve(){ if(tab!=="reserve") return; $$(".step").forEach((s,i)=>s.classList.toggle("on",i<=step)); const pane=$("#reservePane"); if(reserveMode==="event"){ renderEventRequest(); return; }
+          function renderReserve(){ if(tab!=="reserve") return; $(".step").forEach((s,i)=>s.classList.toggle("on",i<=step)); const pane=$("#reservePane"); if(reserveMode==="event"){ renderEventRequest(); return; }
            if(currentReservation){pane.innerHTML=`<div class="notice"><p class="eyebrow">${t("payment.depositSecured")}</p><h2>${currentReservation.ref}</h2><p class="muted">${t("payment.awaiting")}</p></div>${reservationCard(currentReservation)}<div class="row" style="margin-top:14px"><button class="btn full" onclick="switchTab('guest')">${t("guest.viewGuest")}</button><button class="btn secondary full" onclick="currentReservation=null;step=0;selectedArea=null;renderReserve()">${t("reserve.newRequest")}</button></div>`; return}
            if(step===0){ const exp=DATA.experiences.find(x=>x.id===selectedExp); pane.innerHTML=`${exp?`<div class="notice"><p class="eyebrow">${t("reserve.experienceSelected")}</p><h3>${tr(exp.title)}</h3><p class="muted">${tr(exp.text)}</p><button class="btn ghost small" onclick="selectedExp=null;renderReserve()">${t("reserve.changeExperience")}</button></div>`:""}<div class="panel stack"><p class="eyebrow">${t("reserve.details")}</p><div class="field"><label>${t("reserve.date")}</label><input id="rDate" type="date" value="${window.details?.date||new Date(Date.now()+86400000).toISOString().slice(0,10)}"></div><div class="two"><div class="field"><label>${t("reserve.time")}</label><select id="rTime">${["17:30","18:00","18:30","19:00","20:00"].map(v=>`<option ${window.details?.time===v?"selected":""}>${v}</option>`).join("")}</select></div><div class="field"><label>${t("reserve.guests")}</label><select id="rGuests">${["2","4","6","8","12"].map(v=>`<option ${window.details?.guests===v?"selected":""}>${v}</option>`).join("")}</select></div></div><div class="field"><label>${t("reserve.occasion")}</label><select id="rOcc">${occasionOptions().map(o=>`<option value="${o.en}" ${window.details?.occ===o.en?"selected":""}>${o[lang]||o.en}</option>`).join("")}</select></div><div class="field"><label>${t("reserve.comment")}</label><textarea id="rNote">${window.details?.note||""}</textarea></div></div><div class="panel stack"><p class="eyebrow">${t("reserve.guestDetails")}</p><div class="field"><label>${t("reserve.guestName")}</label><input id="gName" value="${guest.name}" placeholder="${t("reserve.guestName")}"></div><div class="two"><div class="field"><label>${t("reserve.phone")}</label><input id="gPhone" value="${guest.phone}" placeholder="+84"></div><div class="field"><label>${t("reserve.email")}</label><input id="gEmail" value="${guest.email}" placeholder="name@email.com"></div></div><div id="guestErr" class="inline-error"></div><div class="sticky-actions"><button class="btn full" onclick="saveDetails()">${t("common.continue")}</button></div></div>`}
            if(step===1){pane.innerHTML=`<h3>${t("reserve.chooseSeating")}</h3><p class="muted" style="margin-bottom:12px">${t("reserve.seatingHint")}</p>${areaError?`<div class="inline-error">${t("reserve.chooseAreaFirst")}</div>`:""}${DATA.areas.map(a=>`<div class="zone ${selectedArea===a.id?'selected':''}"><img src="${a.img}" alt=""><div class="pad"><div class="head" style="margin:0 0 8px"><div><h3>${tr(a.title)}</h3><p class="muted">${tr(a.text)}</p></div><span class="pill">${selectedArea===a.id?t("common.selected"):""}</span></div><div class="row"><button class="btn secondary full" onclick="openArea('${a.id}')">${t("common.view")}</button><button class="btn full" onclick="selectedArea='${a.id}';areaError=false;renderReserve()">${t("common.select")}</button></div></div></div>`).join("")}<div class="sticky-actions"><div class="row"><button class="btn secondary full" onclick="step=0;renderReserve()">${t("common.back")}</button><button class="btn full" onclick="continueFromSeating()">${t("common.continue")}</button></div></div>`}
@@ -1042,6 +1042,38 @@ jobs:
             npx --yes wrangler@4 pages project create "${PROJECT_NAME}" --production-branch main
           fi
 
+      - name: Link Pages project to LUME GitHub
+        shell: bash
+        run: |
+          set -euo pipefail
+          api="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/${PROJECT_NAME}"
+          payload=$(jq -nc '{
+            production_branch:"main",
+            source:{
+              type:"github",
+              config:{
+                owner:"mirozdanie6v",
+                owner_id:"49186663",
+                repo_name:"lume-mini-app",
+                repo_id:"1407147394",
+                production_branch:"main",
+                production_deployments_enabled:true,
+                preview_deployment_setting:"none",
+                pr_comments_enabled:false
+              }
+            }
+          }')
+          code=$(curl -sS -o /tmp/link-source.json -w '%{http_code}' -X PATCH "${api}" \
+            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            -H 'Content-Type: application/json' \
+            --data "${payload}" || true)
+          if [ "${code}" = "200" ] && jq -e '.success == true' /tmp/link-source.json >/dev/null 2>&1; then
+            echo "Cloudflare Pages linked directly to mirozdanie6v/lume-mini-app."
+          else
+            echo "Git source linking was not applied (HTTP ${code}); direct Pages deployment remains active."
+            cat /tmp/link-source.json || true
+          fi
+
       - name: Deploy production
         shell: bash
         run: |
@@ -1085,13 +1117,19 @@ jobs:
           test "${ready}" -eq 1
           echo "LUME production verified at https://${subdomain}"
 
-      - name: Probe custom domain
+      - name: Verify custom domain
         shell: bash
         run: |
           set -euo pipefail
-          code=$(curl -L -sS --connect-timeout 5 --max-time 20 -o /tmp/lume-domain.html -w '%{http_code}' "https://${CUSTOM_DOMAIN}/" || true)
-          if [ "${code}" = "200" ] && grep -Fq '<title>LUME</title>' /tmp/lume-domain.html; then
-            echo "Custom domain live: https://${CUSTOM_DOMAIN}"
-          else
-            echo "Custom domain is still provisioning (HTTP ${code}); Pages production is already live."
-          fi
+          ready=0
+          for attempt in $(seq 1 36); do
+            code=$(curl -L -sS --connect-timeout 5 --max-time 20 -o /tmp/lume-domain.html -w '%{http_code}' "https://${CUSTOM_DOMAIN}/" || true)
+            if [ "${code}" = "200" ] && grep -Fq '<title>LUME</title>' /tmp/lume-domain.html && grep -Fq 'https://lume.viiversion.com/' /tmp/lume-domain.html; then
+              ready=1
+              break
+            fi
+            echo "Waiting for custom domain (attempt ${attempt}, HTTP ${code})"
+            sleep 5
+          done
+          test "${ready}" -eq 1
+          echo "Custom domain live and canonical: https://${CUSTOM_DOMAIN}"
