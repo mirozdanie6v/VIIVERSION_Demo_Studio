@@ -705,21 +705,36 @@ export class DemoStudioContainer extends DurableObject {
 
     if (!artifactMatch && !jobMatch) return undefined;
 
-    if (!this.isPublicAuthorized(request)) {
+    const auth = await this.authenticatePublicRequest(request, ["demo.read"]);
+    if (!auth.ok) return auth.response;
+
+    const id = artifactMatch?.[1] ?? jobMatch?.[1];
+    const jobObject = await this.env.DEMO_STUDIO_ARTIFACTS.get(
+      "jobs/" + id + ".json",
+    );
+    if (!jobObject) return undefined;
+
+    const snapshot = JSON.parse(await jobObject.text());
+    if (
+      !snapshot.ownerIdentityHash ||
+      snapshot.ownerIdentityHash !== auth.identityHash
+    ) {
       return new Response(
-        JSON.stringify({ error: "Invalid or missing bearer token." }),
+        JSON.stringify({ error: "Demo job not found." }),
         {
-          status: 401,
-          headers: { "Content-Type": "application/json; charset=utf-8" },
+          status: 404,
+          headers: {
+            "Content-Type": "application/json; charset=utf-8",
+            "Cache-Control": "no-store",
+          },
         },
       );
     }
 
     if (artifactMatch) {
       const object = await this.env.DEMO_STUDIO_ARTIFACTS.get(
-        "artifacts/" + artifactMatch[1] + ".mp4",
+        "artifacts/" + id + ".mp4",
       );
-
       if (!object) return undefined;
 
       return new Response(object.body, {
@@ -729,7 +744,7 @@ export class DemoStudioContainer extends DurableObject {
           "Content-Length": String(object.size),
           "Content-Disposition":
             'attachment; filename="viiversion-demo-' +
-            artifactMatch[1] +
+            id +
             '.mp4"',
           "Cache-Control": "private, max-age=3600",
           ETag: object.httpEtag,
@@ -737,13 +752,8 @@ export class DemoStudioContainer extends DurableObject {
       });
     }
 
-    const object = await this.env.DEMO_STUDIO_ARTIFACTS.get(
-      "jobs/" + jobMatch[1] + ".json",
-    );
+    delete snapshot.ownerIdentityHash;
 
-    if (!object) return undefined;
-
-    const snapshot = JSON.parse(await object.text());
     const now = Date.now();
     const stageStarted = Date.parse(
       snapshot.stageStartedAt ?? snapshot.updatedAt ?? snapshot.createdAt,
@@ -773,7 +783,7 @@ export class DemoStudioContainer extends DurableObject {
       headers: {
         "Content-Type": "application/json; charset=utf-8",
         "Cache-Control": "no-store",
-        ETag: object.httpEtag,
+        ETag: jobObject.httpEtag,
       },
     });
   }
