@@ -150,9 +150,13 @@ async function main() {
     (max, segment) => Math.max(max, segment.start + segment.duration),
     0,
   );
-  if (finalNarrationEnd > contentDuration + 0.35) {
+  const tailOverflowSeconds = Math.max(
+    0,
+    Number(arg("--tail-overflow-seconds") ?? "0"),
+  );
+  if (finalNarrationEnd > contentDuration + tailOverflowSeconds + 0.35) {
     throw new Error(
-      `Narration exceeds edited content timeline: voice=${finalNarrationEnd.toFixed(2)}s, content=${contentDuration.toFixed(2)}s. Increase the relevant visual hold instead of allowing drift.`,
+      `Narration exceeds edited content timeline: voice=${finalNarrationEnd.toFixed(2)}s, content=${contentDuration.toFixed(2)}s, allowedTailOverflow=${tailOverflowSeconds.toFixed(2)}s. Increase the relevant visual hold instead of allowing uncontrolled drift.`,
     );
   }
 
