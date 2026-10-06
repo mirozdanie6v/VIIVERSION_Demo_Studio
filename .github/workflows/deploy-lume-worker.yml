@@ -1263,8 +1263,20 @@ jobs:
             const context=body&&body.context&&typeof body.context==="object"?body.context:{};
             const prompt=buildPrompt({message:message,lang:body&&body.lang,history:history,context:context});
             try{
-              const result=await env.AI.run(MODEL,{prompt:prompt,max_tokens:700,temperature:0.35});
-              const parsed=extractJson(result&&result.response!=null?result.response:result);
+              const result=await env.AI.run(MODEL,{
+                messages:[
+                  {role:"system",content:"You are LUME Concierge. Follow the user instruction exactly and return only the requested JSON object."},
+                  {role:"user",content:prompt}
+                ],
+                max_completion_tokens:700,
+                temperature:0.35
+              });
+              const raw=result&&result.response!=null
+                ? result.response
+                : result&&Array.isArray(result.choices)&&result.choices[0]&&result.choices[0].message
+                  ? result.choices[0].message.content
+                  : result;
+              const parsed=extractJson(raw);
               const reply=cleanText(parsed&&parsed.reply,900);
               if(!reply) throw new Error("Empty reply");
               return json({reply:reply,plan:normalizePlan(parsed&&parsed.plan),source:"workers-ai",model:MODEL});
