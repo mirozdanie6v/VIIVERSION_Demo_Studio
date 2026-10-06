@@ -42,7 +42,7 @@ jobs:
           python -m pip install --quiet --upgrade pip
           python -m pip install --quiet torch==2.6.0 torchaudio==2.6.0 --index-url https://download.pytorch.org/whl/cpu
           python -m pip install --quiet "git+https://github.com/resemble-ai/chatterbox.git@master"
-          python -m pip install --quiet "russian_text_stresser>=1.0.5"
+          python -m pip install --quiet ruaccent
 
       - name: Capture AVE Dental patient journey
         env:
