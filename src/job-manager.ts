@@ -27,6 +27,7 @@ import {
 } from "./concurrent-media.js";
 import { createVoiceover } from "./voiceover.js";
 import { auditUxDesign } from "./ux-design-brain.js";
+import { identityHash } from "./quota.js";
 
 export type DemoJobRequest = {
   url: string;
@@ -75,6 +76,7 @@ export type DemoJobEvent = {
 
 export type DemoJob = {
   id: string;
+  ownerIdentity: string;
   status: DemoJobStatus;
   stage: DemoJobStage;
   stageLabel: string;
@@ -125,6 +127,7 @@ export type PublicDemoJob = {
 
 export type DemoJobRecovery = {
   request: DemoJobRequest;
+  ownerIdentity: string;
   createdAt: string;
   attempt: number;
   maxAttempts: number;
@@ -266,7 +269,10 @@ export class DemoJobManager {
       positiveInteger(process.env.DEMO_STUDIO_HEARTBEAT_MS, 10_000);
   }
 
-  async submit(request: DemoJobRequest): Promise<PublicDemoJob> {
+  async submit(
+    request: DemoJobRequest,
+    ownerIdentity = "development",
+  ): Promise<PublicDemoJob> {
     await assertSafeHttpUrl(request.url);
 
     if (!request.scenario && !request.goal?.trim()) {
@@ -276,6 +282,7 @@ export class DemoJobManager {
     const now = new Date().toISOString();
     const job: DemoJob = {
       id: randomUUID(),
+      ownerIdentity,
       status: "queued",
       stage: "queued",
       stageLabel: "Waiting for worker",
@@ -317,6 +324,7 @@ export class DemoJobManager {
     const attempt = Math.max(1, recovery.attempt);
     const job: DemoJob = {
       id,
+      ownerIdentity: recovery.ownerIdentity,
       status: "retrying",
       stage: "retry_wait",
       stageLabel: "Recovering job",
@@ -350,9 +358,14 @@ export class DemoJobManager {
     return this.publicJob(job);
   }
 
-  get(id: string): PublicDemoJob | undefined {
+  get(
+    id: string,
+    ownerIdentity?: string,
+  ): PublicDemoJob | undefined {
     const job = this.jobs.get(id);
-    return job ? this.publicJob(job) : undefined;
+    if (!job) return undefined;
+    if (ownerIdentity && job.ownerIdentity !== ownerIdentity) return undefined;
+    return this.publicJob(job);
   }
 
   getInternal(id: string): DemoJob | undefined {
@@ -458,7 +471,10 @@ export class DemoJobManager {
       "utf8",
     );
 
-    await persistJobSnapshot(job.id, this.publicJob(job)).catch(
+    await persistJobSnapshot(job.id, {
+      ...this.publicJob(job),
+      ownerIdentityHash: identityHash(job.ownerIdentity),
+    }).catch(
       (persistenceError) => {
         console.error("[persistence] progress snapshot failed", persistenceError);
       },
@@ -468,6 +484,7 @@ export class DemoJobManager {
   private recoveryPayload(job: DemoJob): DemoJobRecovery {
     return {
       request: job.request,
+      ownerIdentity: job.ownerIdentity,
       createdAt: job.createdAt,
       attempt: job.attempt,
       maxAttempts: job.maxAttempts,
@@ -511,7 +528,7 @@ export class DemoJobManager {
   private retryable(error: unknown): boolean {
     if (error instanceof PermanentJobError) return false;
     const message = error instanceof Error ? error.message : String(error);
-    return !/quota exceeded|invalid or missing bearer|host header|origin is not allowed|visual critic blocked|editor brain quality gate failed/i.test(
+    return !/quota exceeded|invalid or missing bearer|oauth access token|authentication is not configured|host header|origin is not allowed|visual critic blocked|editor brain quality gate failed/i.test(
       message,
     );
   }
