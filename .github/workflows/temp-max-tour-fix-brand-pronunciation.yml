@@ -65,7 +65,7 @@ jobs:
         shell: bash
         env:
           RU_PREFIX: "https://dnznrvs05pmza.cloudfront.net/text_to_speech/0c8f6ad1-2c03-44d8-b15f-d711d094e8a4/ru_cta_prefix_before_english_brand.mp3?_jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJrZXlIYXNoIjoiZmJmMmU0YmVhNzdiOTgzZiIsImJ1Y2tldCI6InJ1bndheS10YXNrLWFydGlmYWN0cyIsInN0YWdlIjoicHJvZCIsImV4cCI6MTc5MTM4MzQ4Nn0.ByKvv9q7_hWfIjw_1KIVbvK1K3Xoc0XElO7ZaurbwcY"
-          BRAND_EN: "https://dnznrvs05pmza.cloudfront.net/text_to_speech/9bf02c06-6a21-42f1-bf87-c3c1778b7fbf/viversion_english_brand_pronunciation.mp3?_jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJrZXlIYXNoIjoiYzE2NjE1Y2YwZTEwOWQzMyIsImJ1Y2tldCI6InJ1bndheS10YXNrLWFydGlmYWN0cyIsInN0YWdlIjoicHJvZCIsImV4cCI6MTc5MTM1ODU0M30.iS4KtK3lYYHGdyu6jp0zwuYZWkf3peTyWNpYvRRv5PA"
+          BRAND_EN: "https://dnznrvs05pmza.cloudfront.net/text_to_speech/d8d1100e-b39d-4ca8-9ccf-92cac8951abc/Viversion_strict_English_pronunciation_v2.mp3?_jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJrZXlIYXNoIjoiZGUxZjg4MzFmZDVlNmI3MCIsImJ1Y2tldCI6InJ1bndheS10YXNrLWFydGlmYWN0cyIsInN0YWdlIjoicHJvZCIsImV4cCI6MTc5MTQyMTIzM30.klxJqm2MiBxvmALzLGNcYYxZPUkOeWgsTI9ByL2neHc"
         run: |
           set -euo pipefail
           mkdir -p artifacts/cta
@@ -130,21 +130,21 @@ jobs:
             -i artifacts/cta/final-audio.m4a \
             -map 0:v:0 -map 1:a:0 \
             -c:v copy -c:a copy -t "${total}" -movflags +faststart \
-            artifacts/MAX_TOUR_RU_v10_Viversion_EN_PRONUNCIATION.mp4
+            artifacts/MAX_TOUR_RU_v10_Viversion_STRICT_ENGLISH_v3.mp4
 
       - name: Verify video stream unchanged
         shell: bash
         run: |
           set -euo pipefail
           in_md5=$(ffmpeg -loglevel error -i artifacts/current/master.mp4 -map 0:v:0 -c copy -f md5 - | cut -d= -f2)
-          out_md5=$(ffmpeg -loglevel error -i artifacts/MAX_TOUR_RU_v10_Viversion_EN_PRONUNCIATION.mp4 -map 0:v:0 -c copy -f md5 - | cut -d= -f2)
+          out_md5=$(ffmpeg -loglevel error -i artifacts/MAX_TOUR_RU_v10_Viversion_STRICT_ENGLISH_v3.mp4 -map 0:v:0 -c copy -f md5 - | cut -d= -f2)
           echo "INPUT_VIDEO_MD5=$in_md5"
           echo "OUTPUT_VIDEO_MD5=$out_md5"
           test "$in_md5" = "$out_md5"
-          ffprobe -v error -show_entries format=duration -show_entries stream=codec_type,width,height -of json artifacts/MAX_TOUR_RU_v10_Viversion_EN_PRONUNCIATION.mp4
+          ffprobe -v error -show_entries format=duration -show_entries stream=codec_type,width,height -of json artifacts/MAX_TOUR_RU_v10_Viversion_STRICT_ENGLISH_v3.mp4
 
       - uses: actions/upload-artifact@v4
         with:
-          name: max-tour-ru-v10-viversion-english-pronunciation
-          path: artifacts/MAX_TOUR_RU_v10_Viversion_EN_PRONUNCIATION.mp4
+          name: max-tour-ru-v10-viversion-strict-english-v3
+          path: artifacts/MAX_TOUR_RU_v10_Viversion_STRICT_ENGLISH_v3.mp4
           if-no-files-found: error
