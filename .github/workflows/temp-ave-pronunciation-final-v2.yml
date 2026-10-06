@@ -131,7 +131,7 @@ jobs:
           done
 
       - name: Synchronize narration and captions
-        run: npx tsx src/narration-sync-cli.ts --run "${{ steps.run.outputs.dir }}" --bpm 96
+        run: npx tsx src/narration-sync-cli.ts --run "${{ steps.run.outputs.dir }}" --bpm 96 --tail-overflow-seconds 3
 
       - name: Render final
         shell: bash
