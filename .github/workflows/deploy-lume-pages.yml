@@ -26,13 +26,40 @@ jobs:
       CUSTOM_DOMAIN: lume.viiversion.com
 
     steps:
-      - name: Verify Cloudflare credentials
+      - name: Verify Cloudflare token
         shell: bash
         run: |
           set -euo pipefail
           test -n "${CLOUDFLARE_API_TOKEN:-}"
-          test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
-          echo "Cloudflare credentials are available."
+          echo "Cloudflare API token is available."
+
+      - name: Resolve Cloudflare account ID
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -n "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then
+            echo "Using configured Cloudflare account ID."
+            exit 0
+          fi
+
+          discovered=""
+          if curl -fsS "https://api.cloudflare.com/client/v4/memberships?status=accepted&per_page=50" \
+            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            > /tmp/cloudflare-memberships.json 2>/dev/null; then
+            discovered=$(jq -r '[.result[]?.account.id] | unique | if length == 1 then .[0] else empty end' /tmp/cloudflare-memberships.json)
+          fi
+
+          if [ -z "${discovered}" ]; then
+            if curl -fsS "https://api.cloudflare.com/client/v4/zones?name=viiversion.com&per_page=5" \
+              -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+              > /tmp/cloudflare-zones.json 2>/dev/null; then
+              discovered=$(jq -r '[.result[]?.account.id] | unique | if length == 1 then .[0] else empty end' /tmp/cloudflare-zones.json)
+            fi
+          fi
+
+          test -n "${discovered}"
+          echo "CLOUDFLARE_ACCOUNT_ID=${discovered}" >> "${GITHUB_ENV}"
+          echo "Cloudflare account ID discovered."
 
       - name: Materialize LUME site
         shell: bash
