@@ -1,0 +1,85 @@
+name: Diagnose LUME Production UX
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/diagnose-lume-production.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Playwright
+        run: |
+          npm init -y >/dev/null
+          npm install playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps chromium >/dev/null
+      - name: Run diagnostics
+        shell: bash
+        run: |
+          cat > diagnose.mjs <<'NODE'
+          import { chromium } from "playwright";
+          import fs from "node:fs";
+          const browser=await chromium.launch({headless:true});
+          const page=await browser.newPage({viewport:{width:430,height:932},deviceScaleFactor:1,isMobile:true,hasTouch:true});
+          const consoleErrors=[], failedRequests=[];
+          page.on("console",m=>{if(m.type()==="error") consoleErrors.push(m.text())});
+          page.on("requestfailed",r=>failedRequests.push({url:r.url(),error:r.failure()?.errorText||""}));
+          await page.goto("https://lume.viiversion.com/",{waitUntil:"networkidle",timeout:60000});
+          const homeImages=await page.locator("img").evaluateAll(imgs=>imgs.map(img=>({src:img.currentSrc||img.src,complete:img.complete,naturalWidth:img.naturalWidth,naturalHeight:img.naturalHeight})));
+          await page.screenshot({path:"prod-home.png",fullPage:true});
+
+          const explore=page.getByRole("button",{name:/Explore menu|Открыть меню|Xem thực đơn/i});
+          let ctaMenu={ok:false,error:null,count:0};
+          try{
+            await explore.first().click({timeout:5000});
+            await page.waitForSelector(".menu-grid",{timeout:5000});
+            ctaMenu={ok:true,error:null,count:await page.locator(".menu-card").count()};
+          }catch(e){ctaMenu.error=e.message}
+          await page.screenshot({path:"prod-menu-cta.png",fullPage:true});
+
+          await page.goto("https://lume.viiversion.com/",{waitUntil:"networkidle"});
+          let navMenu={ok:false,error:null,count:0};
+          try{
+            await page.locator('#bottom-nav [data-action="tab"][data-tab="menu"]').click({timeout:5000});
+            await page.waitForSelector(".menu-grid",{timeout:5000});
+            navMenu={ok:true,error:null,count:await page.locator(".menu-card").count()};
+          }catch(e){navMenu.error=e.message}
+          const menuImages=await page.locator("img").evaluateAll(imgs=>imgs.map(img=>({src:img.currentSrc||img.src,complete:img.complete,naturalWidth:img.naturalWidth,naturalHeight:img.naturalHeight})));
+          await page.screenshot({path:"prod-menu-nav.png",fullPage:true});
+
+          await page.locator('#bottom-nav [data-action="tab"][data-tab="concierge"]').click();
+          await page.fill("#concierge-input","Покажи фотографии всех зон LUME и коротко расскажи о каждой");
+          await page.locator('[data-action="concierge-send"]').click();
+          await page.waitForTimeout(12000);
+          const aiText=await page.locator(".chat").innerText().catch(()=>"");
+          const spaceCards=await page.locator(".ai-space-card,.space-card").count().catch(()=>0);
+          await page.screenshot({path:"prod-ai.png",fullPage:true});
+
+          const result={ctaMenu,navMenu,homeImages,menuImages,aiText,spaceCards,consoleErrors,failedRequests};
+          fs.writeFileSync("diagnostics.json",JSON.stringify(result,null,2));
+          console.log(JSON.stringify(result,null,2));
+          await browser.close();
+          NODE
+          node diagnose.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lume-production-diagnostics
+          path: |
+            diagnostics.json
+            prod-home.png
+            prod-menu-cta.png
+            prod-menu-nav.png
+            prod-ai.png
+          if-no-files-found: error
+          retention-days: 3
