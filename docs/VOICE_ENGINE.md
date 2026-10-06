@@ -33,6 +33,36 @@ Audio + provider metadata + timings when available
 Subtitle / edit synchronization
 ```
 
+## Pronunciation architecture
+
+Pronunciation is split into two independent concerns:
+
+1. **Russian lexical stress**
+   - handled inside the provider bridge, never in the generic Voice Director;
+   - RUAccent performs context-aware Russian accentuation;
+   - `config/pronunciation-registry.json` supplies hard overrides for approved business/product vocabulary;
+   - Chatterbox's own Russian stress pass is disabled after preprocessing, so text is stressed exactly once.
+
+2. **Brand pronunciation**
+   - brands are defined centrally in `config/pronunciation-registry.json`;
+   - each brand has canonical display spelling, accepted aliases, spoken locale, phonetic text and optional IPA;
+   - captions/UI keep the canonical spelling;
+   - Chatterbox splits mixed-language narration into language spans. A Russian sentence containing `VIIVERSION` is synthesized as Russian → English `Vee Version` → Russian using the same approved reference voice;
+   - ElevenLabs synchronizes the same registry into a pronunciation dictionary and uses IPA where supported.
+
+Scenario-level `pronunciation` remains available for non-brand one-off substitutions such as acronyms or units. Brand names must not be redefined inside individual scenarios.
+
+The production invariant is:
+
+```text
+clean narration
+→ scenario one-off substitutions
+→ brand span detection
+→ provider-specific pronunciation
+   ├── Russian span: RUAccent + approved overrides
+   └── Brand span: registered spoken locale / IPA
+→ TTS
+```
 ## Default VIIVERSION presenter voices
 
 For Russian Demo Video Presenter output, the approved premium voice policy is:
@@ -76,7 +106,7 @@ The physical speaker can differ by locale. The persona is the stable product ide
     "persona": "viiversion-presenter",
     "requireNativeTimings": true,
     "pronunciation": {
-      "VIIVERSION": "vee version"
+      "VND": "донгов"
     }
   }
 }
