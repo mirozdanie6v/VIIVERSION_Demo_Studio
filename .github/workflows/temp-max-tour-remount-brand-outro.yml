@@ -1,0 +1,150 @@
+name: MAX TOUR Remounted English Brand Outro
+
+on:
+  push:
+    branches:
+      - 'feature/max-tour-russian-v9'
+    paths:
+      - '.github/workflows/temp-max-tour-remount-brand-outro.yml'
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install tools
+        run: |
+          npm install
+          npx playwright install --with-deps chromium
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Download current approved visual master
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/current
+          node --input-type=module <<'NODE'
+          import { chromium } from 'playwright';
+          const browser=await chromium.launch({headless:true});
+          const page=await browser.newPage();
+          await page.goto('https://firestorage.ai/ja/f/pf1BP-8uDHLb',{waitUntil:'networkidle',timeout:60000});
+          const controls=page.locator('a:visible,button:visible');
+          console.log('CONTROLS=',JSON.stringify(await controls.allTextContents()));
+          let target=page.locator('a:visible,button:visible').filter({hasText:/ダウンロード|Download/i});
+          if(!(await target.count())) target=page.locator('a[href*="download"]:visible');
+          if(!(await target.count())) throw new Error('Download control not found');
+          const downloadPromise=page.waitForEvent('download',{timeout:30000});
+          await target.first().click();
+          const download=await downloadPromise;
+          await download.saveAs('artifacts/current/master.mp4');
+          await browser.close();
+          NODE
+          test -s artifacts/current/master.mp4
+          ffprobe -v error -show_entries format=duration -of csv=p=0 artifacts/current/master.mp4
+
+      - name: Download original Russian audio stems
+        uses: actions/download-artifact@v4
+        with:
+          name: max-tour-premium-russian-v9-final
+          path: artifacts/prior-ru
+          github-token: ${{ github.token }}
+          run-id: 37353860935
+
+      - name: Download corrected CTA voices and music
+        shell: bash
+        env:
+          RU_PREFIX: "https://dnznrvs05pmza.cloudfront.net/text_to_speech/0c8f6ad1-2c03-44d8-b15f-d711d094e8a4/ru_cta_prefix_before_english_brand.mp3?_jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJrZXlIYXNoIjoiZmJmMmU0YmVhNzdiOTgzZiIsImJ1Y2tldCI6InJ1bndheS10YXNrLWFydGlmYWN0cyIsInN0YWdlIjoicHJvZCIsImV4cCI6MTc5MTM4MzQ4Nn0.ByKvv9q7_hWfIjw_1KIVbvK1K3Xoc0XElO7ZaurbwcY"
+          BRAND_EN: "https://dnznrvs05pmza.cloudfront.net/text_to_speech/d8d1100e-b39d-4ca8-9ccf-92cac8951abc/Viversion_strict_English_pronunciation_v2.mp3?_jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJrZXlIYXNoIjoiZGUxZjg4MzFmZDVlNmI3MCIsImJ1Y2tldCI6InJ1bndheS10YXNrLWFydGlmYWN0cyIsInN0YWdlIjoicHJvZCIsImV4cCI6MTc5MTQyMTIzM30.klxJqm2MiBxvmALzLGNcYYxZPUkOeWgsTI9ByL2neHc"
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/cta
+          curl -L --fail --retry 3 "$RU_PREFIX" -o artifacts/cta/prefix.mp3
+          curl -L --fail --retry 3 "$BRAND_EN" -o artifacts/cta/brand-en.mp3
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          text=Path('.github/workflows/temp-max-tour-russian-v9.yml').read_text()
+          m=re.search(r'^\s*MUSIC:\s*"([^"]+)"',text,re.M)
+          if not m: raise SystemExit('MUSIC URL not found')
+          Path('/tmp/music_url').write_text(m.group(1))
+          PY
+          curl -L --fail --retry 3 "$(cat /tmp/music_url)" -o artifacts/cta/music.mp3
+          for f in artifacts/cta/*.mp3; do test -s "$f"; done
+          ffprobe -v error -show_entries format=duration -of csv=p=0 artifacts/cta/prefix.mp3
+          ffprobe -v error -show_entries format=duration -of csv=p=0 artifacts/cta/brand-en.mp3
+
+      - name: Build corrected voiceover
+        shell: bash
+        run: |
+          set -euo pipefail
+          total=75.620
+          cta_start=69.500
+          prefix_dur=$(ffprobe -v error -show_entries format=duration -of csv=p=0 artifacts/cta/prefix.mp3)
+          brand_start=$(python3 - <<PY
+          p=float("$prefix_dur")
+          print(f"{69.500+p+0.12:.3f}")
+          PY
+          )
+          ffmpeg -loglevel error -y \
+            -i artifacts/prior-ru/voiceover_ru.wav \
+            -i artifacts/cta/prefix.mp3 \
+            -i artifacts/cta/brand-en.mp3 \
+            -filter_complex "\
+              [0:a]atrim=start=0:end=${cta_start},asetpts=PTS-STARTPTS,apad=pad_dur=${total}[old];\
+              [1:a]aresample=44100,afade=t=in:st=0:d=0.025,adelay=69500:all=1[prefix];\
+              [2:a]aresample=44100,adelay=$(python3 - <<PY
+          print(round(float("$brand_start")*1000))
+          PY
+          ):all=1,afade=t=in:st=0:d=0.02,afade=t=out:st=1.57:d=0.10[brand];\
+              [old][prefix][brand]amix=inputs=3:duration=longest:normalize=0,atrim=duration=${total},alimiter=limit=0.95[voice]" \
+            -map "[voice]" -c:a pcm_s16le artifacts/cta/voiceover-corrected.wav
+
+      - name: Rebuild audio only and remux unchanged video
+        shell: bash
+        run: |
+          set -euo pipefail
+          total=75.620
+          ffmpeg -loglevel error -y \
+            -stream_loop -1 -i artifacts/cta/music.mp3 \
+            -i artifacts/cta/voiceover-corrected.wav \
+            -i artifacts/prior-ru/sound-design.wav \
+            -filter_complex "\
+              [0:a]volume=0.105,atrim=duration=${total},asetpts=N/SR/TB[m];\
+              [m][1:a]sidechaincompress=threshold=0.030:ratio=10:attack=12:release=320[duck];\
+              [duck][1:a][2:a]amix=inputs=3:duration=longest:normalize=0,alimiter=limit=0.94[a]" \
+            -map "[a]" -t "${total}" -c:a aac -b:a 192k artifacts/cta/final-audio.m4a
+
+          ffmpeg -loglevel error -y \
+            -i artifacts/current/master.mp4 \
+            -i artifacts/cta/final-audio.m4a \
+            -map 0:v:0 -map 1:a:0 \
+            -c:v copy -c:a copy -t "${total}" -movflags +faststart \
+            artifacts/MAX_TOUR_RU_v10_Viversion_REMOUNTED_OUTRO.mp4
+
+      - name: Verify video stream unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          in_md5=$(ffmpeg -loglevel error -i artifacts/current/master.mp4 -map 0:v:0 -c copy -f md5 - | cut -d= -f2)
+          out_md5=$(ffmpeg -loglevel error -i artifacts/MAX_TOUR_RU_v10_Viversion_REMOUNTED_OUTRO.mp4 -map 0:v:0 -c copy -f md5 - | cut -d= -f2)
+          echo "INPUT_VIDEO_MD5=$in_md5"
+          echo "OUTPUT_VIDEO_MD5=$out_md5"
+          test "$in_md5" = "$out_md5"
+          ffprobe -v error -show_entries format=duration -show_entries stream=codec_type,width,height -of json artifacts/MAX_TOUR_RU_v10_Viversion_REMOUNTED_OUTRO.mp4
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: max-tour-ru-v10-viversion-remounted-outro
+          path: artifacts/MAX_TOUR_RU_v10_Viversion_REMOUNTED_OUTRO.mp4
+          if-no-files-found: error
