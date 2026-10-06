@@ -1,5 +1,4 @@
 import type { VoicePersonaId, VoiceRequest } from "./voice-engine-types.js";
-import { applyDefaultLocalePronunciation } from "./russian-pronunciation.js";
 
 export type DirectedVoiceRequest = VoiceRequest & {
   persona: VoicePersonaId;
@@ -51,13 +50,9 @@ export function applyPronunciation(
 export function directVoiceRequest(request: VoiceRequest): DirectedVoiceRequest {
   const locale = normalizeLocale(request.locale);
   const persona = request.persona ?? "viiversion-presenter";
-  const customPronunciation = applyPronunciation(
+  const directedText = applyPronunciation(
     request.text.trim(),
     request.pronunciation,
-  );
-  const directedText = applyDefaultLocalePronunciation(
-    customPronunciation,
-    locale,
   );
 
   if (!directedText) throw new Error("Voice text is empty.");
