@@ -1077,6 +1077,24 @@ export class DemoStudioContainer extends DurableObject {
       .join("");
   }
 
+  async authConfigFingerprint() {
+    const values = [
+      this.env.DEMO_STUDIO_OAUTH_ISSUER ?? "",
+      this.env.DEMO_STUDIO_OAUTH_JWKS_URI ?? "",
+      this.env.DEMO_STUDIO_OAUTH_AUDIENCE ?? ("https://" + PUBLIC_HOST),
+      this.env.DEMO_STUDIO_OAUTH_SCOPES ?? "demo.inspect demo.generate demo.read",
+      this.env.DEMO_STUDIO_API_KEY ?? "",
+    ];
+    const digest = await crypto.subtle.digest(
+      "SHA-256",
+      new TextEncoder().encode(values.join("\n")),
+    );
+    return Array.from(new Uint8Array(digest))
+      .slice(0, 12)
+      .map((byte) => byte.toString(16).padStart(2, "0"))
+      .join("");
+  }
+
   async ensureCurrentRuntime(container) {
     const desiredImage = container.images.app;
     const desiredHybrid =
@@ -1086,10 +1104,17 @@ export class DemoStudioContainer extends DurableObject {
         ? "false"
         : "true";
     const desiredVoiceConfig = await this.voiceConfigFingerprint();
-    const [activeImage, activeHybrid, activeVoiceConfig] = await Promise.all([
+    const desiredAuthConfig = await this.authConfigFingerprint();
+    const [
+      activeImage,
+      activeHybrid,
+      activeVoiceConfig,
+      activeAuthConfig,
+    ] = await Promise.all([
       this.ctx.storage.get(ACTIVE_IMAGE_KEY),
       this.ctx.storage.get(ACTIVE_HYBRID_KEY),
       this.ctx.storage.get(ACTIVE_VOICE_CONFIG_KEY),
+      this.ctx.storage.get(ACTIVE_AUTH_CONFIG_KEY),
     ]);
 
     if (
@@ -1097,7 +1122,8 @@ export class DemoStudioContainer extends DurableObject {
       (
         activeImage !== desiredImage ||
         activeHybrid !== desiredHybrid ||
-        activeVoiceConfig !== desiredVoiceConfig
+        activeVoiceConfig !== desiredVoiceConfig ||
+        activeAuthConfig !== desiredAuthConfig
       )
     ) {
       await container.destroy(
@@ -1107,10 +1133,16 @@ export class DemoStudioContainer extends DurableObject {
         this.ctx.storage.delete(ACTIVE_IMAGE_KEY),
         this.ctx.storage.delete(ACTIVE_HYBRID_KEY),
         this.ctx.storage.delete(ACTIVE_VOICE_CONFIG_KEY),
+        this.ctx.storage.delete(ACTIVE_AUTH_CONFIG_KEY),
       ]);
     }
 
-    return { desiredImage, desiredHybrid, desiredVoiceConfig };
+    return {
+      desiredImage,
+      desiredHybrid,
+      desiredVoiceConfig,
+      desiredAuthConfig,
+    };
   }
 
   async startAndWaitForPort() {
@@ -1119,8 +1151,12 @@ export class DemoStudioContainer extends DurableObject {
       throw new Error("Cloudflare Container binding is unavailable.");
     }
 
-    const { desiredImage, desiredHybrid, desiredVoiceConfig } =
-      await this.ensureCurrentRuntime(container);
+    const {
+      desiredImage,
+      desiredHybrid,
+      desiredVoiceConfig,
+      desiredAuthConfig,
+    } = await this.ensureCurrentRuntime(container);
 
     if (!container.running) {
       const internalToken = await this.getInternalToken();
@@ -1142,15 +1178,19 @@ export class DemoStudioContainer extends DurableObject {
           this.env.DEMO_STUDIO_FFMPEG_PRESET ?? "veryfast",
         DEMO_STUDIO_PRODUCTION_HYBRID: desiredHybrid,
         DEMO_STUDIO_MAX_CONCURRENT_JOBS: "1",
-        DEMO_STUDIO_DAILY_JOB_LIMIT: this.env.DEMO_STUDIO_API_KEY ? "10" : "0",
+        DEMO_STUDIO_DAILY_JOB_LIMIT:
+          (this.env.DEMO_STUDIO_OAUTH_ISSUER || this.env.DEMO_STUDIO_API_KEY)
+            ? "10"
+            : "0",
         DEMO_STUDIO_MAX_JOB_ATTEMPTS: "3",
         DEMO_STUDIO_HEARTBEAT_MS: "10000",
         DEMO_STUDIO_STORAGE_ROOT: "/data/jobs",
         DEMO_STUDIO_INTERNAL_TOKEN: internalToken,
         ALLOW_PRIVATE_TARGETS: "false",
-        DEMO_STUDIO_ALLOW_UNAUTHENTICATED: this.env.DEMO_STUDIO_API_KEY
-          ? "false"
-          : "true",
+        DEMO_STUDIO_ALLOW_UNAUTHENTICATED:
+          (this.env.DEMO_STUDIO_OAUTH_ISSUER || this.env.DEMO_STUDIO_API_KEY)
+            ? "false"
+            : "true",
       };
 
       if (this.env.OPENAI_API_KEY) {
@@ -1165,6 +1205,17 @@ export class DemoStudioContainer extends DurableObject {
         "ELEVENLABS_VOICE_ID_EN",
         "ELEVENLABS_VOICE_ID_EN_US",
         "ELEVENLABS_MODEL",
+      ]) {
+        if (this.env[key]) {
+          env[key] = this.env[key];
+        }
+      }
+
+      for (const key of [
+        "DEMO_STUDIO_OAUTH_ISSUER",
+        "DEMO_STUDIO_OAUTH_JWKS_URI",
+        "DEMO_STUDIO_OAUTH_AUDIENCE",
+        "DEMO_STUDIO_OAUTH_SCOPES",
       ]) {
         if (this.env[key]) {
           env[key] = this.env[key];
@@ -1200,6 +1251,7 @@ export class DemoStudioContainer extends DurableObject {
             this.ctx.storage.put(ACTIVE_IMAGE_KEY, desiredImage),
             this.ctx.storage.put(ACTIVE_HYBRID_KEY, desiredHybrid),
             this.ctx.storage.put(ACTIVE_VOICE_CONFIG_KEY, desiredVoiceConfig),
+            this.ctx.storage.put(ACTIVE_AUTH_CONFIG_KEY, desiredAuthConfig),
           ]);
           return;
         }
