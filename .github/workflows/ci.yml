@@ -27,7 +27,7 @@ jobs:
         run: node --check cloudflare/worker.js
 
       - name: Check local TTS bridge syntax
-        run: python3 -m py_compile scripts/hf_tts.py scripts/pronunciation_preflight.py
+        run: python3 -m py_compile scripts/hf_tts.py scripts/hf_tts_batch.py scripts/pronunciation_preflight.py
 
       - name: Pronunciation preflight
         run: python3 scripts/pronunciation_preflight.py
