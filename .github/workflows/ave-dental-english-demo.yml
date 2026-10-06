@@ -1,6 +1,7 @@
 name: AVE Dental English Premium Demo
 
 on:
+  workflow_call:
   workflow_dispatch:
   push:
     branches: [main]
