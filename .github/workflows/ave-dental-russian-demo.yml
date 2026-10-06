@@ -118,20 +118,16 @@ jobs:
         run: |
           set -euo pipefail
           run_dir="${RUN_DIR}"
-          for txt in "${run_dir}"/voices/text-*.txt; do
-            base=$(basename "$txt" .txt)
-            idx=${base#text-}
-            raw="${run_dir}/voices/raw-${idx}.wav"
-            out="${run_dir}/voices/step-${idx}.mp3"
 
-            python scripts/hf_tts.py \
-              --engine chatterbox \
-              --locale ru-RU \
-              --language ru \
-              --output "$raw" \
-              --voice default \
-              --reference-audio artifacts/niki-reference.wav \
-              < "$txt"
+          python scripts/hf_tts_batch.py \
+            --voices-dir "${run_dir}/voices" \
+            --reference-audio artifacts/niki-reference.wav \
+            --base-language ru
+
+          for raw in "${run_dir}"/voices/raw-*.wav; do
+            base=$(basename "$raw" .wav)
+            idx=${base#raw-}
+            out="${run_dir}/voices/step-${idx}.mp3"
 
             ffmpeg -y -i "$raw" \
               -af "highpass=f=70,lowpass=f=11500,acompressor=threshold=-18dB:ratio=1.55:attack=18:release=220,loudnorm=I=-16:TP=-1.5:LRA=8" \
@@ -139,7 +135,7 @@ jobs:
           done
 
           echo "APPROVED_RU_VOICE=Niki reference / MAX TOUR v9"
-          echo "PRONUNCIATION_PIPELINE=single-pass-russian-stress+brand-language-registry"
+          echo "PRONUNCIATION_PIPELINE=ruaccent-single-pass+brand-language-spans"
 
 
       - name: Synchronize narration and captions
