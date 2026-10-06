@@ -195,6 +195,12 @@ def synthesize_chatterbox(args: argparse.Namespace, text: str) -> None:
             perth.PerthImplicitWatermarker = perth.DummyWatermarker
 
         from chatterbox.mtl_tts import ChatterboxMultilingualTTS
+        from chatterbox.models.tokenizers import tokenizer as tokenizer_module
+
+        # We pre-stress Russian exactly once in this bridge, with controlled
+        # overrides. Disable Chatterbox's second automatic stress pass so it
+        # cannot rewrite our approved accents.
+        tokenizer_module.add_russian_stress = lambda value: value
     except ImportError as exc:
         raise RuntimeError(
             "Chatterbox is not installed. Run: pip install chatterbox-tts"
