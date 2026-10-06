@@ -7,6 +7,7 @@ const INACTIVITY_TIMEOUT_MS = 60 * 60 * 1000;
 const ACTIVE_IMAGE_KEY = "active-container-image";
 const ACTIVE_HYBRID_KEY = "active-production-hybrid";
 const ACTIVE_VOICE_CONFIG_KEY = "active-voice-config";
+const ACTIVE_AUTH_CONFIG_KEY = "active-auth-config";
 const INTERNAL_TOKEN_KEY = "internal-storage-token";
 const GENERATION_DAILY_LIMIT = 10;
 const INSPECTION_DAILY_LIMIT = 30;
@@ -141,9 +142,55 @@ poll();
   });
 }
 
-function publicStaticResponse(request) {
+function oauthChallenge(scope = "") {
+  const resourceMetadata =
+    "https://" + PUBLIC_HOST + "/.well-known/oauth-protected-resource";
+  const parts = [
+    'Bearer resource_metadata="' + resourceMetadata + '"',
+  ];
+  if (scope) parts.push('scope="' + scope + '"');
+  parts.push('error="invalid_token"');
+  parts.push('error_description="Authentication required."');
+  return parts.join(", ");
+}
+
+function publicStaticResponse(request, env) {
   if (request.method !== "GET" && request.method !== "HEAD") return undefined;
   const url = new URL(request.url);
+
+  if (url.pathname === "/.well-known/oauth-protected-resource") {
+    const issuer = String(env.DEMO_STUDIO_OAUTH_ISSUER ?? "").replace(/\/$/, "");
+    if (!issuer) {
+      return new Response(
+        JSON.stringify({ error: "OAuth authorization server is not configured." }),
+        {
+          status: 503,
+          headers: {
+            "Content-Type": "application/json; charset=utf-8",
+            "Cache-Control": "no-store",
+          },
+        },
+      );
+    }
+
+    return new Response(
+      JSON.stringify({
+        resource: "https://" + PUBLIC_HOST,
+        authorization_servers: [issuer],
+        scopes_supported: ["demo.inspect", "demo.generate", "demo.read"],
+        resource_documentation: "https://" + PUBLIC_HOST + "/support",
+        resource_policy_uri: "https://" + PUBLIC_HOST + "/privacy",
+        resource_tos_uri: "https://" + PUBLIC_HOST + "/terms",
+      }),
+      {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json; charset=utf-8",
+          "Cache-Control": "public, max-age=300",
+        },
+      },
+    );
+  }
 
   const jobStatusMatch = url.pathname.match(
     /^\/jobs\/([0-9a-f-]{36})$/i,
@@ -1108,7 +1155,7 @@ export default {
       });
     }
 
-    const staticResponse = publicStaticResponse(request);
+    const staticResponse = publicStaticResponse(request, env);
     if (staticResponse) return staticResponse;
     return env.DEMO_STUDIO.getByName("primary").fetch(request);
   },
