@@ -1032,14 +1032,21 @@ jobs:
           grep -Fq '<title>LUME</title>' site/index.html
           echo "LUME source materialized."
 
-      - name: Create Pages project if needed
+      - name: Ensure Pages project exists
         shell: bash
         run: |
           set -euo pipefail
-          if npx --yes wrangler@4 pages project list --json | jq -e --arg name "${PROJECT_NAME}" 'map(select(.name == $name)) | length > 0' >/dev/null; then
+          api="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/${PROJECT_NAME}"
+          code=$(curl -sS -o /tmp/pages-project.json -w '%{http_code}' "${api}" \
+            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            -H 'Content-Type: application/json' || true)
+          if [ "${code}" = "200" ] && jq -e '.success == true' /tmp/pages-project.json >/dev/null 2>&1; then
             echo "Pages project ${PROJECT_NAME} already exists."
-          else
+          elif [ "${code}" = "404" ]; then
             npx --yes wrangler@4 pages project create "${PROJECT_NAME}" --production-branch main
+          else
+            cat /tmp/pages-project.json || true
+            exit 1
           fi
 
       - name: Link Pages project to LUME GitHub
