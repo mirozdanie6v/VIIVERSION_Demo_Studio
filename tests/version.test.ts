@@ -14,7 +14,7 @@ test("package and plugin versions stay aligned", () => {
   const pkg = json(new URL("../package.json", import.meta.url));
   const plugin = json(new URL("../plugin/plugin.json", import.meta.url));
 
-  assert.equal(DEMO_STUDIO_VERSION, "0.14.2");
+  assert.equal(DEMO_STUDIO_VERSION, "0.15.0");
   assert.equal(pkg.version, DEMO_STUDIO_VERSION);
   assert.equal(plugin.version, DEMO_STUDIO_VERSION);
 });
