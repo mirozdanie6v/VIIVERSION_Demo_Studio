@@ -152,7 +152,18 @@
       "action": "wait",
       "ms": 7500,
       "label": "Customer journey complete",
-      "narration": "For MAX TOUR, this means a smoother customer journey, a stronger premium impression, and more structured enquiries. For the traveller, it feels simple, modern, and ready to book."
+      "narration": "For MAX TOUR, this means a smoother customer journey, a stronger premium impression, and more structured enquiries. For the traveller, it feels simple, modern, and ready to book. Contact VIIVERSION to build the same premium journey for your business."
     }
-  ]
+  ],
+  "voice": {
+    "locale": "en-US",
+    "provider": "auto",
+    "persona": "viiversion-presenter",
+    "instructions": "Warm, modern, confident premium product-demo presenter. Natural English speech, medium energetic pace, short organic pauses, no radio-announcer cadence.",
+    "requireNativeTimings": false,
+    "pronunciation": {
+      "MAX TOUR": "Max Tour",
+      "AI": "A I"
+    }
+  }
 }
