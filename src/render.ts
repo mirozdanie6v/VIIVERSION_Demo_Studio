@@ -586,10 +586,10 @@ export async function renderRun(options: RenderOptions): Promise<string> {
   const introEnabled = options.intro !== false;
   const outroEnabled = options.outro !== false;
   const introSeconds = introEnabled
-    ? Math.max(0.4, options.introSeconds ?? 1.15)
+    ? Math.max(0.8, options.introSeconds ?? 2.2)
     : 0;
   const outroSeconds = outroEnabled
-    ? Math.max(0.6, options.outroSeconds ?? 1.55)
+    ? Math.max(1.2, options.outroSeconds ?? 4.8)
     : 0;
   const title =
     options.title ??
@@ -603,11 +603,9 @@ export async function renderRun(options: RenderOptions): Promise<string> {
     const introTitleSize = preset === "9:16" ? 54 : 50;
     filterParts.push(
       `color=c=0x070A10:s=${width}x${height}:r=30:d=${number(introSeconds)},` +
-        `drawbox=x=72:y=${Math.round(height * 0.22)}:w=6:h=${Math.round(height * 0.18)}:color=white@0.9:t=fill,` +
-        `drawbox=x=72:y=${Math.round(height * 0.42)}:w=${Math.round(width * 0.55)}:h=2:color=white@0.18:t=fill,` +
-        `drawtext=font='DejaVu Sans':text='${escapeDrawText(brandLabel)}':fontcolor=white@0.72:fontsize=${introBrandSize}:x=96:y=${Math.round(height * 0.20)},` +
-        `drawtext=font='DejaVu Sans':text='${escapeDrawText(title)}':fontcolor=white:fontsize=${introTitleSize}:x=96:y=${Math.round(height * 0.29)},` +
-        `drawtext=font='DejaVu Sans':text='PRODUCT EXPERIENCE':fontcolor=white@0.46:fontsize=22:x=96:y=${Math.round(height * 0.45)},` +
+        `drawtext=font='DejaVu Sans':text='${escapeDrawText(brandLabel)}':fontcolor=white@0.66:fontsize=${introBrandSize}:x=84:y=${Math.round(height * 0.28)},` +
+        `drawtext=font='DejaVu Sans':text='${escapeDrawText(title)}':fontcolor=white:fontsize=${introTitleSize}:x=84:y=${Math.round(height * 0.37)},` +
+        `drawtext=font='DejaVu Sans':text='PRODUCT EXPERIENCE':fontcolor=white@0.42:fontsize=22:x=84:y=${Math.round(height * 0.50)},` +
         `fade=t=in:st=0:d=0.45,fade=t=out:st=${number(Math.max(0, introSeconds - 0.45))}:d=0.45,` +
         "format=yuv420p,settb=AVTB[intro]",
     );
@@ -623,11 +621,10 @@ export async function renderRun(options: RenderOptions): Promise<string> {
       options.ctaSecondary ?? "Напишите нам — адаптируем решение под ваш бизнес.";
     filterParts.push(
       `color=c=0x070A10:s=${width}x${height}:r=30:d=${number(outroSeconds)},` +
-        `drawbox=x=72:y=${Math.round(height * 0.24)}:w=6:h=${Math.round(height * 0.24)}:color=white@0.9:t=fill,` +
-        `drawtext=font='DejaVu Sans':text='${escapeDrawText(brandLabel)}':fontcolor=white@0.68:fontsize=30:x=96:y=${Math.round(height * 0.20)},` +
-        `drawtext=font='DejaVu Sans':text='${escapeDrawText(outroText)}':fontcolor=white:fontsize=${preset === "9:16" ? 46 : 42}:x=96:y=${Math.round(height * 0.31)},` +
-        `drawtext=font='DejaVu Sans':text='${escapeDrawText(outroSecondary)}':fontcolor=white@0.72:fontsize=24:x=96:y=${Math.round(height * 0.44)},` +
-        `drawtext=font='DejaVu Sans':text='VIIVERSION.COM':fontcolor=white@0.48:fontsize=20:x=96:y=${Math.round(height * 0.70)},` +
+        `drawtext=font='DejaVu Sans':text='${escapeDrawText(brandLabel)}':fontcolor=white@0.64:fontsize=30:x=84:y=${Math.round(height * 0.24)},` +
+        `drawtext=font='DejaVu Sans':text='${escapeDrawText(outroText)}':fontcolor=white:fontsize=${preset === "9:16" ? 50 : 44}:x=84:y=${Math.round(height * 0.35)},` +
+        `drawtext=font='DejaVu Sans':text='${escapeDrawText(outroSecondary)}':fontcolor=white@0.74:fontsize=26:x=84:y=${Math.round(height * 0.49)},` +
+        `drawtext=font='DejaVu Sans':text='VIIVERSION.COM':fontcolor=white@0.46:fontsize=20:x=84:y=${Math.round(height * 0.72)},` +
         `fade=t=in:st=0:d=0.45,fade=t=out:st=${number(Math.max(0, outroSeconds - 0.55))}:d=0.55,` +
         "format=yuv420p,settb=AVTB[outro]",
     );
