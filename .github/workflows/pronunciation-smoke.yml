@@ -2,6 +2,13 @@ name: Pronunciation Smoke
 
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - 'config/pronunciation-registry.json'
+      - 'scripts/hf_tts.py'
+      - 'scripts/hf_tts_batch.py'
+      - 'scripts/pronunciation_preflight.py'
+      - '.github/workflows/pronunciation-smoke.yml'
   push:
     branches: [main]
     paths:
@@ -26,7 +33,7 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Cache RUAccent assets
+      - name: Cache StressONNX assets
         uses: actions/cache@v4
         with:
           path: |
