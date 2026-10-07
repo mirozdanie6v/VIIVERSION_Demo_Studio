@@ -1,0 +1,68 @@
+name: Ops deploy VIIVERSION hero
+
+on:
+  push:
+    branches:
+      - ops/deploy-viiversion-hero-20261007
+    paths:
+      - ".github/workflows/deploy-viiversion-hero-ops.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: f4935962036fd500d34335e0b174b227
+    steps:
+      - name: Require Cloudflare token
+        shell: bash
+        run: test -n "${CLOUDFLARE_API_TOKEN:-}" || { echo "::error::CLOUDFLARE_API_TOKEN is unavailable"; exit 1; }
+
+      - name: Checkout VIIVERSION landing
+        shell: bash
+        run: git clone --depth 1 --branch viiversion https://github.com/mirozdanie6v/viiversion.git site
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install and build
+        working-directory: site
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
+
+      - name: Verify requested hero copy in build
+        working-directory: site
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq "Разработка кастомных ИТ-систем, мобильных приложений и сквозных интеграций." public/index.html
+          grep -Fq "Связываем ваши сайты, облачные сервисы, CRM и мессенджеры в единый автоматизированный контур. Строим модульную архитектуру, которая позволяет внедрять решения поэтапно и масштабировать бизнес без остановки текущих операций." public/index.html
+
+      - name: Deploy landing
+        working-directory: site
+        run: npx wrangler deploy
+
+      - name: Verify live hero
+        shell: bash
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp)"
+          for i in $(seq 1 30); do
+            if curl -fsS --connect-timeout 10 --max-time 20 -H 'Cache-Control: no-cache' "https://viiversion.com/?hero-verify=${GITHUB_RUN_ID}-${i}" -o "$tmp"; then
+              if grep -Fq "Разработка кастомных ИТ-систем, мобильных приложений и сквозных интеграций." "$tmp" &&
+                 grep -Fq "Связываем ваши сайты, облачные сервисы, CRM и мессенджеры в единый автоматизированный контур. Строим модульную архитектуру, которая позволяет внедрять решения поэтапно и масштабировать бизнес без остановки текущих операций." "$tmp"; then
+                echo "Live hero verified"
+                exit 0
+              fi
+            fi
+            sleep 4
+          done
+          echo "::error::New hero copy is not live"
+          exit 1
