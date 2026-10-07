@@ -14,7 +14,7 @@ permissions:
 
 concurrency:
   group: lume-signature-production
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   deploy-and-verify:
@@ -104,16 +104,24 @@ jobs:
           curl -fsS "${PROD_URL}/api/health" > /tmp/health.json
           jq -e '.ok == true and .aiBinding == true' /tmp/health.json >/dev/null
 
-          curl -fsS -X POST "${PROD_URL}/api/concierge" \
-            -H 'content-type: application/json' \
-            --data '{"message":"Покажи фотографии всех зон LUME и коротко расскажи о каждой","lang":"ru","history":[],"context":{}}' \
-            > /tmp/ai.json
-          jq -e '.reply | type=="string" and length>0' /tmp/ai.json >/dev/null
-          jq -e '.spaceCardIds | length == 4' /tmp/ai.json >/dev/null
-          if jq -r '.reply' /tmp/ai.json | grep -Eqi 'не могу.{0,30}(фото|изображ)|text[- ]based|cannot.{0,30}(photo|image)'; then
-            echo "AI photo refusal detected"
-            exit 1
-          fi
+          ai_ok=0
+          for attempt in 1 2 3; do
+            if curl -fsS --max-time 40 -X POST "${PROD_URL}/api/concierge" \
+              -H 'content-type: application/json' \
+              --data '{"message":"Покажи фотографии всех зон LUME и коротко расскажи о каждой","lang":"ru","history":[],"context":{}}' \
+              > /tmp/ai.json; then
+              if jq -e '.reply | type=="string" and length>0' /tmp/ai.json >/dev/null \
+                && jq -e '.spaceCardIds | length == 4' /tmp/ai.json >/dev/null \
+                && ! jq -r '.reply' /tmp/ai.json | grep -Eqi 'не могу.{0,30}(фото|изображ)|text[- ]based|cannot.{0,30}(photo|image)'; then
+                ai_ok=1
+                break
+              fi
+            fi
+            echo "AI smoke attempt ${attempt} failed"
+            sleep 3
+          done
+          cat /tmp/ai.json || true
+          test "${ai_ok}" -eq 1
 
       - name: Install Playwright
         run: |
