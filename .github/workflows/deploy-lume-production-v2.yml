@@ -1,26 +1,29 @@
-name: Deploy LUME v2 Production
+name: Deploy LUME Signature Production
 
 on:
   push:
     branches: [main]
     paths:
       - '.github/workflows/deploy-lume-production-v2.yml'
+      - '.deploy/lume-signature-a.json'
+      - '.deploy/lume-signature-b.json'
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: lume-v2-production
+  group: lume-signature-production
   cancel-in-progress: false
 
 jobs:
-  deploy:
+  deploy-and-verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      PROD_URL: https://lume.viiversion.com
 
     steps:
       - uses: actions/checkout@v4
@@ -28,23 +31,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-
-      - name: Verify Cloudflare token
-        run: |
-          set -euo pipefail
-          test -n "${CLOUDFLARE_API_TOKEN:-}"
-
-      - name: Resolve Cloudflare account
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [ -n "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then
-            exit 0
-          fi
-          curl -fsS "https://api.cloudflare.com/client/v4/zones?name=viiversion.com&per_page=5"             -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" > /tmp/zones.json
-          id=$(jq -r '[.result[]? | select(.name=="viiversion.com")][0].account.id // empty' /tmp/zones.json)
-          test -n "${id}"
-          echo "CLOUDFLARE_ACCOUNT_ID=${id}" >> "${GITHUB_ENV}"
 
       - name: Materialize production source
         shell: bash
@@ -54,8 +40,8 @@ jobs:
           node <<'NODE'
           const fs=require('fs');
           const path=require('path');
-          for(const file of ['.deploy/lume-prod-bundle-a.json','.deploy/lume-prod-bundle-b.json']){
-            const bundle=JSON.parse(fs.readFileSync(file,'utf8'));
+          for(const source of ['.deploy/lume-signature-a.json','.deploy/lume-signature-b.json']){
+            const bundle=JSON.parse(fs.readFileSync(source,'utf8'));
             for(const [name,content] of Object.entries(bundle)){
               const target=path.join('lume-prod',name);
               fs.mkdirSync(path.dirname(target),{recursive:true});
@@ -64,17 +50,34 @@ jobs:
           }
           NODE
 
-      - name: Validate and build
+      - name: Install, validate and build
         shell: bash
         run: |
           set -euo pipefail
           cd lume-prod
+          npm install --no-audit --no-fund
           npm run check:syntax
           npm run build
           test -f dist/index.html
           test -f dist/src/app.js
           test -f dist/styles/app.css
+          test -f dist/assets/lume/logo/lume-logo.webp
+          test -f dist/assets/lume/hero/lume-hero.webp
+          test -f dist/assets/lume/spaces/dining-01.webp
+          test -f dist/assets/lume/menu/lobster.webp
           grep -Fq 'lume.viiversion.com' wrangler.jsonc
+
+      - name: Resolve Cloudflare account
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}"
+          if [ -n "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then exit 0; fi
+          curl -fsS "https://api.cloudflare.com/client/v4/zones?name=viiversion.com&per_page=5" \
+            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" > /tmp/zones.json
+          id=$(jq -r '[.result[]? | select(.name=="viiversion.com")][0].account.id // empty' /tmp/zones.json)
+          test -n "${id}"
+          echo "CLOUDFLARE_ACCOUNT_ID=${id}" >> "${GITHUB_ENV}"
 
       - name: Deploy production Worker
         shell: bash
@@ -83,27 +86,105 @@ jobs:
           cd lume-prod
           npx --yes wrangler@4 deploy --config wrangler.jsonc
 
-      - name: Verify production and AI
+      - name: Verify production API
         shell: bash
         run: |
           set -euo pipefail
           ready=0
           for attempt in $(seq 1 36); do
-            code=$(curl -L -sS --connect-timeout 5 --max-time 20 -o /tmp/lume.html -w '%{http_code}' "https://lume.viiversion.com/" || true)
+            code=$(curl -L -sS --connect-timeout 5 --max-time 20 -o /tmp/lume.html -w '%{http_code}' "${PROD_URL}/" || true)
             if [ "${code}" = "200" ] && grep -Fq '<title>LUME</title>' /tmp/lume.html && grep -Fq '/src/app.js' /tmp/lume.html; then
               ready=1
               break
             fi
-            echo "Waiting for production (attempt ${attempt}, HTTP ${code})"
             sleep 5
           done
           test "${ready}" -eq 1
 
-          curl -fsS "https://lume.viiversion.com/api/health" > /tmp/health.json
+          curl -fsS "${PROD_URL}/api/health" > /tmp/health.json
           jq -e '.ok == true and .aiBinding == true' /tmp/health.json >/dev/null
 
-          curl -fsS -X POST "https://lume.viiversion.com/api/concierge"             -H 'content-type: application/json'             --data '{"message":"Romantic dinner for two with seafood around sunset","lang":"en","history":[],"context":{"selectedMenuItemIds":["lobster"]}}'             > /tmp/concierge.json
-          jq -e '.reply | type == "string" and length > 0' /tmp/concierge.json >/dev/null
-          jq -e '.plan.areaId | IN("dining","garden","bar","rooftop")' /tmp/concierge.json >/dev/null
+          curl -fsS -X POST "${PROD_URL}/api/concierge" \
+            -H 'content-type: application/json' \
+            --data '{"message":"Покажи фотографии всех зон LUME и коротко расскажи о каждой","lang":"ru","history":[],"context":{}}' \
+            > /tmp/ai.json
+          jq -e '.reply | type=="string" and length>0' /tmp/ai.json >/dev/null
+          jq -e '.spaceCardIds | length == 4' /tmp/ai.json >/dev/null
+          if jq -r '.reply' /tmp/ai.json | grep -Eqi 'не могу.{0,30}(фото|изображ)|text[- ]based|cannot.{0,30}(photo|image)'; then
+            echo "AI photo refusal detected"
+            exit 1
+          fi
 
-          echo "LUME v2 production verified: https://lume.viiversion.com"
+      - name: Install Playwright
+        run: |
+          set -euo pipefail
+          npm install playwright@1.55.0 --no-audit --no-fund >/dev/null
+          npx playwright install --with-deps chromium >/dev/null
+
+      - name: Production mobile QA
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > qa-prod.mjs <<'NODE'
+          import { chromium } from "playwright";
+          import fs from "node:fs";
+
+          const url=process.env.PROD_URL;
+          const browser=await chromium.launch({headless:true});
+          const page=await browser.newPage({viewport:{width:430,height:932},deviceScaleFactor:1,isMobile:true,hasTouch:true});
+          const errors=[];
+          page.on("console",m=>{if(m.type()==="error") errors.push("console: "+m.text())});
+          page.on("pageerror",e=>errors.push("pageerror: "+e.message));
+
+          await page.goto(url+"/",{waitUntil:"networkidle"});
+          await page.waitForSelector(".hero-signature");
+          const logo=await page.locator(".brand-logo").evaluate(el=>({src:el.getAttribute("src"),w:el.naturalWidth,h:el.naturalHeight}));
+          if(!logo.src?.endsWith(".webp") || !logo.w) throw new Error("Production WebP logo failed");
+          if(await page.locator("#bottom-nav svg.icon").count()!==5) throw new Error("Production SVG bottom navigation failed");
+
+          await page.getByRole("link",{name:/Explore menu|Открыть меню|Xem thực đơn/i}).click();
+          await page.waitForSelector(".menu-grid");
+          if(!page.url().includes("#/menu")) throw new Error("Menu route failed");
+          await page.waitForFunction(() => {
+            const images=[...document.querySelectorAll(".menu-card img")];
+            return images.length>=4 && images.every(img=>img.complete && img.naturalWidth>0);
+          },{timeout:20000});
+          const menuImages=await page.locator(".menu-card img").evaluateAll(images=>images.map(img=>({src:img.currentSrc||img.src,w:img.naturalWidth,h:img.naturalHeight})));
+          if(menuImages.some(img=>!img.w || !img.src.includes("/assets/lume/menu/"))) throw new Error("Production menu images are not local loaded assets");
+
+          await page.goto(url+"/#/home",{waitUntil:"networkidle"});
+          await page.locator('[data-action="view-space"][data-id="dining"]').first().click();
+          await page.waitForSelector(".space-gallery");
+          if(await page.locator(".gallery-frame img").count()<3) throw new Error("Production space gallery failed");
+
+          await page.locator('#bottom-nav a[data-tab="concierge"]').click();
+          await page.waitForSelector("#concierge-input");
+          await page.fill("#concierge-input","Покажи фотографии всех зон LUME и коротко расскажи о каждой");
+          await page.locator('[data-action="concierge-send"]').click();
+          await page.waitForSelector(".ai-space-card",{timeout:30000});
+          if(await page.locator(".ai-space-card").count()!==4) throw new Error("Production AI did not render four space cards");
+          const chat=await page.locator(".chat").innerText();
+          if(/не могу.{0,30}(фото|изображ)|text[- ]based|cannot.{0,30}(photo|image)/i.test(chat)) throw new Error("Production AI refused photos");
+
+          await page.locator(".ai-space-card [data-action='view-space']").first().click();
+          await page.waitForSelector(".space-gallery");
+          await page.locator('[data-action="reserve-space"]').click();
+          await page.waitForSelector('[data-action="reserve-next-details"]');
+
+          if(errors.length) throw new Error(errors.join(" | "));
+          fs.writeFileSync("qa-production.json",JSON.stringify({logo,menuImages,errors},null,2));
+          await page.screenshot({path:"lume-production.png",fullPage:true});
+          await browser.close();
+          NODE
+          node qa-prod.mjs
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lume-production-signature-qa
+          path: |
+            qa-production.json
+            lume-production.png
+            /tmp/ai.json
+          if-no-files-found: warn
+          retention-days: 5
