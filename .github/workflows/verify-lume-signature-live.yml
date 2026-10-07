@@ -1,0 +1,114 @@
+name: Verify LUME Signature Live
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/verify-lume-signature-live.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      PROD_URL: https://lume.viiversion.com
+
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Verify live API
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 20 "${PROD_URL}/api/health" > /tmp/health.json
+          jq -e '.ok == true and .aiBinding == true' /tmp/health.json >/dev/null
+
+          ai_ok=0
+          for attempt in 1 2 3; do
+            if curl -fsS --max-time 40 -X POST "${PROD_URL}/api/concierge" \
+              -H 'content-type: application/json' \
+              --data '{"message":"Покажи фотографии всех зон LUME и коротко расскажи о каждой","lang":"ru","history":[],"context":{}}' \
+              > /tmp/ai.json; then
+              if jq -e '.reply | type=="string" and length>0' /tmp/ai.json >/dev/null \
+                && jq -e '.spaceCardIds | length == 4' /tmp/ai.json >/dev/null \
+                && ! jq -r '.reply' /tmp/ai.json | grep -Eqi 'не могу.{0,30}(фото|изображ)|text[- ]based|cannot.{0,30}(photo|image)'; then
+                ai_ok=1
+                break
+              fi
+            fi
+            sleep 2
+          done
+          cat /tmp/ai.json || true
+          test "${ai_ok}" -eq 1
+
+      - name: Install Playwright
+        run: |
+          npm init -y >/dev/null
+          npm install playwright@1.55.0 --no-audit --no-fund >/dev/null
+          npx playwright install --with-deps chromium >/dev/null
+
+      - name: Verify live mobile UX
+        shell: bash
+        run: |
+          cat > qa.mjs <<'NODE'
+          import { chromium } from "playwright";
+          const url=process.env.PROD_URL;
+          const browser=await chromium.launch({headless:true});
+          const page=await browser.newPage({viewport:{width:430,height:932},isMobile:true,hasTouch:true});
+          const errors=[];
+          page.on("console",m=>{if(m.type()==="error") errors.push(m.text())});
+          page.on("pageerror",e=>errors.push(e.message));
+
+          await page.goto(url+"/",{waitUntil:"networkidle"});
+          await page.waitForSelector(".hero-signature");
+
+          const logo=await page.locator(".brand-logo").evaluate(el=>({src:el.getAttribute("src"),w:el.naturalWidth,h:el.naturalHeight}));
+          if(!logo.src?.endsWith(".webp") || !logo.w) throw new Error("LUME WebP logo failed");
+          if(await page.locator("#bottom-nav svg.icon").count()!==5) throw new Error("Premium SVG nav icons missing");
+
+          await page.getByRole("link",{name:/Explore menu|Открыть меню|Xem thực đơn/i}).click();
+          await page.waitForSelector(".menu-grid");
+          await page.waitForFunction(()=>{
+            const imgs=[...document.querySelectorAll(".menu-card img")];
+            return imgs.length>=4 && imgs.every(img=>img.complete && img.naturalWidth>0);
+          },{timeout:20000});
+
+          await page.goto(url+"/#/home",{waitUntil:"networkidle"});
+          await page.locator('[data-action="view-space"][data-id="dining"]').first().click();
+          await page.waitForSelector(".space-gallery");
+          if(await page.locator(".gallery-frame img").count()<3) throw new Error("Space gallery failed");
+
+          await page.locator('#bottom-nav a[data-tab="concierge"]').click();
+          await page.fill("#concierge-input","Покажи фотографии всех зон LUME и коротко расскажи о каждой");
+          await page.locator('[data-action="concierge-send"]').click();
+          await page.waitForSelector(".ai-space-card",{timeout:45000});
+          if(await page.locator(".ai-space-card").count()!==4) throw new Error("AI did not render four space cards");
+          const text=await page.locator(".chat").innerText();
+          if(/не могу.{0,30}(фото|изображ)|text[- ]based|cannot.{0,30}(photo|image)/i.test(text)) throw new Error("AI refused photo presentation");
+
+          await page.locator(".ai-space-card [data-action='view-space']").first().click();
+          await page.waitForSelector(".space-gallery");
+          await page.locator('[data-action="reserve-space"]').click();
+          await page.waitForSelector('[data-action="reserve-next-details"]');
+
+          if(errors.length) throw new Error(errors.join(" | "));
+          await page.screenshot({path:"live-lume.png",fullPage:true});
+          await browser.close();
+          NODE
+          node qa.mjs
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lume-signature-live-qa
+          path: |
+            live-lume.png
+            /tmp/ai.json
+          if-no-files-found: warn
+          retention-days: 3
