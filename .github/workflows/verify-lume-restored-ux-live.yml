@@ -1,0 +1,80 @@
+name: Verify LUME Restored UX Live
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/verify-lume-restored-ux-live.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Playwright
+        run: |
+          npm init -y >/dev/null
+          npm install playwright@1.55.0 --no-audit --no-fund >/dev/null
+          npx playwright install --with-deps chromium >/dev/null
+      - name: Verify restored UX
+        shell: bash
+        run: |
+          cat > qa.mjs <<'NODE'
+          import { chromium } from "playwright";
+          const url="https://lume.viiversion.com";
+          const browser=await chromium.launch({headless:true});
+          const page=await browser.newPage({viewport:{width:430,height:932},isMobile:true,hasTouch:true});
+          const errors=[];
+          page.on("console",m=>{if(m.type()==="error") errors.push(m.text())});
+          page.on("pageerror",e=>errors.push(e.message));
+
+          await page.goto(url+"/",{waitUntil:"networkidle"});
+          await page.waitForSelector(".hero-signature");
+          const cards=await page.locator(".space-card").evaluateAll(nodes=>nodes.map(node=>{
+            const r=node.getBoundingClientRect(),img=node.querySelector("img");
+            return {w:Math.round(r.width),h:Math.round(r.height),loaded:Boolean(img?.complete&&img.naturalWidth)};
+          }));
+          if(cards.length!==4 || cards.some(x=>!x.loaded)) throw new Error("Evening cards not loaded");
+          if(cards.some(x=>Math.abs(x.w-cards[0].w)>2 || Math.abs(x.h-cards[0].h)>2)) throw new Error("Evening cards not uniform");
+
+          await page.goto(url+"/#/menu",{waitUntil:"networkidle"});
+          await page.waitForSelector(".menu-card");
+          await page.locator(".menu-card").first().click();
+          await page.waitForSelector(".menu-sheet");
+          const detail=await page.locator(".menu-sheet-media img").evaluate(img=>img.complete&&img.naturalWidth>0);
+          if(!detail) throw new Error("Menu detail image failed");
+          await page.locator(".menu-sheet-close").click();
+
+          await page.goto(url+"/#/reserve",{waitUntil:"networkidle"});
+          await page.fill('[data-field="name"]',"QA Guest");
+          await page.fill('[data-field="phone"]',"+84900000000");
+          await page.locator('[data-action="reserve-next-details"]').click();
+          await page.locator('[data-action="select-reserve-space"]').first().click();
+          await page.locator('[data-action="reserve-next-space"]').click();
+          await page.locator('[data-action="reserve-next-review"]').click();
+          await page.waitForSelector(".payment-shell");
+          if(await page.locator('[data-action="payment-method"]').count()!==4) throw new Error("Payment methods missing");
+          await page.locator('[data-method="card"]').click(); await page.waitForSelector(".card-fields");
+          await page.locator('[data-method="qr"]').click(); await page.waitForSelector(".qr-demo");
+          await page.locator('[data-method="wallet"]').click(); await page.waitForSelector(".wallet-badges");
+          await page.locator('[data-method="bank"]').click(); await page.waitForSelector(".bank-details");
+
+          if(errors.length) throw new Error(errors.join(" | "));
+          await page.screenshot({path:"lume-restored-ux-live.png",fullPage:true});
+          await browser.close();
+          NODE
+          node qa.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lume-restored-ux-live
+          path: lume-restored-ux-live.png
+          if-no-files-found: warn
+          retention-days: 3
