@@ -163,7 +163,7 @@ jobs:
           if(!detailImage.loaded) throw new Error("Menu detail image did not load");
           await page.screenshot({path:"02b-menu-detail.png",fullPage:true});
           await page.locator('.menu-sheet [data-action="toggle-menu-item"]').click();
-          await page.locator('.menu-sheet [data-action="close-menu-detail"]').click();
+          await page.locator('.menu-sheet-close').click();
           await page.waitForSelector(".menu-sheet",{state:"detached"});
 
           await page.goto(url+"/#/home",{waitUntil:"networkidle"});
