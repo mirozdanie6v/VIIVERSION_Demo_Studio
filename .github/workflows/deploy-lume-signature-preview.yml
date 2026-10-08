@@ -133,6 +133,15 @@ jobs:
           if(!logo.src?.endsWith(".webp") || !logo.w) throw new Error("Official WebP logo did not load");
           const svgCount=await page.locator("#bottom-nav svg.icon").count();
           if(svgCount!==5) throw new Error("Premium SVG bottom icons are missing");
+          const eveningCards=await page.locator(".space-card").evaluateAll(cards=>cards.map(card=>{
+            const r=card.getBoundingClientRect();
+            const img=card.querySelector("img");
+            return {w:Math.round(r.width),h:Math.round(r.height),loaded:Boolean(img?.complete&&img?.naturalWidth)};
+          }));
+          if(eveningCards.length!==4) throw new Error("Expected four evening-format cards");
+          if(eveningCards.some(card=>!card.loaded)) throw new Error("An evening-format image did not load");
+          const firstCard=eveningCards[0];
+          if(eveningCards.some(card=>Math.abs(card.w-firstCard.w)>2 || Math.abs(card.h-firstCard.h)>2)) throw new Error("Evening-format cards are not uniform");
           await page.screenshot({path:"01-home.png",fullPage:true});
 
           await page.getByRole("link",{name:/Explore menu|Открыть меню|Xem thực đơn/i}).click();
@@ -147,6 +156,15 @@ jobs:
           const menuImages=await page.locator(".menu-card img").evaluateAll(images=>images.map(img=>({src:img.currentSrc||img.src,w:img.naturalWidth,h:img.naturalHeight})));
           if(menuImages.some(img=>!img.w || !img.src.includes("/assets/lume/menu/"))) throw new Error("Menu images are not local loaded WebP assets");
           await page.screenshot({path:"02-menu.png",fullPage:true});
+
+          await page.locator(".menu-card").first().click();
+          await page.waitForSelector(".menu-sheet");
+          const detailImage=await page.locator(".menu-sheet-media img").evaluate(img=>({loaded:img.complete&&img.naturalWidth>0,w:img.naturalWidth,h:img.naturalHeight}));
+          if(!detailImage.loaded) throw new Error("Menu detail image did not load");
+          await page.screenshot({path:"02b-menu-detail.png",fullPage:true});
+          await page.locator('.menu-sheet [data-action="toggle-menu-item"]').click();
+          await page.locator('.menu-sheet [data-action="close-menu-detail"]').click();
+          await page.waitForSelector(".menu-sheet",{state:"detached"});
 
           await page.goto(url+"/#/home",{waitUntil:"networkidle"});
           await page.locator('#bottom-nav a[data-tab="menu"]').click();
@@ -175,11 +193,31 @@ jobs:
           await page.waitForSelector(".space-gallery");
           await page.locator('[data-action="reserve-space"]').click();
           await page.waitForSelector('[data-action="reserve-next-details"]');
+          await page.fill('[data-field="name"]',"QA Guest");
+          await page.fill('[data-field="phone"]',"+84900000000");
+          await page.locator('[data-action="reserve-next-details"]').click();
+          await page.waitForSelector('[data-action="reserve-next-space"]');
+          await page.locator('[data-action="reserve-next-space"]').click();
+          await page.waitForSelector('[data-action="reserve-next-review"]');
+          await page.locator('[data-action="reserve-next-review"]').click();
+          await page.waitForSelector(".payment-shell");
 
+          const methods=await page.locator('[data-action="payment-method"]').count();
+          if(methods!==4) throw new Error("Payment methods were not fully restored");
+          await page.locator('[data-action="payment-method"][data-method="card"]').click();
+          await page.waitForSelector(".card-fields");
+          await page.locator('[data-action="payment-method"][data-method="qr"]').click();
+          await page.waitForSelector(".qr-demo");
+          await page.locator('[data-action="payment-method"][data-method="wallet"]').click();
+          await page.waitForSelector(".wallet-badges");
+          await page.locator('[data-action="payment-method"][data-method="bank"]').click();
+          await page.waitForSelector(".bank-details");
           await page.screenshot({path:"05-conversion.png",fullPage:true});
+          await page.locator('[data-action="reserve-confirm"]').click();
+          await page.waitForSelector('[data-action="tab"][data-tab="guest"]');
 
           if(errors.length) throw new Error(errors.join(" | "));
-          fs.writeFileSync("qa.json",JSON.stringify({logo,svgCount,menuImages,galleryCount,cards,errors},null,2));
+          fs.writeFileSync("qa.json",JSON.stringify({logo,svgCount,eveningCards,menuImages,detailImage,galleryCount,cards,paymentMethods:methods,errors},null,2));
           await browser.close();
           NODE
           node qa.mjs
@@ -191,6 +229,7 @@ jobs:
           path: |
             01-home.png
             02-menu.png
+            02b-menu-detail.png
             03-space-gallery.png
             04-ai-spaces.png
             05-conversion.png
