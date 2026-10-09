@@ -90,6 +90,21 @@ async function main() {
     fail("Vertical production captions must remain at the approved 50px size.");
   }
 
+  // An inset inside a vertical 1080x1920 canvas is a Golden Gate blocker.
+  // Subtitles retain their separate approved 50px overlay.
+  const fullBleed = [
+    "force_original_aspect_ratio=increase",
+    "crop=${width}:${height}:(iw-ow)/2:(ih-oh)/2",
+  ];
+  for (const token of fullBleed) {
+    if (!render.includes(token)) {
+      fail(`Golden vertical video must fill the canvas; missing: ${token}`);
+    }
+  }
+  if (render.includes("scale=900:1480:force_original_aspect_ratio=decrease")) {
+    fail("Golden vertical video still contains the old undersized inset.");
+  }
+
   const sync = await text("src/narration-sync-cli.ts");
   if (!sync.includes("Style: Default,DejaVu Sans,50")) {
     fail("Voice-synchronized ASS captions must remain at the approved 50px size.");
