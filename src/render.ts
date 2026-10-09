@@ -148,9 +148,12 @@ function buildMainVideoFilters(
 ): string[] {
   const filters: string[] = [];
   const vertical = width < height;
+  // Fill the vertical canvas with the recorded UI. The previous fixed
+  // 900x1480 inset made the app appear tiny inside a 1080x1920 video.
+  // Keep captions in the independent overlay layer, not in the source scale.
   const base = vertical
-    ? `scale=900:1480:force_original_aspect_ratio=decrease,` +
-      `pad=${width}:${height}:(ow-iw)/2:330:color=0x070A10,` +
+    ? `scale=${width}:${height}:force_original_aspect_ratio=increase,` +
+      `crop=${width}:${height}:(iw-ow)/2:(ih-oh)/2,` +
       "setsar=1,fps=30,settb=AVTB"
     : `scale=${width}:${height}:force_original_aspect_ratio=decrease,` +
       `pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:color=0x070A10,` +
