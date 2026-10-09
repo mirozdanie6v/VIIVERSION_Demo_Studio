@@ -140,7 +140,7 @@ async function runFfmpeg(executable: string, args: string[]): Promise<void> {
   });
 }
 
-function buildMainVideoFilters(
+export function buildMainVideoFilters(
   width: number,
   height: number,
   scenes: EditScene[],
