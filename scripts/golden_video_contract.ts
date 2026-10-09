@@ -90,6 +90,8 @@ async function main() {
     fail("Vertical production captions must remain at the approved 50px size.");
   }
 
+  const render = await text("src/render.ts");
+
   // An inset inside a vertical 1080x1920 canvas is a Golden Gate blocker.
   // Subtitles retain their separate approved 50px overlay.
   const fullBleed = [
@@ -110,7 +112,6 @@ async function main() {
     fail("Voice-synchronized ASS captions must remain at the approved 50px size.");
   }
 
-  const render = await text("src/render.ts");
   if (!render.includes("options.introSeconds ?? 2.2") ||
       !render.includes("options.outroSeconds ?? 4.8")) {
     fail("Premium intro/outro defaults drifted from the approved production policy.");
