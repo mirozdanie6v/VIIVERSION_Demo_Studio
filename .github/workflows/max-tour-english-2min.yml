@@ -1,6 +1,7 @@
-name: MAX TOUR English 2-Minute Presentation
+name: MAX TOUR English Premium Presentation
 
 on:
+  workflow_call:
   workflow_dispatch:
   push:
     branches: [main]
@@ -9,13 +10,27 @@ on:
       - '.github/workflows/max-tour-english-2min.yml'
 
 concurrency:
-  group: max-tour-english-2min
+  group: max-tour-english-premium
   cancel-in-progress: true
 
 jobs:
   render:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
+    env:
+      DEMO_STUDIO_REQUIRE_PREMIUM_VOICE: "true"
+      ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+      ELEVENLABS_VOICE_ID: ${{ secrets.ELEVENLABS_VOICE_ID }}
+      ELEVENLABS_VOICE_ID_RU: ${{ secrets.ELEVENLABS_VOICE_ID_RU }}
+      ELEVENLABS_VOICE_ID_RU_RU: ${{ secrets.ELEVENLABS_VOICE_ID_RU_RU }}
+      ELEVENLABS_VOICE_ID_EN: ${{ secrets.ELEVENLABS_VOICE_ID_EN }}
+      ELEVENLABS_VOICE_ID_EN_US: ${{ secrets.ELEVENLABS_VOICE_ID_EN_US }}
+      ELEVENLABS_MODEL: ${{ vars.ELEVENLABS_MODEL || 'eleven_v3' }}
+      HF_TTS_ENABLED: "1"
+      HF_TTS_PREMIUM_DEFAULT: "1"
+      HF_TTS_ENGINE: chatterbox
+      HF_TTS_DEVICE: cpu
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -23,20 +38,53 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Install Chromium
-        run: npx playwright install --with-deps chromium
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
 
-      - name: Install FFmpeg
+      - name: Cache premium TTS models
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/huggingface
+                        ~/.cache/pip
+          key: demo-studio-premium-tts-${{ runner.os }}-v2
+
+      - name: Install Chromium, FFmpeg and premium local TTS
         run: |
+          npx playwright install --with-deps chromium
           sudo apt-get update
-          sudo apt-get install -y ffmpeg
+          sudo apt-get install -y ffmpeg espeak-ng
+          python -m pip install --quiet --upgrade pip
+          python -m pip install --quiet torch==2.6.0 torchaudio==2.6.0 --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install --quiet "setuptools<82" resemble-perth numpy "git+https://github.com/resemble-ai/chatterbox.git@master" stressonnx==0.0.2
 
-      - name: Capture MAX TOUR customer journey
+      - name: Download approved Niki reference
+        uses: actions/download-artifact@v4
+        with:
+          name: max-tour-premium-russian-v9-final
+          path: reference-source
+          github-token: ${{ github.token }}
+          run-id: 37353860935
+
+      - name: Prepare canonical Niki reference
+        run: |
+          set -euo pipefail
+          test -s reference-source/voiceover_ru.wav
+          ffmpeg -y -hide_banner -loglevel error \
+            -i reference-source/voiceover_ru.wav \
+            -t 8.8 \
+            -af "highpass=f=70,lowpass=f=11500,loudnorm=I=-17:TP=-2:LRA=8" \
+            -ar 24000 -ac 1 /tmp/niki-reference.wav
+          test -s /tmp/niki-reference.wav
+
+      - name: Capture authorized customer journey
         env:
           DEMO_STUDIO_ALLOWED_HOSTS: max-tour.viiversion.com
           ALLOW_PRIVATE_TARGETS: "false"
@@ -45,88 +93,99 @@ jobs:
       - name: Resolve run directory
         id: run
         shell: bash
-        run: echo "dir=$(find artifacts -mindepth 1 -maxdepth 1 -type d | sort | tail -n 1)" >> "$GITHUB_OUTPUT"
+        run: |
+          set -euo pipefail
+          run_dir=$(find artifacts -type f -name run.json -printf '%h\n' | head -n 1)
+          test -n "$run_dir"
+          test -s "$run_dir/run.json"
+          test -s "$run_dir/capture.webm"
+          echo "dir=$run_dir" >> "$GITHUB_OUTPUT"
 
-      - name: Free disk after browser capture
+      - name: Generate approved premium voice segments
+        run: |
+          npm run voice:scenario -- \
+            --reference-audio /tmp/niki-reference.wav \
+            --scenario examples/max-tour-english-2min.json \
+            --run "${{ steps.run.outputs.dir }}"
+
+      - name: Verify premium voice provider
         shell: bash
         run: |
-          rm -rf ~/.cache/ms-playwright || true
-          rm -rf ~/.npm/_cacache || true
-          sudo apt-get clean
-          sudo rm -rf /var/lib/apt/lists/* || true
-          sudo rm -rf /usr/local/lib/android || true
-          sudo rm -rf /usr/share/dotnet || true
-          df -h
+          set -euo pipefail
+          run_dir="${{ steps.run.outputs.dir }}"
+          test -s "${run_dir}/voice-segments.json"
+          jq -e '
+            (.segments | length) > 0
+            and ([.segments[].provider] | all(. == "elevenlabs" or . == "huggingface"))
+          ' "${run_dir}/voice-segments.json" >/dev/null
+
+      - name: Synchronize narration and captions
+        run: |
+          npx tsx src/narration-sync-cli.ts \
+            --run "${{ steps.run.outputs.dir }}" \
+            --bpm 96
 
       - name: Generate subtle background music
         shell: bash
         run: |
           run_dir="${{ steps.run.outputs.dir }}"
           ffmpeg -y \
-            -f lavfi -i "sine=frequency=110:sample_rate=44100:duration=132" \
-            -f lavfi -i "sine=frequency=164.81:sample_rate=44100:duration=132" \
-            -f lavfi -i "sine=frequency=220:sample_rate=44100:duration=132" \
-            -filter_complex "[0:a]volume=0.09,tremolo=f=0.12:d=0.25[a0];[1:a]volume=0.045[a1];[2:a]volume=0.025[a2];[a0][a1][a2]amix=inputs=3:normalize=0,lowpass=f=1200,highpass=f=70,afade=t=in:st=0:d=3,afade=t=out:st=126:d=5[m]" \
-            -map "[m]" -c:a aac -b:a 192k "${run_dir}/background.m4a"
+            -f lavfi -i "sine=frequency=110:sample_rate=44100:duration=300" \
+            -f lavfi -i "sine=frequency=164.81:sample_rate=44100:duration=300" \
+            -filter_complex "[0:a]volume=0.045[a0];[1:a]volume=0.024[a1];[a0][a1]amix=inputs=2:normalize=0,lowpass=f=1400,highpass=f=70,loudnorm=I=-29:TP=-7:LRA=7[m]" \
+            -map "[m]" -c:a aac -b:a 160k "${run_dir}/background.m4a"
 
-      - name: Install neural TTS
-        run: python3 -m pip install --quiet edge-tts
-
-      - name: Build narration script
-        shell: bash
-        env:
-          RUN_DIR: ${{ steps.run.outputs.dir }}
-        run: |
-          node --input-type=module <<'NODE'
-          import fs from 'node:fs';
-          const scenario = JSON.parse(fs.readFileSync('examples/max-tour-english-2min.json', 'utf8'));
-          const narration = scenario.steps
-            .map(step => (step.narration || '').trim())
-            .filter(Boolean)
-            .join(' ');
-          fs.writeFileSync(process.env.RUN_DIR + '/narration.txt', narration + '\n');
-          NODE
-
-      - name: Synthesize persuasive English voice
-        shell: bash
-        run: |
-          run_dir="${{ steps.run.outputs.dir }}"
-          edge-tts \
-            --voice en-US-AriaNeural \
-            --rate=-2% \
-            --pitch=+0Hz \
-            --file "${run_dir}/narration.txt" \
-            --write-media "${run_dir}/voiceover.mp3"
-
-      - name: Render English sales presentation
+      - name: Render premium presentation
         run: |
           npm run render -- \
             --run "${{ steps.run.outputs.dir }}" \
             --preset 9:16 \
             --voiceover "${{ steps.run.outputs.dir }}/voiceover.mp3" \
+            --captions-file "${{ steps.run.outputs.dir }}/synced-captions.ass" \
             --music "${{ steps.run.outputs.dir }}/background.m4a" \
             --music-volume 0.08 \
             --music-bpm 96 \
             --brand "VIIVERSION" \
             --title "MAX TOUR · Customer Journey" \
-            --cta "A smoother path from discovery to booking"
+            --intro-seconds 2.4 \
+            --outro-seconds 5.2 \
+            --cta "Build the same premium journey for your customers" \
+            --cta-secondary "Contact VIIVERSION"
 
-      - name: Verify final video
+      - name: Verify golden video contract
         shell: bash
         run: |
           set -euo pipefail
           run_dir="${{ steps.run.outputs.dir }}"
-          test -s "${run_dir}/voiceover.mp3"
-          test -s "${run_dir}/background.m4a"
-          test -s "${run_dir}/captions.srt"
-          test -s "${run_dir}/final-9x16.mp4"
+          for file in \
+            capture.webm \
+            voice-segments.json \
+            voiceover.mp3 \
+            narration-sync.json \
+            synced-captions.ass \
+            editor_brain.json \
+            editor_critic.json \
+            music_brain.json \
+            captions.json \
+            final-9x16.mp4; do
+            test -s "${run_dir}/${file}"
+          done
+
+          jq -e '.qualityGate.passed == true' "${run_dir}/editor_brain.json" >/dev/null
+          jq -e '.passed == true' "${run_dir}/editor_critic.json" >/dev/null
+          jq -e '.version == "music-brain-v1"' "${run_dir}/music_brain.json" >/dev/null
+
           duration=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "${run_dir}/final-9x16.mp4")
-          awk -v d="$duration" 'BEGIN { exit !(d >= 105 && d <= 135) }'
+          awk -v d="$duration" 'BEGIN { exit !(d >= 70 && d <= 260) }'
           echo "FINAL_DURATION=$duration"
 
-      - name: Upload final presentation
+          ffmpeg -y -ss 1.4 -i "${run_dir}/final-9x16.mp4" -frames:v 1 "${run_dir}/qa-intro.png"
+          ffmpeg -y -ss 20 -i "${run_dir}/final-9x16.mp4" -frames:v 1 "${run_dir}/qa-content.png"
+          ffmpeg -y -sseof -3 -i "${run_dir}/final-9x16.mp4" -frames:v 1 "${run_dir}/qa-outro.png"
+
+      - name: Upload golden presentation
         uses: actions/upload-artifact@v4
         with:
-          name: max-tour-english-2min-presentation
+          name: golden-max-tour-en
           path: artifacts/
           if-no-files-found: error

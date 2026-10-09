@@ -28,6 +28,10 @@ function languageOf(locale: string): string {
   return locale.trim().replace(/_/g, "-").split("-")[0].toLowerCase();
 }
 
+function truthy(value: string | undefined): boolean {
+  return ["1", "true", "yes", "on"].includes((value ?? "").trim().toLowerCase());
+}
+
 function prefersPremiumPresenterVoice(request: VoiceRequest): boolean {
   const persona = request.persona ?? "viiversion-presenter";
   if (persona !== "viiversion-presenter") return false;
@@ -88,6 +92,10 @@ export class VoiceRouter {
     const explicit = request.provider && request.provider !== "auto"
       ? request.provider
       : undefined;
+    const strictPremium =
+      !explicit &&
+      prefersPremiumPresenterVoice(request) &&
+      truthy(env.DEMO_STUDIO_REQUIRE_PREMIUM_VOICE);
 
     const candidates = this.providers.map((provider) => {
       const configured = provider.isConfigured(request, this.context);
@@ -112,6 +120,13 @@ export class VoiceRouter {
       if (explicit) {
         score += provider.id === explicit ? 1000 : -1000;
       }
+      if (
+        strictPremium &&
+        provider.id !== "elevenlabs" &&
+        provider.id !== "huggingface"
+      ) {
+        score -= 10000;
+      }
       if (!configured) score -= 10000;
       if (!localeSupported) score -= 10000;
 
@@ -126,6 +141,12 @@ export class VoiceRouter {
 
     const selected = [...candidates]
       .filter((item) => item.configured && item.localeSupported)
+      .filter(
+        (item) =>
+          !strictPremium ||
+          item.provider === "elevenlabs" ||
+          item.provider === "huggingface",
+      )
       .sort((a, b) => b.score - a.score)[0]?.provider;
 
     return { selected, candidates };
@@ -134,8 +155,19 @@ export class VoiceRouter {
   async synthesize(request: VoiceRequest): Promise<VoiceResult> {
     const decision = this.inspect(request);
     const explicit = request.provider && request.provider !== "auto";
+    const env = this.context.env ?? process.env;
+    const strictPremium =
+      !explicit &&
+      prefersPremiumPresenterVoice(request) &&
+      truthy(env.DEMO_STUDIO_REQUIRE_PREMIUM_VOICE);
     const ranked = [...decision.candidates]
       .filter((item) => item.configured && item.localeSupported)
+      .filter(
+        (item) =>
+          !strictPremium ||
+          item.provider === "elevenlabs" ||
+          item.provider === "huggingface",
+      )
       .filter((item) => !request.requireNativeTimings || item.nativeTimings)
       .sort((a, b) => b.score - a.score);
 
@@ -147,7 +179,9 @@ export class VoiceRouter {
         )
         .join("; ");
       throw new Error(
-        `No configured voice provider can synthesize locale ${request.locale}. ${summary}`,
+        strictPremium
+          ? `Premium presenter voice is required for ${request.locale}, but neither approved ElevenLabs nor approved local premium TTS is available. ${summary}`
+          : `No configured voice provider can synthesize locale ${request.locale}. ${summary}`,
       );
     }
 

@@ -2,13 +2,19 @@ import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { toNodeHandler } from "@modelcontextprotocol/node";
-import { authenticateBearer } from "./auth.js";
+import {
+  authenticateBearer,
+  authenticationMode,
+  oauthChallenge,
+  protectedResourceMetadata,
+} from "./auth.js";
 import { assertTrustedHttpRequest } from "./http-security.js";
 import { FAVICON_SVG, LANDING_PAGE } from "./landing.js";
 import type { DemoJobRecovery, DemoJobRequest } from "./job-manager.js";
 import { buildJobStatusPage } from "./job-status-page.js";
 import { createDemoStudioMcpHandler } from "./mcp-server.js";
 import { buildOpenApiDocument } from "./openapi.js";
+import { identityHash } from "./quota.js";
 import { DemoStudioService } from "./service.js";
 import { DEMO_STUDIO_VERSION, demoStudioAccessMode, demoStudioGenerationMode } from "./version.js";
 
@@ -122,11 +128,16 @@ function errorStatus(error: unknown): number {
   if (message.includes("quota exceeded")) return 429;
   if (
     message.includes("bearer token") ||
+    message.includes("OAuth access token") ||
+    message.includes("required scope") ||
     message.includes("Invalid or missing")
   ) {
     return 401;
   }
-  if (message.includes("DEMO_STUDIO_API_KEY is not configured")) return 503;
+  if (
+    message.includes("Authentication is not configured") ||
+    message.includes("OAuth is enabled but")
+  ) return 503;
   if (message.includes("Host header") || message.includes("Origin is not allowed")) return 403;
   return 400;
 }
@@ -162,6 +173,12 @@ function internalAuthorized(request: IncomingMessage): boolean {
   return header === "Bearer " + expected;
 }
 
+function internalAuthCheckAuthorized(request: IncomingMessage): boolean {
+  const expected = process.env.DEMO_STUDIO_INTERNAL_TOKEN?.trim();
+  if (!expected) return false;
+  return request.headers["x-demo-studio-internal-token"] === expected;
+}
+
 export function createDemoStudioHttpServer(
   service = new DemoStudioService(),
 ) {
@@ -194,6 +211,14 @@ export function createDemoStudioHttpServer(
         return;
       }
 
+      if (
+        request.method === "GET" &&
+        pathname === "/.well-known/oauth-protected-resource"
+      ) {
+        sendJson(response, 200, protectedResourceMetadata());
+        return;
+      }
+
       if (request.method === "GET" && pathname === "/favicon.svg") {
         response.writeHead(200, {
           "Content-Type": "image/svg+xml; charset=utf-8",
@@ -212,6 +237,33 @@ export function createDemoStudioHttpServer(
           "X-Content-Type-Options": "nosniff",
         });
         response.end(buildJobStatusPage(statusPageJobId));
+        return;
+      }
+
+      if (
+        request.method === "GET" &&
+        pathname === "/__internal/auth-check"
+      ) {
+        if (!internalAuthCheckAuthorized(request)) {
+          sendJson(response, 401, { error: "Unauthorized internal request." });
+          return;
+        }
+
+        const requiredScopes = String(
+          request.headers["x-demo-studio-required-scopes"] ?? "",
+        )
+          .split(/[\s,]+/)
+          .map((value) => value.trim())
+          .filter(Boolean);
+        const auth = await authenticateBearer(
+          request.headers.authorization,
+          requiredScopes,
+        );
+        sendJson(response, 200, {
+          identityHash: identityHash(auth.identity),
+          mode: auth.mode,
+          scopes: auth.scopes,
+        });
         return;
       }
 
@@ -257,29 +309,52 @@ export function createDemoStudioHttpServer(
       }
 
       if (pathname === "/mcp") {
-        authenticateBearer(request.headers.authorization);
         await mcpNode(request, response);
         return;
       }
 
-      const auth = authenticateBearer(request.headers.authorization);
-
       if (request.method === "POST" && pathname === "/v1/jobs") {
+        const auth = await authenticateBearer(
+          request.headers.authorization,
+          ["demo.generate"],
+        );
         const input = parseJobRequest(await readJson(request));
         const created = await service.createJob(input, auth.identity);
+        const { statusToken, ...publicJob } = created.job;
+        const statusPageUrl =
+          "/jobs/" +
+          created.job.id +
+          (statusToken
+            ? "?status_token=" + encodeURIComponent(statusToken)
+            : "");
 
         sendJson(response, 202, {
-          job: created.job,
+          job: publicJob,
           quota: created.quota,
           status_url: "/v1/jobs/" + created.job.id,
-          status_page_url: "/jobs/" + created.job.id,
+          status_page_url: statusPageUrl,
         });
         return;
       }
 
       const jobPath = matchJobPath(pathname);
       if (request.method === "GET" && jobPath && !jobPath.artifact) {
-        const job = service.getJob(jobPath.id);
+        const requestUrl = new URL(
+          request.url ?? "/",
+          "http://localhost",
+        );
+        const statusToken =
+          requestUrl.searchParams.get("status_token") ?? undefined;
+        let job;
+        if (statusToken) {
+          job = service.getJob(jobPath.id, undefined, statusToken);
+        } else {
+          const auth = await authenticateBearer(
+            request.headers.authorization,
+            ["demo.read"],
+          );
+          job = service.getJob(jobPath.id, auth.identity);
+        }
         if (!job) {
           sendJson(response, 404, { error: "Demo job not found." });
           return;
@@ -287,18 +362,24 @@ export function createDemoStudioHttpServer(
 
         sendJson(response, 200, {
           ...job,
-          artifact_url: job.artifactReady
-            ? "/v1/jobs/" + job.id + "/artifact"
-            : undefined,
+          artifact_url:
+            job.artifactReady && !statusToken
+              ? "/v1/jobs/" + job.id + "/artifact"
+              : undefined,
         });
         return;
       }
 
       if (request.method === "GET" && jobPath?.artifact) {
+        const auth = await authenticateBearer(
+          request.headers.authorization,
+          ["demo.read"],
+        );
         const internal = service.jobs.getInternal(jobPath.id);
         if (
           !internal?.artifactPath ||
-          internal.status !== "completed"
+          internal.status !== "completed" ||
+          internal.ownerIdentity !== auth.identity
         ) {
           sendJson(response, 404, { error: "Artifact is not ready." });
           return;
@@ -320,7 +401,17 @@ export function createDemoStudioHttpServer(
       sendText(response, 404, "Not found.");
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      sendJson(response, errorStatus(error), { error: message });
+      const status = errorStatus(error);
+      const headers: Record<string, string> = {};
+      if (status === 401 && authenticationMode() === "oauth") {
+        headers["WWW-Authenticate"] = oauthChallenge([], {
+          error: /scope/i.test(message)
+            ? "insufficient_scope"
+            : "invalid_token",
+          description: message,
+        });
+      }
+      sendJson(response, status, { error: message }, headers);
     }
   });
 }

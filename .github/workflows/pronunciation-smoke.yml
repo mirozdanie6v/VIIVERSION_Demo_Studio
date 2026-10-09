@@ -2,6 +2,13 @@ name: Pronunciation Smoke
 
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - 'config/pronunciation-registry.json'
+      - 'scripts/hf_tts.py'
+      - 'scripts/hf_tts_batch.py'
+      - 'scripts/pronunciation_preflight.py'
+      - '.github/workflows/pronunciation-smoke.yml'
   push:
     branches: [main]
     paths:
@@ -16,9 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      RUACCENT_MODEL: tiny2.1
-      RUACCENT_DEVICE: CPU
-      RUACCENT_WORKDIR: ${{ github.workspace }}/.cache/ruaccent
+      STRESSONNX_MODEL: ruaccent
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -28,18 +33,17 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Cache RUAccent assets
+      - name: Cache StressONNX assets
         uses: actions/cache@v4
         with:
           path: |
-            .cache/ruaccent
             ~/.cache/huggingface
-          key: pronunciation-ruaccent-${{ runner.os }}-${{ runner.arch }}-tiny2.1-v1
+          key: pronunciation-stressonnx-${{ runner.os }}-${{ runner.arch }}-v1
 
-      - name: Install RUAccent
+      - name: Install StressONNX
         run: |
           python -m pip install --quiet --upgrade pip
-          python -m pip install --quiet ruaccent
+          python -m pip install --quiet stressonnx==0.0.2
 
       - name: Run full pronunciation preflight
         run: python scripts/pronunciation_preflight.py --full

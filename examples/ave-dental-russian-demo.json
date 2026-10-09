@@ -390,7 +390,7 @@
   ],
   "voice": {
     "locale": "ru-RU",
-    "provider": "huggingface",
+    "provider": "auto",
     "persona": "viiversion-presenter",
     "instructions": "Premium Russian product presenter. Warm, intelligent, confident and natural. Speak to a business owner, not as a radio announcer. Conversational human rhythm, clear semantic emphasis, medium energetic pace, short organic pauses, elegant restraint, no synthetic monotone, no theatrical trailer tone.",
     "requireNativeTimings": false,

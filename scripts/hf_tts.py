@@ -62,10 +62,11 @@ def _whole_term_pattern(term: str) -> re.Pattern[str]:
     )
 
 
-_ruaccent_instance = None
+_stressonnx_stress = None
 
 
 def accented_to_ruaccent(value: str) -> str:
+    """Compatibility helper for legacy pronunciation-registry preflight."""
     decomposed = unicodedata.normalize("NFD", value)
     converted = re.sub(
         r"([аеёиоуыэюяАЕЁИОУЫЭЮЯ])\u0301",
@@ -76,6 +77,7 @@ def accented_to_ruaccent(value: str) -> str:
 
 
 def ruaccent_to_combining_acute(value: str) -> str:
+    """Compatibility helper for legacy +vowel stress notation."""
     converted = re.sub(
         r"\+([аеёиоуыэюяАЕЁИОУЫЭЮЯ])",
         lambda match: match.group(1) + "\u0301",
@@ -84,41 +86,63 @@ def ruaccent_to_combining_acute(value: str) -> str:
     return unicodedata.normalize("NFC", converted)
 
 
-def _get_ruaccent(registry: dict):
-    global _ruaccent_instance
-    if _ruaccent_instance is not None:
-        return _ruaccent_instance
+def _get_stressonnx():
+    global _stressonnx_stress
+    if _stressonnx_stress is not None:
+        return _stressonnx_stress
 
     try:
-        from ruaccent import RUAccent
+        from stressonnx import stress
     except ImportError as exc:
         raise RuntimeError(
-            "Russian premium TTS requires RUAccent. Install with: pip install ruaccent"
+            "Russian premium TTS requires stressonnx==0.0.2. "
+            "Install with: pip install stressonnx==0.0.2"
         ) from exc
 
-    custom_dict = {
-        source.lower(): accented_to_ruaccent(stressed)
+    _stressonnx_stress = stress
+    return stress
+
+
+def _apply_approved_stress_overrides(text: str, registry: dict) -> str:
+    overrides = {
+        source.casefold(): stressed
         for source, stressed in registry.get("russianStressOverrides", {}).items()
     }
+    if not overrides:
+        return text
 
-    accentizer = RUAccent()
-    accentizer.load(
-        omograph_model_size=os.getenv("RUACCENT_MODEL", "tiny2.1"),
-        use_dictionary=True,
-        custom_dict=custom_dict,
-        device=os.getenv("RUACCENT_DEVICE", "CPU"),
-        workdir=os.getenv("RUACCENT_WORKDIR") or None,
-        tiny_mode=False,
+    word_pattern = re.compile(
+        r"(?:[А-Яа-яЁё](?:\u0301)?)+",
+        flags=re.UNICODE,
     )
-    _ruaccent_instance = accentizer
-    return accentizer
+
+    def replace_word(match: re.Match[str]) -> str:
+        token = match.group(0)
+        clean_token = strip_stress_marks(token)
+        approved = overrides.get(clean_token.casefold())
+        if approved is None:
+            return token
+        if clean_token[:1].isupper():
+            approved = approved[:1].upper() + approved[1:]
+        return approved
+
+    return word_pattern.sub(replace_word, text)
 
 
 def stress_russian_text(text: str, registry: dict) -> str:
     clean = strip_stress_marks(text)
-    accentizer = _get_ruaccent(registry)
-    stressed_plus = accentizer.process_all(clean)
-    return ruaccent_to_combining_acute(stressed_plus)
+    stress = _get_stressonnx()
+    model = os.getenv("STRESSONNX_MODEL", "ruaccent")
+    try:
+        stressed = stress(clean, "ru", model=model, fallback=True)
+    except TypeError:
+        # Keep compatibility with the stable 0.0.2 API if fallback is not
+        # exposed by a downstream build.
+        stressed = stress(clean, "ru", model=model)
+    return _apply_approved_stress_overrides(
+        unicodedata.normalize("NFC", str(stressed)),
+        registry,
+    )
 
 
 def split_brand_segments(text: str, base_language: str, registry: dict) -> list[tuple[str, str]]:

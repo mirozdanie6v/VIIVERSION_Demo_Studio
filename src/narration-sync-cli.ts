@@ -5,6 +5,7 @@ import { buildEditorBrainPlan } from "./editor-brain.js";
 import { reviewEditorPlan } from "./editor-critic.js";
 import { alignScenesToBeatGrid } from "./music-brain.js";
 import { splitCaptionText } from "./caption-brain.js";
+import { resolveNarrationTailHoldSeconds } from "./narration-timing.js";
 import type { EditScene, SceneManifest, SceneTimelineEntry } from "./scenes.js";
 
 type Manifest = SceneManifest & {
@@ -150,11 +151,11 @@ async function main() {
     (max, segment) => Math.max(max, segment.start + segment.duration),
     0,
   );
-  if (finalNarrationEnd > contentDuration + 0.35) {
-    throw new Error(
-      `Narration exceeds edited content timeline: voice=${finalNarrationEnd.toFixed(2)}s, content=${contentDuration.toFixed(2)}s. Increase the relevant visual hold instead of allowing drift.`,
-    );
-  }
+  const tailHoldSeconds = resolveNarrationTailHoldSeconds(
+    finalNarrationEnd,
+    contentDuration,
+  );
+  const synchronizedContentDuration = contentDuration + tailHoldSeconds;
 
   const ffArgs: string[] = ["-y"];
   for (const segment of planned) ffArgs.push("-i", segment.clipPath);
@@ -225,7 +226,7 @@ async function main() {
     "",
     "[V4+ Styles]",
     "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
-    "Style: Default,DejaVu Sans,28,&H00FFFFFF,&H00FFFFFF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0,0,8,84,84,112,1",
+    "Style: Default,DejaVu Sans,50,&H00FFFFFF,&H00FFFFFF,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,0,0,8,72,72,96,1",
     "",
     "[Events]",
     "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
@@ -243,10 +244,12 @@ async function main() {
     path.join(runDir, "narration-sync.json"),
     JSON.stringify(
       {
-        version: "narration-sync-v1",
+        version: "narration-sync-v2",
         timingSource: "actual-tts-segment-duration",
-        contentDurationSeconds: contentDuration,
+        editorContentDurationSeconds: contentDuration,
+        contentDurationSeconds: synchronizedContentDuration,
         finalNarrationEndSeconds: finalNarrationEnd,
+        tailHoldSeconds,
         segments: planned.map(({ clipPath, ...segment }) => ({
           ...segment,
           clip: path.basename(clipPath),
@@ -262,8 +265,10 @@ async function main() {
   console.log(JSON.stringify({
     voiceover: path.join(runDir, "voiceover.mp3"),
     captions: path.join(runDir, "synced-captions.ass"),
-    contentDuration,
+    editorContentDuration: contentDuration,
+    contentDuration: synchronizedContentDuration,
     finalNarrationEnd,
+    tailHoldSeconds,
     segmentCount: planned.length,
   }, null, 2));
 }

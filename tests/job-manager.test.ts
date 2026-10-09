@@ -9,6 +9,8 @@ import {
 test("public job metadata does not expose the source request or local paths", () => {
   const job: DemoJob = {
     id: "00000000-0000-0000-0000-000000000001",
+    ownerIdentity: "oauth:https://issuer.example:user-123",
+    statusToken: "status-token-for-test-000000000001",
     status: "completed",
     progress: 100,
     message: "Presentation video is ready.",
@@ -36,6 +38,13 @@ test("public job metadata does not expose the source request or local paths", ()
   assert.equal("artifactPath" in publicJob, false);
   assert.equal("scenarioPath" in publicJob, false);
   assert.equal("runDir" in publicJob, false);
+  assert.equal("statusToken" in publicJob, false);
+
+  const createdJob = toPublicDemoJob(job, true);
+  assert.equal(
+    createdJob.statusToken,
+    "status-token-for-test-000000000001",
+  );
 });
 
 test("production hybrid is default-on with an explicit standard rollback", () => {

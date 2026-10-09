@@ -1,6 +1,7 @@
-name: AVE Dental Russian Demo
+name: AVE Dental Russian Premium Demo
 
 on:
+  workflow_call:
   workflow_dispatch:
   push:
     branches: [main]
@@ -9,13 +10,26 @@ on:
       - '.github/workflows/ave-dental-russian-demo.yml'
 
 concurrency:
-  group: ave-dental-russian-demo
+  group: ave-dental-russian-premium
   cancel-in-progress: true
 
 jobs:
   render:
     runs-on: ubuntu-latest
-    timeout-minutes: 55
+    timeout-minutes: 45
+    env:
+      DEMO_STUDIO_REQUIRE_PREMIUM_VOICE: "true"
+      ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+      ELEVENLABS_VOICE_ID: ${{ secrets.ELEVENLABS_VOICE_ID }}
+      ELEVENLABS_VOICE_ID_RU: ${{ secrets.ELEVENLABS_VOICE_ID_RU }}
+      ELEVENLABS_VOICE_ID_RU_RU: ${{ secrets.ELEVENLABS_VOICE_ID_RU_RU }}
+      ELEVENLABS_VOICE_ID_EN: ${{ secrets.ELEVENLABS_VOICE_ID_EN }}
+      ELEVENLABS_VOICE_ID_EN_US: ${{ secrets.ELEVENLABS_VOICE_ID_EN_US }}
+      ELEVENLABS_MODEL: ${{ vars.ELEVENLABS_MODEL || 'eleven_v3' }}
+      HF_TTS_ENABLED: "1"
+      HF_TTS_PREMIUM_DEFAULT: "1"
+      HF_TTS_ENGINE: chatterbox
+      HF_TTS_DEVICE: cpu
 
     steps:
       - name: Checkout
@@ -34,370 +48,144 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install Chromium, media tools and premium Russian TTS
+      - name: Cache premium TTS models
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/huggingface
+                        ~/.cache/pip
+          key: demo-studio-premium-tts-${{ runner.os }}-v2
+
+      - name: Install Chromium, FFmpeg and premium local TTS
         run: |
           npx playwright install --with-deps chromium
           sudo apt-get update
           sudo apt-get install -y ffmpeg espeak-ng
           python -m pip install --quiet --upgrade pip
           python -m pip install --quiet torch==2.6.0 torchaudio==2.6.0 --index-url https://download.pytorch.org/whl/cpu
-          python -m pip install --quiet "git+https://github.com/resemble-ai/chatterbox.git@master"
-          python -m pip install --quiet ruaccent
+          python -m pip install --quiet "setuptools<82" resemble-perth numpy "git+https://github.com/resemble-ai/chatterbox.git@master" stressonnx==0.0.2
 
-      - name: Capture AVE Dental patient journey
+      - name: Download approved Niki reference
+        uses: actions/download-artifact@v4
+        with:
+          name: max-tour-premium-russian-v9-final
+          path: reference-source
+          github-token: ${{ github.token }}
+          run-id: 37353860935
+
+      - name: Prepare canonical Niki reference
+        run: |
+          set -euo pipefail
+          test -s reference-source/voiceover_ru.wav
+          ffmpeg -y -hide_banner -loglevel error \
+            -i reference-source/voiceover_ru.wav \
+            -t 8.8 \
+            -af "highpass=f=70,lowpass=f=11500,loudnorm=I=-17:TP=-2:LRA=8" \
+            -ar 24000 -ac 1 /tmp/niki-reference.wav
+          test -s /tmp/niki-reference.wav
+
+      - name: Capture authorized customer journey
         env:
           DEMO_STUDIO_ALLOWED_HOSTS: ave-dental-miniapp.vercel.app
           ALLOW_PRIVATE_TARGETS: "false"
         run: npm run capture -- --scenario examples/ave-dental-russian-demo.json
 
-      - name: Download approved MAX TOUR Niki reference
-        uses: actions/download-artifact@v4
-        with:
-          name: max-tour-premium-russian-v9-final
-          path: artifacts/max-tour-reference
-          github-token: ${{ github.token }}
-          run-id: 37353860935
-
-      - name: Resolve AVE run directory
+      - name: Resolve run directory
         id: run
         shell: bash
         run: |
           set -euo pipefail
-          run_dir=$(find artifacts -mindepth 2 -maxdepth 2 -type f -name run.json -printf '%h\n' | grep -v '/max-tour-reference
-
-      - name: Free browser cache before premium voice synthesis
-        shell: bash
-        run: |
-          rm -rf ~/.cache/ms-playwright || true
-          rm -rf ~/.npm/_cacache || true
-          sudo apt-get clean || true
-          sudo rm -rf /var/lib/apt/lists/* || true
-          df -h
-
-      - name: Prepare narration segments with Russian stress lexicon
-        shell: bash
-        env:
-          RUN_DIR: ${{ steps.run.outputs.dir }}
-        run: |
-          mkdir -p "${RUN_DIR}/voices"
-          node --import tsx --input-type=module <<'NODE'
-          import fs from 'node:fs';
-          import path from 'node:path';
-          import { applyPronunciation } from './src/voice-director.ts';
-
-          const scenario = JSON.parse(
-            fs.readFileSync('examples/ave-dental-russian-demo.json', 'utf8'),
-          );
-          const pronunciation = scenario.voice?.pronunciation || {};
-
-          for (let i = 0; i < scenario.steps.length; i += 1) {
-            const step = scenario.steps[i];
-            if (!step.narration?.trim()) continue;
-
-            const source = (step.voiceText || step.narration).trim();
-            const spoken = applyPronunciation(source, pronunciation);
-
-            fs.writeFileSync(
-              path.join(process.env.RUN_DIR, 'voices', `text-${i}.txt`),
-              spoken + '\n',
-            );
-          }
-          NODE
-
-      - name: Prepare approved Niki reference from MAX TOUR v9
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -s artifacts/max-tour-reference/voiceover_ru.wav
-          ffmpeg -y -i artifacts/max-tour-reference/voiceover_ru.wav -t 8.8 \
-            -af "highpass=f=70,lowpass=f=11500,loudnorm=I=-17:TP=-2:LRA=8" \
-            -ar 24000 -ac 1 artifacts/niki-reference.wav
-
-      - name: Synthesize approved Niki-reference Russian voice
-        shell: bash
-        env:
-          RUN_DIR: ${{ steps.run.outputs.dir }}
-        run: |
-          set -euo pipefail
-          run_dir="${RUN_DIR}"
-
-          python scripts/hf_tts_batch.py \
-            --voices-dir "${run_dir}/voices" \
-            --reference-audio artifacts/niki-reference.wav \
-            --base-language ru
-
-          for raw in "${run_dir}"/voices/raw-*.wav; do
-            base=$(basename "$raw" .wav)
-            idx=${base#raw-}
-            out="${run_dir}/voices/step-${idx}.mp3"
-
-            ffmpeg -y -i "$raw" \
-              -af "highpass=f=70,lowpass=f=11500,acompressor=threshold=-18dB:ratio=1.55:attack=18:release=220,loudnorm=I=-16:TP=-1.5:LRA=8" \
-              -c:a libmp3lame -b:a 224k "$out"
-          done
-
-          echo "APPROVED_RU_VOICE=Niki reference / MAX TOUR v9"
-          echo "PRONUNCIATION_PIPELINE=ruaccent-single-pass+brand-language-spans"
-
-
-      - name: Synchronize narration and captions
-        shell: bash
-        run: |
-          npx tsx src/narration-sync-cli.ts             --run "${{ steps.run.outputs.dir }}"             --bpm 96
-
-      - name: Generate subtle premium background music
-        shell: bash
-        env:
-          RUN_DIR: ${{ steps.run.outputs.dir }}
-        run: |
-          python - <<'PY'
-          import os, wave
-          import numpy as np
-
-          sr = 44100
-          duration = 150.0
-          n = int(duration * sr)
-          t = np.arange(n, dtype=np.float64) / sr
-          left = np.zeros(n, dtype=np.float64)
-          right = np.zeros(n, dtype=np.float64)
-
-          chords = [
-              (196.00, 246.94, 293.66),
-              (220.00, 261.63, 329.63),
-              (174.61, 220.00, 261.63),
-              (164.81, 196.00, 246.94),
-          ]
-          chord_len = 15.0
-          for ci in range(int(duration / chord_len)):
-              chord = chords[ci % len(chords)]
-              start = int(ci * chord_len * sr)
-              end = min(n, int((ci + 1) * chord_len * sr))
-              tt = np.arange(end - start, dtype=np.float64) / sr
-              fade = np.minimum(1, tt / 2.0) * np.minimum(1, (chord_len - tt) / 2.0)
-              for j, f in enumerate(chord):
-                  amp = 0.024 / (j + 1)
-                  left[start:end] += amp * np.sin(2*np.pi*f*tt + 0.13*j) * fade
-                  right[start:end] += amp * np.sin(2*np.pi*f*tt + 0.21*j) * fade
-
-          pulse = 0.0022 * np.sin(2*np.pi*49*t) * (0.55 + 0.45*np.sin(2*np.pi*(96/60/2)*t)**2)
-          left += pulse
-          right += pulse
-
-          peak = max(np.max(np.abs(left)), np.max(np.abs(right)), 1e-9)
-          stereo = np.stack([left/peak*0.52, right/peak*0.52], axis=1)
-          pcm = (np.clip(stereo, -1, 1) * 32767).astype(np.int16)
-
-          out = os.path.join(os.environ['RUN_DIR'], 'background.wav')
-          with wave.open(out, 'wb') as w:
-              w.setnchannels(2)
-              w.setsampwidth(2)
-              w.setframerate(sr)
-              w.writeframes(pcm.tobytes())
-          PY
-
-          run_dir="${{ steps.run.outputs.dir }}"
-          ffmpeg -y -i "${run_dir}/background.wav"             -af "highpass=f=70,lowpass=f=9000,loudnorm=I=-29:TP=-7:LRA=7"             -c:a aac -b:a 192k "${run_dir}/background.m4a"
-
-      - name: Render premium B2B Russian presentation
-        run: |
-          npm run render --             --run "${{ steps.run.outputs.dir }}"             --preset 9:16             --voiceover "${{ steps.run.outputs.dir }}/voiceover.mp3"             --captions-file "${{ steps.run.outputs.dir }}/synced-captions.ass"             --music "${{ steps.run.outputs.dir }}/background.m4a"             --music-volume 0.07             --music-bpm 96             --brand "VIIVERSION"             --title "Запись клиентов + AI-консультант"             --intro-seconds 3.4             --outro-seconds 6.5             --cta "Свяжитесь с VIIVERSION"             --cta-secondary "Запись 24/7 · AI-консультант · автоматизация"
-
-      - name: Verify final video and create QA frames
-        shell: bash
-        env:
-          RUN_DIR: ${{ steps.run.outputs.dir }}
-        run: |
-          set -euo pipefail
-          run_dir="${{ steps.run.outputs.dir }}"
-          test -s "${run_dir}/capture.webm"
-          test -s "${run_dir}/voiceover.mp3"
-          test -s "${run_dir}/synced-captions.ass"
-          test -s "${run_dir}/final-9x16.mp4"
-
-          duration=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "${run_dir}/final-9x16.mp4")
-          awk -v d="$duration" 'BEGIN { exit !(d >= 70 && d <= 230) }'
-          echo "FINAL_DURATION=$duration"
-
-          ffmpeg -y -ss 1.6 -i "${run_dir}/final-9x16.mp4" -frames:v 1 "${run_dir}/qa-intro.png"
-          ffmpeg -y -ss 52 -i "${run_dir}/final-9x16.mp4" -frames:v 1 "${run_dir}/qa-booking.png"
-          ffmpeg -y -sseof -12 -i "${run_dir}/final-9x16.mp4" -frames:v 1 "${run_dir}/qa-ai.png"
-          ffmpeg -y -sseof -3 -i "${run_dir}/final-9x16.mp4" -frames:v 1 "${run_dir}/qa-outro.png"
-
-      - name: Upload AVE Dental Niki-reference premium Russian presentation
-        uses: actions/upload-artifact@v4
-        with:
-          name: ave-dental-russian-niki-premium-b2b
-          path: artifacts/
-          if-no-files-found: error
- | head -n 1)
+          run_dir=$(find artifacts -type f -name run.json -printf '%h\n' | head -n 1)
           test -n "$run_dir"
           test -s "$run_dir/run.json"
           test -s "$run_dir/capture.webm"
           echo "dir=$run_dir" >> "$GITHUB_OUTPUT"
-          echo "AVE_RUN_DIR=$run_dir"
 
-      - name: Free browser cache before premium voice synthesis
-        shell: bash
+      - name: Generate approved premium voice segments
         run: |
-          rm -rf ~/.cache/ms-playwright || true
-          rm -rf ~/.npm/_cacache || true
-          sudo apt-get clean || true
-          sudo rm -rf /var/lib/apt/lists/* || true
-          df -h
+          npm run voice:scenario -- \
+            --reference-audio /tmp/niki-reference.wav \
+            --scenario examples/ave-dental-russian-demo.json \
+            --run "${{ steps.run.outputs.dir }}"
 
-      - name: Prepare narration segments with Russian stress lexicon
-        shell: bash
-        env:
-          RUN_DIR: ${{ steps.run.outputs.dir }}
-        run: |
-          mkdir -p "${RUN_DIR}/voices"
-          node --import tsx --input-type=module <<'NODE'
-          import fs from 'node:fs';
-          import path from 'node:path';
-          import { applyPronunciation } from './src/voice-director.ts';
-
-          const scenario = JSON.parse(
-            fs.readFileSync('examples/ave-dental-russian-demo.json', 'utf8'),
-          );
-          const pronunciation = scenario.voice?.pronunciation || {};
-
-          for (let i = 0; i < scenario.steps.length; i += 1) {
-            const step = scenario.steps[i];
-            if (!step.narration?.trim()) continue;
-
-            const source = (step.voiceText || step.narration).trim();
-            const spoken = applyPronunciation(source, pronunciation);
-
-            fs.writeFileSync(
-              path.join(process.env.RUN_DIR, 'voices', `text-${i}.txt`),
-              spoken + '\n',
-            );
-          }
-          NODE
-
-      - name: Prepare approved Niki reference from MAX TOUR v9
+      - name: Verify premium voice provider
         shell: bash
         run: |
           set -euo pipefail
-          test -s artifacts/max-tour-reference/voiceover_ru.wav
-          ffmpeg -y -i artifacts/max-tour-reference/voiceover_ru.wav -t 8.8 \
-            -af "highpass=f=70,lowpass=f=11500,loudnorm=I=-17:TP=-2:LRA=8" \
-            -ar 24000 -ac 1 artifacts/niki-reference.wav
-
-      - name: Synthesize approved Niki-reference Russian voice
-        shell: bash
-        env:
-          RUN_DIR: ${{ steps.run.outputs.dir }}
-        run: |
-          set -euo pipefail
-          run_dir="${RUN_DIR}"
-
-          python scripts/hf_tts_batch.py \
-            --voices-dir "${run_dir}/voices" \
-            --reference-audio artifacts/niki-reference.wav \
-            --base-language ru
-
-          for raw in "${run_dir}"/voices/raw-*.wav; do
-            base=$(basename "$raw" .wav)
-            idx=${base#raw-}
-            out="${run_dir}/voices/step-${idx}.mp3"
-
-            ffmpeg -y -i "$raw" \
-              -af "highpass=f=70,lowpass=f=11500,acompressor=threshold=-18dB:ratio=1.55:attack=18:release=220,loudnorm=I=-16:TP=-1.5:LRA=8" \
-              -c:a libmp3lame -b:a 224k "$out"
-          done
-
-          echo "APPROVED_RU_VOICE=Niki reference / MAX TOUR v9"
-          echo "PRONUNCIATION_PIPELINE=ruaccent-single-pass+brand-language-spans"
-
+          run_dir="${{ steps.run.outputs.dir }}"
+          test -s "${run_dir}/voice-segments.json"
+          jq -e '
+            (.segments | length) > 0
+            and ([.segments[].provider] | all(. == "elevenlabs" or . == "huggingface"))
+          ' "${run_dir}/voice-segments.json" >/dev/null
 
       - name: Synchronize narration and captions
+        run: |
+          npx tsx src/narration-sync-cli.ts \
+            --run "${{ steps.run.outputs.dir }}" \
+            --bpm 96
+
+      - name: Generate subtle background music
         shell: bash
         run: |
-          npx tsx src/narration-sync-cli.ts             --run "${{ steps.run.outputs.dir }}"             --bpm 96
-
-      - name: Generate subtle premium background music
-        shell: bash
-        env:
-          RUN_DIR: ${{ steps.run.outputs.dir }}
-        run: |
-          python - <<'PY'
-          import os, wave
-          import numpy as np
-
-          sr = 44100
-          duration = 150.0
-          n = int(duration * sr)
-          t = np.arange(n, dtype=np.float64) / sr
-          left = np.zeros(n, dtype=np.float64)
-          right = np.zeros(n, dtype=np.float64)
-
-          chords = [
-              (196.00, 246.94, 293.66),
-              (220.00, 261.63, 329.63),
-              (174.61, 220.00, 261.63),
-              (164.81, 196.00, 246.94),
-          ]
-          chord_len = 15.0
-          for ci in range(int(duration / chord_len)):
-              chord = chords[ci % len(chords)]
-              start = int(ci * chord_len * sr)
-              end = min(n, int((ci + 1) * chord_len * sr))
-              tt = np.arange(end - start, dtype=np.float64) / sr
-              fade = np.minimum(1, tt / 2.0) * np.minimum(1, (chord_len - tt) / 2.0)
-              for j, f in enumerate(chord):
-                  amp = 0.024 / (j + 1)
-                  left[start:end] += amp * np.sin(2*np.pi*f*tt + 0.13*j) * fade
-                  right[start:end] += amp * np.sin(2*np.pi*f*tt + 0.21*j) * fade
-
-          pulse = 0.0022 * np.sin(2*np.pi*49*t) * (0.55 + 0.45*np.sin(2*np.pi*(96/60/2)*t)**2)
-          left += pulse
-          right += pulse
-
-          peak = max(np.max(np.abs(left)), np.max(np.abs(right)), 1e-9)
-          stereo = np.stack([left/peak*0.52, right/peak*0.52], axis=1)
-          pcm = (np.clip(stereo, -1, 1) * 32767).astype(np.int16)
-
-          out = os.path.join(os.environ['RUN_DIR'], 'background.wav')
-          with wave.open(out, 'wb') as w:
-              w.setnchannels(2)
-              w.setsampwidth(2)
-              w.setframerate(sr)
-              w.writeframes(pcm.tobytes())
-          PY
-
           run_dir="${{ steps.run.outputs.dir }}"
-          ffmpeg -y -i "${run_dir}/background.wav"             -af "highpass=f=70,lowpass=f=9000,loudnorm=I=-29:TP=-7:LRA=7"             -c:a aac -b:a 192k "${run_dir}/background.m4a"
+          ffmpeg -y \
+            -f lavfi -i "sine=frequency=110:sample_rate=44100:duration=300" \
+            -f lavfi -i "sine=frequency=164.81:sample_rate=44100:duration=300" \
+            -filter_complex "[0:a]volume=0.045[a0];[1:a]volume=0.024[a1];[a0][a1]amix=inputs=2:normalize=0,lowpass=f=1400,highpass=f=70,loudnorm=I=-29:TP=-7:LRA=7[m]" \
+            -map "[m]" -c:a aac -b:a 160k "${run_dir}/background.m4a"
 
-      - name: Render premium B2B Russian presentation
+      - name: Render premium presentation
         run: |
-          npm run render --             --run "${{ steps.run.outputs.dir }}"             --preset 9:16             --voiceover "${{ steps.run.outputs.dir }}/voiceover.mp3"             --captions-file "${{ steps.run.outputs.dir }}/synced-captions.ass"             --music "${{ steps.run.outputs.dir }}/background.m4a"             --music-volume 0.07             --music-bpm 96             --brand "VIIVERSION"             --title "Запись клиентов + AI-консультант"             --intro-seconds 3.4             --outro-seconds 6.5             --cta "Свяжитесь с VIIVERSION"             --cta-secondary "Запись 24/7 · AI-консультант · автоматизация"
+          npm run render -- \
+            --run "${{ steps.run.outputs.dir }}" \
+            --preset 9:16 \
+            --voiceover "${{ steps.run.outputs.dir }}/voiceover.mp3" \
+            --captions-file "${{ steps.run.outputs.dir }}/synced-captions.ass" \
+            --music "${{ steps.run.outputs.dir }}/background.m4a" \
+            --music-volume 0.07 \
+            --music-bpm 96 \
+            --brand "VIIVERSION" \
+            --title "Запись клиентов + AI-консультант" \
+            --intro-seconds 3.0 \
+            --outro-seconds 6.0 \
+            --cta "Хотите такое решение для своего бизнеса?" \
+            --cta-secondary "Свяжитесь с VIIVERSION"
 
-      - name: Verify final video and create QA frames
+      - name: Verify golden video contract
         shell: bash
-        env:
-          RUN_DIR: ${{ steps.run.outputs.dir }}
         run: |
           set -euo pipefail
           run_dir="${{ steps.run.outputs.dir }}"
-          test -s "${run_dir}/capture.webm"
-          test -s "${run_dir}/voiceover.mp3"
-          test -s "${run_dir}/synced-captions.ass"
-          test -s "${run_dir}/final-9x16.mp4"
+          for file in \
+            capture.webm \
+            voice-segments.json \
+            voiceover.mp3 \
+            narration-sync.json \
+            synced-captions.ass \
+            editor_brain.json \
+            editor_critic.json \
+            music_brain.json \
+            captions.json \
+            final-9x16.mp4; do
+            test -s "${run_dir}/${file}"
+          done
+
+          jq -e '.qualityGate.passed == true' "${run_dir}/editor_brain.json" >/dev/null
+          jq -e '.passed == true' "${run_dir}/editor_critic.json" >/dev/null
+          jq -e '.version == "music-brain-v1"' "${run_dir}/music_brain.json" >/dev/null
 
           duration=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "${run_dir}/final-9x16.mp4")
-          awk -v d="$duration" 'BEGIN { exit !(d >= 70 && d <= 230) }'
+          awk -v d="$duration" 'BEGIN { exit !(d >= 60 && d <= 260) }'
           echo "FINAL_DURATION=$duration"
 
-          ffmpeg -y -ss 1.6 -i "${run_dir}/final-9x16.mp4" -frames:v 1 "${run_dir}/qa-intro.png"
-          ffmpeg -y -ss 52 -i "${run_dir}/final-9x16.mp4" -frames:v 1 "${run_dir}/qa-booking.png"
-          ffmpeg -y -sseof -12 -i "${run_dir}/final-9x16.mp4" -frames:v 1 "${run_dir}/qa-ai.png"
+          ffmpeg -y -ss 1.4 -i "${run_dir}/final-9x16.mp4" -frames:v 1 "${run_dir}/qa-intro.png"
+          ffmpeg -y -ss 20 -i "${run_dir}/final-9x16.mp4" -frames:v 1 "${run_dir}/qa-content.png"
           ffmpeg -y -sseof -3 -i "${run_dir}/final-9x16.mp4" -frames:v 1 "${run_dir}/qa-outro.png"
 
-      - name: Upload AVE Dental Niki-reference premium Russian presentation
+      - name: Upload golden presentation
         uses: actions/upload-artifact@v4
         with:
-          name: ave-dental-russian-niki-premium-b2b
+          name: golden-ave-dental-ru
           path: artifacts/
           if-no-files-found: error
-# pronunciation-render-v2

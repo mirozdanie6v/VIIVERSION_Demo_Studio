@@ -6,7 +6,10 @@ const CONTAINER_PORT = 8080;
 const INACTIVITY_TIMEOUT_MS = 60 * 60 * 1000;
 const ACTIVE_IMAGE_KEY = "active-container-image";
 const ACTIVE_HYBRID_KEY = "active-production-hybrid";
+const ACTIVE_VOICE_CONFIG_KEY = "active-voice-config";
+const ACTIVE_AUTH_CONFIG_KEY = "active-auth-config";
 const INTERNAL_TOKEN_KEY = "internal-storage-token";
+const NIKI_REFERENCE_VERSION = "max-tour-v9-r1";
 const GENERATION_DAILY_LIMIT = 10;
 const INSPECTION_DAILY_LIMIT = 30;
 const ACTIVE_JOB_PREFIX = "active-job:";
@@ -95,7 +98,8 @@ main{max-width:760px;margin:0 auto;padding:56px 24px 88px}
 </main>
 <script>
 const jobId=${JSON.stringify(safeId)};
-const endpoint="/v1/jobs/"+encodeURIComponent(jobId);
+const statusToken=new URLSearchParams(window.location.search).get("status_token");
+const endpoint="/v1/jobs/"+encodeURIComponent(jobId)+(statusToken?"?status_token="+encodeURIComponent(statusToken):"");
 const $=(id)=>document.getElementById(id);
 const age=(iso)=>iso?Math.max(0,Math.floor((Date.now()-Date.parse(iso))/1000)):0;
 function render(job){
@@ -108,7 +112,11 @@ function render(job){
  $("heartbeat").textContent="Heartbeat "+age(job.heartbeatAt)+"s ago";
  $("retry").textContent=job.retryReason?"Automatic recovery: "+job.retryReason:"";
  $("error").textContent=job.error||"";
- $("artifact").innerHTML=job.artifactReady?'<a href="'+endpoint+'/artifact">Open final MP4</a>':"";
+ $("artifact").textContent=job.artifactReady
+   ? (statusToken
+      ? "Video is ready. Return to ChatGPT to open the final MP4."
+      : "Video is ready.")
+   : "";
  const history=$("history");history.innerHTML="";
  for(const item of (job.history||[]).slice().reverse()){
   const li=document.createElement("li");
@@ -140,9 +148,55 @@ poll();
   });
 }
 
-function publicStaticResponse(request) {
+function oauthChallenge(scope = "") {
+  const resourceMetadata =
+    "https://" + PUBLIC_HOST + "/.well-known/oauth-protected-resource";
+  const parts = [
+    'Bearer resource_metadata="' + resourceMetadata + '"',
+  ];
+  if (scope) parts.push('scope="' + scope + '"');
+  parts.push('error="invalid_token"');
+  parts.push('error_description="Authentication required."');
+  return parts.join(", ");
+}
+
+function publicStaticResponse(request, env) {
   if (request.method !== "GET" && request.method !== "HEAD") return undefined;
   const url = new URL(request.url);
+
+  if (url.pathname === "/.well-known/oauth-protected-resource") {
+    const issuer = String(env.DEMO_STUDIO_OAUTH_ISSUER ?? "").replace(/\/$/, "");
+    if (!issuer) {
+      return new Response(
+        JSON.stringify({ error: "OAuth authorization server is not configured." }),
+        {
+          status: 503,
+          headers: {
+            "Content-Type": "application/json; charset=utf-8",
+            "Cache-Control": "no-store",
+          },
+        },
+      );
+    }
+
+    return new Response(
+      JSON.stringify({
+        resource: "https://" + PUBLIC_HOST,
+        authorization_servers: [issuer],
+        scopes_supported: ["demo.inspect", "demo.generate", "demo.read"],
+        resource_documentation: "https://" + PUBLIC_HOST + "/support",
+        resource_policy_uri: "https://" + PUBLIC_HOST + "/privacy",
+        resource_tos_uri: "https://" + PUBLIC_HOST + "/terms",
+      }),
+      {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json; charset=utf-8",
+          "Cache-Control": "public, max-age=300",
+        },
+      },
+    );
+  }
 
   const jobStatusMatch = url.pathname.match(
     /^\/jobs\/([0-9a-f-]{36})$/i,
@@ -266,8 +320,91 @@ export class DemoStudioContainer extends DurableObject {
     }
   }
 
-  async consumeDailyQuota(request, kind, limit) {
-    const identity = await quotaIdentity(request);
+  async authenticatePublicRequest(request, scopes = []) {
+    this.starting ??= this.startAndWaitForPort().finally(() => {
+      this.starting = undefined;
+    });
+    await this.starting;
+
+    const internalToken = await this.getInternalToken();
+    const authorization = request.headers.get("authorization") ?? "";
+    const response = await this.ctx.container
+      .getTcpPort(CONTAINER_PORT)
+      .fetch("http://container/__internal/auth-check", {
+        method: "GET",
+        headers: {
+          Authorization: authorization,
+          "x-demo-studio-internal-token": internalToken,
+          "x-demo-studio-required-scopes": scopes.join(" "),
+          "x-forwarded-host": PUBLIC_HOST,
+          "x-forwarded-proto": "https",
+        },
+        signal: AbortSignal.timeout(10_000),
+      });
+
+    if (!response.ok) {
+      const detail = await response.text();
+      const status = response.status === 401 ? 401 : 503;
+      return {
+        ok: false,
+        response: new Response(
+          JSON.stringify({
+            error: detail || "Authentication failed.",
+          }),
+          {
+            status,
+            headers: {
+              "Content-Type": "application/json; charset=utf-8",
+              "Cache-Control": "no-store",
+              ...(status === 401
+                ? {
+                    "WWW-Authenticate": oauthChallenge(scopes.join(" ")),
+                  }
+                : {}),
+            },
+          },
+        ),
+      };
+    }
+
+    const payload = await response.json();
+    if (!payload?.identityHash) {
+      return {
+        ok: false,
+        response: new Response(
+          JSON.stringify({ error: "Authenticated identity is unavailable." }),
+          {
+            status: 503,
+            headers: {
+              "Content-Type": "application/json; charset=utf-8",
+              "Cache-Control": "no-store",
+            },
+          },
+        ),
+      };
+    }
+
+    return {
+      ok: true,
+      identityHash: String(payload.identityHash),
+      mode: payload.mode,
+      scopes: Array.isArray(payload.scopes) ? payload.scopes : [],
+    };
+  }
+
+  async consumeDailyQuota(request, kind, limit, scopes = []) {
+    const auth = await this.authenticatePublicRequest(request, scopes);
+    if (!auth.ok) {
+      return {
+        allowed: false,
+        used: 0,
+        limit,
+        remaining: 0,
+        authResponse: auth.response,
+      };
+    }
+
+    const identity = auth.identityHash;
     const day = new Date().toISOString().slice(0, 10);
     const key = "quota:" + day + ":" + kind + ":" + identity;
 
@@ -335,7 +472,9 @@ export class DemoStudioContainer extends DurableObject {
         request,
         "generation",
         GENERATION_DAILY_LIMIT,
+        ["demo.generate"],
       );
+      if (quota.authResponse) return quota.authResponse;
       return quota.allowed
         ? undefined
         : this.quotaErrorResponse(undefined, "generation", quota);
@@ -366,7 +505,9 @@ export class DemoStudioContainer extends DurableObject {
         request,
         "generation",
         GENERATION_DAILY_LIMIT,
+        ["demo.generate"],
       );
+      if (quota.authResponse) return quota.authResponse;
       return quota.allowed
         ? undefined
         : this.quotaErrorResponse(payload, "generation", quota);
@@ -380,7 +521,9 @@ export class DemoStudioContainer extends DurableObject {
         request,
         "inspection",
         INSPECTION_DAILY_LIMIT,
+        ["demo.inspect"],
       );
+      if (quota.authResponse) return quota.authResponse;
       return quota.allowed
         ? undefined
         : this.quotaErrorResponse(payload, "inspection", quota);
@@ -398,12 +541,6 @@ export class DemoStudioContainer extends DurableObject {
     }
 
     return token;
-  }
-
-  isPublicAuthorized(request) {
-    const configured = this.env.DEMO_STUDIO_API_KEY;
-    if (!configured) return true;
-    return bearerToken(request) === configured;
   }
 
   async scheduleWatchdog() {
@@ -439,12 +576,15 @@ export class DemoStudioContainer extends DurableObject {
     const checkpointMatch = url.pathname.match(
       /^\/__internal\/checkpoints\/([0-9a-f-]{36})\/([a-z0-9._-]+)$/i,
     );
+    const voiceReference =
+      url.pathname === "/__internal/voice-references/niki.wav";
 
     if (
       !artifactMatch &&
       !jobMatch &&
       !recoveryMatch &&
-      !checkpointMatch
+      !checkpointMatch &&
+      !voiceReference
     ) {
       return undefined;
     }
@@ -452,6 +592,28 @@ export class DemoStudioContainer extends DurableObject {
     const expected = await this.getInternalToken();
     if (bearerToken(request) !== expected) {
       return new Response("Unauthorized", { status: 401 });
+    }
+
+    if (voiceReference && request.method === "GET") {
+      const object = await this.env.DEMO_STUDIO_ARTIFACTS.get(
+        "voice-references/niki-reference.wav",
+      );
+      if (!object) return new Response("Voice reference not found", { status: 404 });
+
+      return new Response(object.body, {
+        status: 200,
+        headers: {
+          "Content-Type": "audio/wav",
+          "Content-Length": String(object.size),
+          "Cache-Control": "private, max-age=31536000, immutable",
+          ETag: object.httpEtag,
+          "X-Voice-Reference-Version": NIKI_REFERENCE_VERSION,
+        },
+      });
+    }
+
+    if (voiceReference) {
+      return new Response("Method not allowed", { status: 405 });
     }
 
     if (checkpointMatch && request.method === "GET") {
@@ -574,21 +736,53 @@ export class DemoStudioContainer extends DurableObject {
 
     if (!artifactMatch && !jobMatch) return undefined;
 
-    if (!this.isPublicAuthorized(request)) {
-      return new Response(
-        JSON.stringify({ error: "Invalid or missing bearer token." }),
-        {
-          status: 401,
-          headers: { "Content-Type": "application/json; charset=utf-8" },
-        },
-      );
+    const id = artifactMatch?.[1] ?? jobMatch?.[1];
+    const jobObject = await this.env.DEMO_STUDIO_ARTIFACTS.get(
+      "jobs/" + id + ".json",
+    );
+    if (!jobObject) return undefined;
+
+    const snapshot = JSON.parse(await jobObject.text());
+    let capabilityAuthorized = false;
+
+    if (!artifactMatch) {
+      const statusToken = url.searchParams.get("status_token");
+      if (statusToken && snapshot.statusTokenHash) {
+        const digest = await crypto.subtle.digest(
+          "SHA-256",
+          new TextEncoder().encode(statusToken),
+        );
+        const tokenHash = Array.from(new Uint8Array(digest))
+          .map((byte) => byte.toString(16).padStart(2, "0"))
+          .join("");
+        capabilityAuthorized = tokenHash === snapshot.statusTokenHash;
+      }
+    }
+
+    if (!capabilityAuthorized) {
+      const auth = await this.authenticatePublicRequest(request, ["demo.read"]);
+      if (!auth.ok) return auth.response;
+      if (
+        !snapshot.ownerIdentityHash ||
+        snapshot.ownerIdentityHash !== auth.identityHash
+      ) {
+        return new Response(
+          JSON.stringify({ error: "Demo job not found." }),
+          {
+            status: 404,
+            headers: {
+              "Content-Type": "application/json; charset=utf-8",
+              "Cache-Control": "no-store",
+            },
+          },
+        );
+      }
     }
 
     if (artifactMatch) {
       const object = await this.env.DEMO_STUDIO_ARTIFACTS.get(
-        "artifacts/" + artifactMatch[1] + ".mp4",
+        "artifacts/" + id + ".mp4",
       );
-
       if (!object) return undefined;
 
       return new Response(object.body, {
@@ -598,7 +792,7 @@ export class DemoStudioContainer extends DurableObject {
           "Content-Length": String(object.size),
           "Content-Disposition":
             'attachment; filename="viiversion-demo-' +
-            artifactMatch[1] +
+            id +
             '.mp4"',
           "Cache-Control": "private, max-age=3600",
           ETag: object.httpEtag,
@@ -606,13 +800,9 @@ export class DemoStudioContainer extends DurableObject {
       });
     }
 
-    const object = await this.env.DEMO_STUDIO_ARTIFACTS.get(
-      "jobs/" + jobMatch[1] + ".json",
-    );
+    delete snapshot.ownerIdentityHash;
+    delete snapshot.statusTokenHash;
 
-    if (!object) return undefined;
-
-    const snapshot = JSON.parse(await object.text());
     const now = Date.now();
     const stageStarted = Date.parse(
       snapshot.stageStartedAt ?? snapshot.updatedAt ?? snapshot.createdAt,
@@ -642,7 +832,7 @@ export class DemoStudioContainer extends DurableObject {
       headers: {
         "Content-Type": "application/json; charset=utf-8",
         "Cache-Control": "no-store",
-        ETag: object.httpEtag,
+        ETag: jobObject.httpEtag,
       },
     });
   }
@@ -916,6 +1106,45 @@ export class DemoStudioContainer extends DurableObject {
     return this.ctx.container.getTcpPort(CONTAINER_PORT).fetch(forwarded);
   }
 
+  async voiceConfigFingerprint() {
+    const values = [
+      this.env.ELEVENLABS_API_KEY ?? "",
+      this.env.ELEVENLABS_VOICE_ID ?? "",
+      this.env.ELEVENLABS_VOICE_ID_RU ?? "",
+      this.env.ELEVENLABS_VOICE_ID_RU_RU ?? "",
+      this.env.ELEVENLABS_VOICE_ID_EN ?? "",
+      this.env.ELEVENLABS_VOICE_ID_EN_US ?? "",
+      this.env.ELEVENLABS_MODEL ?? "eleven_v3",
+      NIKI_REFERENCE_VERSION,
+    ];
+    const digest = await crypto.subtle.digest(
+      "SHA-256",
+      new TextEncoder().encode(values.join("\n")),
+    );
+    return Array.from(new Uint8Array(digest))
+      .slice(0, 12)
+      .map((byte) => byte.toString(16).padStart(2, "0"))
+      .join("");
+  }
+
+  async authConfigFingerprint() {
+    const values = [
+      this.env.DEMO_STUDIO_OAUTH_ISSUER ?? "",
+      this.env.DEMO_STUDIO_OAUTH_JWKS_URI ?? "",
+      this.env.DEMO_STUDIO_OAUTH_AUDIENCE ?? ("https://" + PUBLIC_HOST),
+      this.env.DEMO_STUDIO_OAUTH_SCOPES ?? "demo.inspect demo.generate demo.read",
+      this.env.DEMO_STUDIO_API_KEY ?? "",
+    ];
+    const digest = await crypto.subtle.digest(
+      "SHA-256",
+      new TextEncoder().encode(values.join("\n")),
+    );
+    return Array.from(new Uint8Array(digest))
+      .slice(0, 12)
+      .map((byte) => byte.toString(16).padStart(2, "0"))
+      .join("");
+  }
+
   async ensureCurrentRuntime(container) {
     const desiredImage = container.images.app;
     const desiredHybrid =
@@ -924,14 +1153,28 @@ export class DemoStudioContainer extends DurableObject {
         .toLowerCase() === "false"
         ? "false"
         : "true";
-    const [activeImage, activeHybrid] = await Promise.all([
+    const desiredVoiceConfig = await this.voiceConfigFingerprint();
+    const desiredAuthConfig = await this.authConfigFingerprint();
+    const [
+      activeImage,
+      activeHybrid,
+      activeVoiceConfig,
+      activeAuthConfig,
+    ] = await Promise.all([
       this.ctx.storage.get(ACTIVE_IMAGE_KEY),
       this.ctx.storage.get(ACTIVE_HYBRID_KEY),
+      this.ctx.storage.get(ACTIVE_VOICE_CONFIG_KEY),
+      this.ctx.storage.get(ACTIVE_AUTH_CONFIG_KEY),
     ]);
 
     if (
       container.running &&
-      (activeImage !== desiredImage || activeHybrid !== desiredHybrid)
+      (
+        activeImage !== desiredImage ||
+        activeHybrid !== desiredHybrid ||
+        activeVoiceConfig !== desiredVoiceConfig ||
+        activeAuthConfig !== desiredAuthConfig
+      )
     ) {
       await container.destroy(
         "Replacing stale Demo Studio container runtime",
@@ -939,10 +1182,17 @@ export class DemoStudioContainer extends DurableObject {
       await Promise.all([
         this.ctx.storage.delete(ACTIVE_IMAGE_KEY),
         this.ctx.storage.delete(ACTIVE_HYBRID_KEY),
+        this.ctx.storage.delete(ACTIVE_VOICE_CONFIG_KEY),
+        this.ctx.storage.delete(ACTIVE_AUTH_CONFIG_KEY),
       ]);
     }
 
-    return { desiredImage, desiredHybrid };
+    return {
+      desiredImage,
+      desiredHybrid,
+      desiredVoiceConfig,
+      desiredAuthConfig,
+    };
   }
 
   async startAndWaitForPort() {
@@ -951,7 +1201,12 @@ export class DemoStudioContainer extends DurableObject {
       throw new Error("Cloudflare Container binding is unavailable.");
     }
 
-    const { desiredImage, desiredHybrid } = await this.ensureCurrentRuntime(container);
+    const {
+      desiredImage,
+      desiredHybrid,
+      desiredVoiceConfig,
+      desiredAuthConfig,
+    } = await this.ensureCurrentRuntime(container);
 
     if (!container.running) {
       const internalToken = await this.getInternalToken();
@@ -967,23 +1222,57 @@ export class DemoStudioContainer extends DurableObject {
           PUBLIC_HOST + ",container,localhost,127.0.0.1",
         DEMO_STUDIO_ALLOWED_ORIGINS: "https://" + PUBLIC_HOST,
         DEMO_STUDIO_REUSE_BROWSER: "true",
+        DEMO_STUDIO_REQUIRE_PREMIUM_VOICE: "true",
+        HF_TTS_PREMIUM_DEFAULT: "1",
+        HF_TTS_REFERENCE_URL_RU:
+          "https://" + PUBLIC_HOST + "/__internal/voice-references/niki.wav",
+        HF_TTS_REFERENCE_VERSION: NIKI_REFERENCE_VERSION,
         DEMO_STUDIO_FFMPEG_PRESET:
           this.env.DEMO_STUDIO_FFMPEG_PRESET ?? "veryfast",
         DEMO_STUDIO_PRODUCTION_HYBRID: desiredHybrid,
         DEMO_STUDIO_MAX_CONCURRENT_JOBS: "1",
-        DEMO_STUDIO_DAILY_JOB_LIMIT: this.env.DEMO_STUDIO_API_KEY ? "10" : "0",
+        DEMO_STUDIO_DAILY_JOB_LIMIT:
+          (this.env.DEMO_STUDIO_OAUTH_ISSUER || this.env.DEMO_STUDIO_API_KEY)
+            ? "10"
+            : "0",
         DEMO_STUDIO_MAX_JOB_ATTEMPTS: "3",
         DEMO_STUDIO_HEARTBEAT_MS: "10000",
         DEMO_STUDIO_STORAGE_ROOT: "/data/jobs",
         DEMO_STUDIO_INTERNAL_TOKEN: internalToken,
         ALLOW_PRIVATE_TARGETS: "false",
-        DEMO_STUDIO_ALLOW_UNAUTHENTICATED: this.env.DEMO_STUDIO_API_KEY
-          ? "false"
-          : "true",
+        DEMO_STUDIO_ALLOW_UNAUTHENTICATED:
+          (this.env.DEMO_STUDIO_OAUTH_ISSUER || this.env.DEMO_STUDIO_API_KEY)
+            ? "false"
+            : "true",
       };
 
       if (this.env.OPENAI_API_KEY) {
         env.OPENAI_API_KEY = this.env.OPENAI_API_KEY;
+      }
+
+      for (const key of [
+        "ELEVENLABS_API_KEY",
+        "ELEVENLABS_VOICE_ID",
+        "ELEVENLABS_VOICE_ID_RU",
+        "ELEVENLABS_VOICE_ID_RU_RU",
+        "ELEVENLABS_VOICE_ID_EN",
+        "ELEVENLABS_VOICE_ID_EN_US",
+        "ELEVENLABS_MODEL",
+      ]) {
+        if (this.env[key]) {
+          env[key] = this.env[key];
+        }
+      }
+
+      for (const key of [
+        "DEMO_STUDIO_OAUTH_ISSUER",
+        "DEMO_STUDIO_OAUTH_JWKS_URI",
+        "DEMO_STUDIO_OAUTH_AUDIENCE",
+        "DEMO_STUDIO_OAUTH_SCOPES",
+      ]) {
+        if (this.env[key]) {
+          env[key] = this.env[key];
+        }
       }
 
       if (this.env.DEMO_STUDIO_API_KEY) {
@@ -1014,6 +1303,8 @@ export class DemoStudioContainer extends DurableObject {
           await Promise.all([
             this.ctx.storage.put(ACTIVE_IMAGE_KEY, desiredImage),
             this.ctx.storage.put(ACTIVE_HYBRID_KEY, desiredHybrid),
+            this.ctx.storage.put(ACTIVE_VOICE_CONFIG_KEY, desiredVoiceConfig),
+            this.ctx.storage.put(ACTIVE_AUTH_CONFIG_KEY, desiredAuthConfig),
           ]);
           return;
         }
@@ -1062,7 +1353,7 @@ export default {
       });
     }
 
-    const staticResponse = publicStaticResponse(request);
+    const staticResponse = publicStaticResponse(request, env);
     if (staticResponse) return staticResponse;
     return env.DEMO_STUDIO.getByName("primary").fetch(request);
   },

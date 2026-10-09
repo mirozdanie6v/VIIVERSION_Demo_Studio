@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildCaptions,
+  buildMainVideoFilters,
   buildNarration,
   resolveRenderEncoderPreset,
 } from "../src/render.js";
@@ -85,4 +86,19 @@ test("render encoder preset defaults to measured veryfast and allows rollback ov
     resolveRenderEncoderPreset("faster", { DEMO_STUDIO_FFMPEG_PRESET: "veryfast" }),
     "faster",
   );
+});
+
+test("vertical golden video fills 1080x1920 without shrinking the UI into a padded inset", () => {
+  const filters = buildMainVideoFilters(1080, 1920, []);
+  const output = filters.join(";");
+  assert.match(output, /scale=1080:1920:force_original_aspect_ratio=increase/);
+  assert.match(output, /crop=1080:1920:\(iw-ow\)\/2:\(ih-oh\)\/2/);
+  assert.doesNotMatch(output, /pad=1080:1920|scale=900:1480/);
+});
+
+test("landscape presentation retains its existing aspect-preserving framing", () => {
+  const filters = buildMainVideoFilters(1920, 1080, []);
+  const output = filters.join(";");
+  assert.match(output, /scale=1920:1080:force_original_aspect_ratio=decrease/);
+  assert.match(output, /pad=1920:1080/);
 });

@@ -1,0 +1,97 @@
+name: Golden Video Release Gate
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'scripts/**'
+      - 'config/golden-video-matrix.json'
+      - 'examples/max-tour-russian-premium.json'
+      - 'examples/max-tour-english-2min.json'
+      - 'examples/ave-dental-russian-demo.json'
+      - 'examples/ave-dental-english-demo.json'
+      - 'examples/the-cloud-russian-demo.json'
+      - '.github/workflows/max-tour-russian-premium.yml'
+      - '.github/workflows/max-tour-english-2min.yml'
+      - '.github/workflows/ave-dental-russian-demo.yml'
+      - '.github/workflows/ave-dental-english-demo.yml'
+      - '.github/workflows/the-cloud-demo.yml'
+      - '.github/workflows/golden-video-gate.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run golden:contract
+
+  max-tour-ru:
+    needs: contract
+    uses: ./.github/workflows/max-tour-russian-premium.yml
+    secrets: inherit
+
+  max-tour-en:
+    needs: contract
+    uses: ./.github/workflows/max-tour-english-2min.yml
+    secrets: inherit
+
+  ave-dental-ru:
+    needs: contract
+    uses: ./.github/workflows/ave-dental-russian-demo.yml
+    secrets: inherit
+
+  ave-dental-en:
+    needs: contract
+    uses: ./.github/workflows/ave-dental-english-demo.yml
+    secrets: inherit
+
+  the-cloud-ru:
+    needs: contract
+    uses: ./.github/workflows/the-cloud-demo.yml
+    secrets: inherit
+
+  release-ready:
+    if: always()
+    needs:
+      - contract
+      - max-tour-ru
+      - max-tour-en
+      - ave-dental-ru
+      - ave-dental-en
+      - the-cloud-ru
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every golden case
+        env:
+          CONTRACT: ${{ needs.contract.result }}
+          MAX_TOUR_RU: ${{ needs.max-tour-ru.result }}
+          MAX_TOUR_EN: ${{ needs.max-tour-en.result }}
+          AVE_RU: ${{ needs.ave-dental-ru.result }}
+          AVE_EN: ${{ needs.ave-dental-en.result }}
+          CLOUD_RU: ${{ needs.the-cloud-ru.result }}
+        run: |
+          set -euo pipefail
+          printf '%s\n' \
+            "contract=$CONTRACT" \
+            "max-tour-ru=$MAX_TOUR_RU" \
+            "max-tour-en=$MAX_TOUR_EN" \
+            "ave-ru=$AVE_RU" \
+            "ave-en=$AVE_EN" \
+            "the-cloud-ru=$CLOUD_RU"
+          test "$CONTRACT" = "success"
+          test "$MAX_TOUR_RU" = "success"
+          test "$MAX_TOUR_EN" = "success"
+          test "$AVE_RU" = "success"
+          test "$AVE_EN" = "success"
+          test "$CLOUD_RU" = "success"

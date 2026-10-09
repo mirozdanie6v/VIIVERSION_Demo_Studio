@@ -176,3 +176,37 @@ test("premium locale preference does not override an explicit provider", () => {
     "huggingface",
   );
 });
+
+
+test("strict premium mode refuses non-premium fallback for Russian presenter", () => {
+  const router = new VoiceRouter({
+    providers: [
+      new FakeProvider("elevenlabs", true, false, ["*"]),
+      new FakeProvider("huggingface", false, false, ["ru-RU"]),
+      new FakeProvider("openai", false, true, ["*"]),
+      new FakeProvider("piper", false, true, ["ru-RU"]),
+    ],
+    context: { env: { DEMO_STUDIO_REQUIRE_PREMIUM_VOICE: "true" } },
+  });
+
+  assert.equal(
+    router.inspect({ ...request, locale: "ru-RU", persona: "viiversion-presenter" }).selected,
+    undefined,
+  );
+});
+
+test("strict premium mode accepts approved premium provider", () => {
+  const router = new VoiceRouter({
+    providers: [
+      new FakeProvider("huggingface", false, true, ["en-US"]),
+      new FakeProvider("openai", false, true, ["*"]),
+      new FakeProvider("piper", false, true, ["en-US"]),
+    ],
+    context: { env: { DEMO_STUDIO_REQUIRE_PREMIUM_VOICE: "true" } },
+  });
+
+  assert.equal(
+    router.inspect({ ...request, locale: "en-US", persona: "viiversion-presenter" }).selected,
+    "huggingface",
+  );
+});

@@ -1,6 +1,14 @@
 import { DEMO_STUDIO_VERSION } from "./version.js";
 
 export function buildOpenApiDocument(baseUrl = process.env.PUBLIC_BASE_URL ?? "http://localhost:8787") {
+  const issuer = process.env.DEMO_STUDIO_OAUTH_ISSUER?.replace(/\/$/, "");
+  const oauthEnabled = Boolean(issuer);
+  const oauthScopes = {
+    "demo.inspect": "Inspect authorized web applications",
+    "demo.generate": "Create Demo Studio video jobs",
+    "demo.read": "Read the current user's Demo Studio jobs and artifacts",
+  };
+
   return {
     openapi: "3.1.0",
     info: {
@@ -16,6 +24,24 @@ export function buildOpenApiDocument(baseUrl = process.env.PUBLIC_BASE_URL ?? "h
           type: "http",
           scheme: "bearer",
         },
+        ...(oauthEnabled
+          ? {
+              oauth2: {
+                type: "oauth2",
+                flows: {
+                  authorizationCode: {
+                    authorizationUrl:
+                      process.env.DEMO_STUDIO_OAUTH_AUTHORIZATION_URL ??
+                      issuer + "/authorize",
+                    tokenUrl:
+                      process.env.DEMO_STUDIO_OAUTH_TOKEN_URL ??
+                      issuer + "/oauth/token",
+                    scopes: oauthScopes,
+                  },
+                },
+              },
+            }
+          : {}),
       },
       schemas: {
         CreateDemoJob: {
@@ -99,7 +125,9 @@ export function buildOpenApiDocument(baseUrl = process.env.PUBLIC_BASE_URL ?? "h
         },
       },
     },
-    security: [{ bearerAuth: [] }],
+    security: oauthEnabled
+      ? [{ oauth2: ["demo.read"] }]
+      : [{ bearerAuth: [] }],
     paths: {
       "/health": {
         get: {

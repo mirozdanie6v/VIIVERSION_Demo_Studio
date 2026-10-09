@@ -15,7 +15,7 @@ RUN npm ci --include=dev --no-fund --no-audit \
   && python3 -m venv /opt/viiversion-tts \
   && /opt/viiversion-tts/bin/python -m pip install --no-cache-dir --upgrade pip \
   && /opt/viiversion-tts/bin/python -m pip install --no-cache-dir torch torchaudio --index-url https://download.pytorch.org/whl/cpu \
-  && /opt/viiversion-tts/bin/python -m pip install --no-cache-dir "setuptools<82" resemble-perth numpy chatterbox-tts supertonic \
+  && /opt/viiversion-tts/bin/python -m pip install --no-cache-dir "setuptools<82" resemble-perth numpy chatterbox-tts supertonic stressonnx==0.0.2 \
   && rm -rf /root/.cache/pip /var/lib/apt/lists/*
 
 COPY tsconfig.json ./
