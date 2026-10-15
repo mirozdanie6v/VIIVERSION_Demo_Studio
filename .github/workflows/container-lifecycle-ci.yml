@@ -28,6 +28,8 @@ jobs:
         run: |
           node --check cloudflare/worker.js
           node --check cloudflare/container-lifecycle.js
+      - name: Bundle Cloudflare Worker
+        run: npx esbuild cloudflare/worker.js --bundle --platform=browser --format=esm --external:cloudflare:workers --outfile=/tmp/demo-studio-worker.js
       - name: Type check
         run: npm run typecheck
       - name: Test suite
