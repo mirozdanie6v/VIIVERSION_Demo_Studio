@@ -85,6 +85,20 @@ jobs:
           before=$(active_instances)
           stage_success initial-instance-api
           stage_success instance-count-before-${before}
+          if [ "${before}" -gt 0 ]; then
+            instance_state=$(jq -r '.result[0].status.state // "unknown"' /tmp/instances.json)
+            if [[ "${instance_state}" =~ ^[a-z]+$ ]]; then
+              stage_success instance-state-${instance_state}
+            fi
+            started_at=$(jq -r '.result[0].started_at // empty' /tmp/instances.json)
+            if [ -n "${started_at}" ]; then
+              started_epoch=$(date -d "${started_at}" +%s)
+              age_minutes=$(( ( $(date +%s) - started_epoch ) / 60 ))
+              if [ "${age_minutes}" -ge 0 ] && [ "${age_minutes}" -le 9999 ]; then
+                stage_success instance-age-min-${age_minutes}
+              fi
+            fi
+          fi
           for i in 1 2 3 4 5; do
             curl -fsS --max-time 30 "${base}/health?light=${i}" -o /tmp/health-iteration.json
             jq -e '.healthScope == "edge" and .containerChecked == false' /tmp/health-iteration.json >/dev/null
