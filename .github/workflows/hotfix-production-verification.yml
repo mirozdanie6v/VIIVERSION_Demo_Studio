@@ -1,0 +1,56 @@
+name: Verify production-based Demo Studio hotfix
+on:
+  push:
+    branches:
+      - hotfix/demo-studio-idle-from-prod-20261015
+permissions:
+  contents: read
+  statuses: write
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - name: Verify hotfix baseline and tests
+        id: audit
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(node -p "require('./package.json').version")" = "0.14.1"
+          npm ci --no-fund --no-audit
+          node --check cloudflare/worker.js
+          node --check cloudflare/container-lifecycle.js
+          npx esbuild cloudflare/worker.js --bundle --platform=browser --format=esm --external:cloudflare:workers --outfile=/tmp/demo-studio-prod-worker.js
+          npm run typecheck
+          npm test
+      - name: Report hotfix test outcome
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          AUDIT_OUTCOME: ${{ steps.audit.outcome }}
+        run: |
+          set -euo pipefail
+          if [ "${AUDIT_OUTCOME}" = "success" ]; then
+            state=success
+            description="Production-based Demo Studio lifecycle hotfix tests passed"
+          else
+            state=failure
+            description="Production-based Demo Studio hotfix validation failed"
+          fi
+          jq -n --arg state "${state}" --arg description "${description}" \
+            '{state:$state,description:$description,context:"demo-studio/prod-hotfix-validation"}' > /tmp/status.json
+          curl -fsS -X POST \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "Content-Type: application/json" \
+            --data-binary @/tmp/status.json \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" >/dev/null
+      - name: Fail if hotfix validation failed
+        if: steps.audit.outcome != 'success'
+        run: exit 1
