@@ -84,12 +84,14 @@ jobs:
           }
           before=$(active_instances)
           stage_success initial-instance-api
+          stage_success instance-count-before-${before}
           for i in 1 2 3 4 5; do
             curl -fsS --max-time 30 "${base}/health?light=${i}" -o /tmp/health-iteration.json
             jq -e '.healthScope == "edge" and .containerChecked == false' /tmp/health-iteration.json >/dev/null
           done
           after=$(active_instances)
           stage_success repeat-instance-api
+          stage_success instance-count-after-${after}
           echo "Active instances before edge health probes: ${before}; after: ${after}"
           if [ "${before}" != "0" ] || [ "${after}" != "0" ]; then
             echo "INCONCLUSIVE: container(s) active; may be legitimate generation work. No changes performed."
