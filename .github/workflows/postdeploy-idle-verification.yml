@@ -75,6 +75,12 @@ jobs:
           test -n "${app_id}" || { echo "Demo Studio container application was not uniquely identifiable"; exit 1; }
           stage_success cloudflare-app
 
+          # The previously observed instance had been running for only seven
+          # minutes. Wait beyond the 10-minute configured idle timeout before
+          # determining whether it is stuck. This is read-only; no forced stop.
+          sleep 360
+          stage_success delayed-observation
+
           active_instances() {
             curl -fsS --max-time 30 "${api}/accounts/${account}/containers/applications/${app_id}/instances-v2?state=active&per_page=1000" \
               -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -o /tmp/instances.json
