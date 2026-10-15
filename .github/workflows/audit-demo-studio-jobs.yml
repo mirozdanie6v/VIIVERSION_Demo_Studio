@@ -1,0 +1,117 @@
+name: Audit Demo Studio Job State (read only)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/audit-demo-studio-jobs.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      R2_BUCKET_NAME: viiversion-demo-studio-artifacts
+    steps:
+      - name: Read-only inspect stored job/recovery records
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          import sys
+          from urllib.parse import quote, urlencode
+          from urllib.request import Request, urlopen
+          from urllib.error import HTTPError, URLError
+
+          token = os.environ.get("CLOUDFLARE_API_TOKEN", "")
+          account = os.environ.get("CLOUDFLARE_ACCOUNT_ID", "")
+          bucket = os.environ["R2_BUCKET_NAME"]
+          if not token:
+              raise RuntimeError("Cloudflare token is unavailable: cannot verify job state")
+
+          def get(url, json_response=True):
+              request = Request(url, headers={"Authorization": "Bearer " + token}, method="GET")
+              with urlopen(request, timeout=30) as response:
+                  raw = response.read()
+              if not json_response:
+                  return raw
+              doc = json.loads(raw)
+              if not isinstance(doc, dict) or doc.get("success") is not True:
+                  raise RuntimeError("Cloudflare read-only API returned an unsuccessful response")
+              return doc
+
+          origin = "https://api.cloudflare.com/client/v4"
+          if not account:
+              accounts = []
+              for endpoint, extract in (
+                  ("/memberships?status=accepted&per_page=50", lambda row: row.get("account", {}).get("id")),
+                  ("/zones?name=viiversion.com&per_page=5", lambda row: row.get("account", {}).get("id")),
+              ):
+                  try:
+                      values = get(origin + endpoint).get("result", [])
+                      accounts = sorted(set(filter(None, (extract(row) for row in values))))
+                  except (HTTPError, URLError, ValueError):
+                      accounts = []
+                  if len(accounts) == 1:
+                      account = accounts[0]
+                      break
+              if not account:
+                  raise RuntimeError("Cloudflare account cannot be resolved; audit is inconclusive")
+
+          base = origin + "/accounts/" + quote(account, safe="") + "/r2/buckets/" + quote(bucket, safe="")
+          def list_keys(prefix):
+              keys = []
+              cursor = None
+              for _ in range(100):
+                  query = {"prefix": prefix, "per_page": 1000}
+                  if cursor:
+                      query["cursor"] = cursor
+                  doc = get(base + "/objects?" + urlencode(query))
+                  batch = [row.get("key") for row in doc.get("result", []) if isinstance(row, dict)]
+                  if any(not isinstance(k, str) for k in batch):
+                      raise RuntimeError("Missing object key in R2 listing")
+                  keys.extend(batch)
+                  if len(keys) > 2000:
+                      raise RuntimeError("More than 2000 tracked R2 objects; audit capped as inconclusive")
+                  info = doc.get("result_info") or {}
+                  if not info.get("is_truncated"):
+                      return keys
+                  cursor = info.get("cursor")
+                  if not cursor:
+                      raise RuntimeError("Truncated R2 listing without cursor")
+              raise RuntimeError("R2 listing page limit exceeded")
+
+          recovery_keys = list_keys("recovery/")
+          job_keys = list_keys("jobs/")
+          states = {}
+          unresolved = 0
+          for key in job_keys:
+              raw = get(base + "/objects/" + quote(key, safe="/"), json_response=False)
+              try:
+                  snapshot = json.loads(raw)
+                  state = str(snapshot.get("status", "unknown"))
+              except (ValueError, AttributeError, TypeError):
+                  state = "unknown"
+              states[state] = states.get(state, 0) + 1
+              if state not in {"completed", "failed"}:
+                  unresolved += 1
+
+          print("R2 recovery records:", len(recovery_keys))
+          print("R2 job snapshots:", len(job_keys))
+          print("R2 statuses (counts only):", json.dumps(states, sort_keys=True))
+          print("R2 nonterminal/unknown snapshots:", unresolved)
+          print("This check does not read Durable Object active-job markers or in-memory jobs.")
+          if recovery_keys or unresolved:
+              print("DEPLOYMENT GATE: BLOCKED (R2 shows pending or recoverable work)")
+              sys.exit(2)
+          print("R2 CHECK: CLEAR. Durable Object and in-flight checks remain required.")
+          PY
