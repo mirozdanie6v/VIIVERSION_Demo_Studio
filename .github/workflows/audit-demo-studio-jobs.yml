@@ -112,11 +112,38 @@ jobs:
           print("R2 job snapshots:", len(job_keys))
           print("R2 statuses (counts only):", json.dumps(states, sort_keys=True))
           print("R2 nonterminal/unknown snapshots:", unresolved)
-          print("This check does not read Durable Object active-job markers or in-memory jobs.")
-          if recovery_keys or unresolved:
-              print("DEPLOYMENT GATE: BLOCKED (R2 shows pending or recoverable work)")
+          # Read-only Container Instances API complements R2 metadata. A live
+          # instance means there may be work not yet recorded in R2.
+          apps_doc = get(origin + "/accounts/" + quote(account, safe="") +
+                         "/containers/applications?per_page=500")
+          apps = apps_doc.get("result", [])
+          matches = [app for app in apps if
+                     "viiversion-demo-studio" in str(app.get("name", "")).lower() and
+                     ("demostudiocontainer" in str(app.get("name", "")).lower() or
+                      str(app.get("name", "")).lower() == "viiversion-demo-studio")]
+          if len(matches) != 1:
+              raise RuntimeError("Cannot uniquely identify the Demo Studio container application")
+          application_id = matches[0].get("id")
+          if not application_id:
+              raise RuntimeError("Container application ID is unavailable")
+          instances_url = (origin + "/accounts/" + quote(account, safe="") +
+                           "/containers/applications/" + quote(application_id, safe="") +
+                           "/instances-v2?state=active&per_page=1000")
+          instances_doc = get(instances_url)
+          instances = instances_doc.get("result", [])
+          if not isinstance(instances, list):
+              raise RuntimeError("Container instances result is unexpected")
+          active_instances = len(instances)
+          if (instances_doc.get("result_info") or {}).get("next_page_token"):
+              raise RuntimeError("Active instance result truncated: audit blocked")
+
+          print("Active/provisioning/stopping Demo Studio container instances:", active_instances)
+          print("Durable Object active-job KV markers are not directly accessible through this API.")
+          if recovery_keys or unresolved or active_instances:
+              print("DEPLOYMENT GATE: BLOCKED (possible pending work or running container)")
               sys.exit(2)
-          print("R2 CHECK: CLEAR. Durable Object and in-flight checks remain required.")
+          print("READ-ONLY CHECK: CLEAR (R2 terminal, no recovery, no active containers).")
+          print("Recheck immediately before deploy; Durable Object marker inspection is a separate control.")
           PY
 
       - name: Publish safe read-only audit result as commit status
