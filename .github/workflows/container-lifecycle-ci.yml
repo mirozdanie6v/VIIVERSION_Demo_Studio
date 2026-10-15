@@ -1,0 +1,36 @@
+name: Verify Demo Studio container lifecycle
+
+on:
+  pull_request:
+    paths:
+      - "cloudflare/worker.js"
+      - "cloudflare/container-lifecycle.js"
+      - "tests/container-lifecycle.test.ts"
+      - ".github/workflows/deploy-production.yml"
+      - ".github/workflows/container-lifecycle-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  lifecycle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci --no-fund --no-audit
+      - name: Check runtime module syntax
+        run: |
+          node --check cloudflare/worker.js
+          node --check cloudflare/container-lifecycle.js
+      - name: Bundle Cloudflare Worker
+        run: npx esbuild cloudflare/worker.js --bundle --platform=browser --format=esm --external:cloudflare:workers --outfile=/tmp/demo-studio-worker.js
+      - name: Type check
+        run: npm run typecheck
+      - name: Test suite
+        run: npm test
