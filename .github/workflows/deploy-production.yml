@@ -244,9 +244,14 @@ jobs:
             expected_access="anonymous"
           fi
 
+          health_auth=()
+          if [ -n "${DEMO_STUDIO_API_KEY:-}" ]; then
+            health_auth=(-H "Authorization: Bearer ${DEMO_STUDIO_API_KEY}")
+          fi
+
           ready=0
           for attempt in $(seq 1 60); do
-            code=$(curl -L -sS --connect-timeout 8 --max-time 40               -o /tmp/demo-health.json -w '%{http_code}'               "${base}/health/runtime?deploy=${GITHUB_SHA}" || true)
+            code=$(curl -L -sS --connect-timeout 8 --max-time 40 "${health_auth[@]}" -o /tmp/demo-health.json -w '%{http_code}'               "${base}/health/runtime?deploy=${GITHUB_SHA}" || true)
 
             if [ "${code}" = "200" ] && jq -e               --arg version "${expected_version}"               --arg mode "${expected_mode}"               --arg access "${expected_access}"               '(.ok == true) and (.service == "viiversion-demo-studio") and (.version == $version) and (.generationMode == $mode) and (.accessMode == $access)'               /tmp/demo-health.json >/dev/null 2>&1; then
               ready=1
