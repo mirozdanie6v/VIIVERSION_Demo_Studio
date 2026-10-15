@@ -25,7 +25,17 @@ jobs:
         continue-on-error: true
         run: |
           set -euo pipefail
+          stage_ok() {
+            jq -n --arg context "demo-studio/cost-stage-$1" '{state:"success",description:"Read-only billing query checkpoint",context:$context}' > /tmp/stage.json
+            curl -fsS --max-time 20 -X POST \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "Content-Type: application/json" \
+              --data-binary @/tmp/stage.json \
+              "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" >/dev/null
+          }
           test -n "${CLOUDFLARE_API_TOKEN:-}" || { echo "No token"; exit 1; }
+          stage_ok token-present
           api=https://api.cloudflare.com/client/v4
           account="${CLOUDFLARE_ACCOUNT_ID:-}"
           if [ -z "${account}" ]; then
@@ -41,15 +51,18 @@ jobs:
             fi
           fi
           test -n "${account}" || { echo "Cannot resolve account"; exit 1; }
+          stage_ok account-resolved
           code=$(curl -sS -o /tmp/billable-usage.json -w '%{http_code}' --max-time 30 \
              "${api}/accounts/${account}/billable-usage?from=2026-10-14&to=$(date -u +%Y-%m-%d)" \
              -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}")
+          stage_ok http-${code}
           if [ "${code}" = 403 ]; then
             echo "Billing Read permission missing: read-only token scope needed."
             exit 3
           fi
           test "${code}" = 200 || { echo "Billing API returned HTTP ${code}"; exit 2; }
           jq -e '.success == true and (.result | type == "array")' /tmp/billable-usage.json >/dev/null
+          stage_ok schema-validated
 
           python3 - <<'PY'
           import json,os,re,subprocess
