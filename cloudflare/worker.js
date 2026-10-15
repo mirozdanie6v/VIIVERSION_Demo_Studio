@@ -1,9 +1,14 @@
 import { DurableObject } from "cloudflare:workers";
+import packageMetadata from "../package.json";
+import {
+  edgeHealthPayload,
+  inactivityTimeoutForActiveJobCount,
+  isTerminalJobStatus,
+} from "./container-lifecycle.js";
 import { evaluateJobWatchdog } from "./watchdog-policy.js";
 
 const PUBLIC_HOST = "demostudio.viiversion.com";
 const CONTAINER_PORT = 8080;
-const INACTIVITY_TIMEOUT_MS = 60 * 60 * 1000;
 const ACTIVE_IMAGE_KEY = "active-container-image";
 const ACTIVE_HYBRID_KEY = "active-production-hybrid";
 const INTERNAL_TOKEN_KEY = "internal-storage-token";
@@ -260,10 +265,81 @@ export class DemoStudioContainer extends DurableObject {
     this.starting = undefined;
 
     if (ctx.container?.running) {
-      void ctx.blockConcurrencyWhile(() =>
-        ctx.container.setInactivityTimeout(INACTIVITY_TIMEOUT_MS),
-      );
+      void ctx.blockConcurrencyWhile(async () => {
+        await this.refreshContainerInactivityTimeout();
+      });
     }
+  }
+
+  async refreshContainerInactivityTimeout() {
+    if (!this.ctx.container?.running) return;
+
+    // Keep the existing one-hour safety window while recovery or rendering
+    // is tracked; use a ten-minute idle window only after the queue clears.
+    const active = await this.ctx.storage.list({
+      prefix: ACTIVE_JOB_PREFIX,
+      limit: 1,
+    });
+    await this.ctx.container.setInactivityTimeout(
+      inactivityTimeoutForActiveJobCount(active.size),
+    );
+  }
+
+  async handleAdminRead(request, url) {
+    if (url.pathname !== "/__admin/active-jobs") return undefined;
+    if (request.method !== "GET") {
+      return new Response("Method not allowed", { status: 405 });
+    }
+
+    // Never turn the authenticated read-only operations endpoint into an
+    // anonymous endpoint when the public Demo Studio API key is unset.
+    const adminToken = this.env.DEMO_STUDIO_API_KEY;
+    if (!adminToken || bearerToken(request) !== adminToken) {
+      return new Response("Forbidden", { status: 403 });
+    }
+
+    const active = await this.ctx.storage.list({ prefix: ACTIVE_JOB_PREFIX });
+    const jobs = [];
+    let pendingCount = 0;
+    let unknownCount = 0;
+
+    for (const key of active.keys()) {
+      const id = key.slice(ACTIVE_JOB_PREFIX.length);
+      const object = await this.env.DEMO_STUDIO_ARTIFACTS.get(
+        "jobs/" + id + ".json",
+      );
+      let status = "unknown";
+      if (object) {
+        try {
+          const snapshot = JSON.parse(await object.text());
+          status = String(snapshot.status ?? "unknown");
+        } catch {
+          status = "unknown";
+        }
+      }
+      if (status === "unknown") unknownCount += 1;
+      if (!isTerminalJobStatus(status)) pendingCount += 1;
+      jobs.push({ id, status });
+    }
+
+    return new Response(
+      JSON.stringify({
+        service: "viiversion-demo-studio",
+        checkedAt: new Date().toISOString(),
+        containerRunning: Boolean(this.ctx.container?.running),
+        trackedJobs: jobs.length,
+        pendingCount,
+        unknownCount,
+        jobs,
+        note: "Read-only snapshot of Durable Object active-job markers; verify R2 recovery state and check again immediately before deployment.",
+      }),
+      {
+        headers: {
+          "Content-Type": "application/json; charset=utf-8",
+          "Cache-Control": "no-store",
+        },
+      },
+    );
   }
 
   async consumeDailyQuota(request, kind, limit) {
@@ -424,6 +500,7 @@ export class DemoStudioContainer extends DurableObject {
         ),
       ]),
     ]);
+    await this.refreshContainerInactivityTimeout();
   }
 
   async handleInternalRequest(request, url) {
@@ -533,6 +610,7 @@ export class DemoStudioContainer extends DurableObject {
         },
       );
       await this.ctx.storage.put(ACTIVE_JOB_PREFIX + id, { id });
+      await this.refreshContainerInactivityTimeout();
       await this.scheduleWatchdog();
       return new Response(null, { status: 204 });
     }
@@ -552,10 +630,11 @@ export class DemoStudioContainer extends DurableObject {
       },
     );
 
-    if (snapshot.status === "completed" || snapshot.status === "failed") {
+    if (isTerminalJobStatus(snapshot.status)) {
       await this.clearActiveJob(id);
     } else {
       await this.ctx.storage.put(ACTIVE_JOB_PREFIX + id, { id });
+      await this.refreshContainerInactivityTimeout();
       await this.scheduleWatchdog();
     }
 
@@ -886,11 +965,15 @@ export class DemoStudioContainer extends DurableObject {
           Date.now() + JOB_WATCHDOG_INTERVAL_MS,
         );
       }
+      await this.refreshContainerInactivityTimeout();
     }
   }
 
   async fetch(request) {
     const url = new URL(request.url);
+
+    const admin = await this.handleAdminRead(request, url);
+    if (admin) return admin;
 
     const internal = await this.handleInternalRequest(request, url);
     if (internal) return internal;
@@ -998,7 +1081,7 @@ export class DemoStudioContainer extends DurableObject {
       });
     }
 
-    await container.setInactivityTimeout(INACTIVITY_TIMEOUT_MS);
+    await this.refreshContainerInactivityTimeout();
 
     const port = container.getTcpPort(CONTAINER_PORT);
     let lastError;
@@ -1060,6 +1143,37 @@ export default {
           ETag: object.httpEtag,
         },
       });
+    }
+
+    // Cheap liveness: monitoring must not allocate an expensive video container.
+    if ((request.method === "GET" || request.method === "HEAD") &&
+        url.pathname === "/health") {
+      const payload = JSON.stringify(edgeHealthPayload({
+        version: packageMetadata.version,
+        productionHybrid: env.DEMO_STUDIO_PRODUCTION_HYBRID,
+        apiKeyPresent: Boolean(env.DEMO_STUDIO_API_KEY),
+      }));
+      return new Response(request.method === "HEAD" ? null : payload, {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json; charset=utf-8",
+          "Cache-Control": "no-store",
+        },
+      });
+    }
+
+    // Deep readiness stays available for release checks. It deliberately
+    // starts the container and must NOT be used for periodic uptime polling.
+    if ((request.method === "GET" || request.method === "HEAD") &&
+        url.pathname === "/health/runtime") {
+      if (env.DEMO_STUDIO_API_KEY &&
+          bearerToken(request) !== env.DEMO_STUDIO_API_KEY) {
+        return new Response("Forbidden", { status: 403 });
+      }
+      url.pathname = "/health";
+      return env.DEMO_STUDIO.getByName("primary").fetch(
+        new Request(url.toString(), request),
+      );
     }
 
     const staticResponse = publicStaticResponse(request);

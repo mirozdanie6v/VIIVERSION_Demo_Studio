@@ -11,6 +11,7 @@ on:
 
 permissions:
   contents: read
+  statuses: write
 
 concurrency:
   group: viiversion-demo-studio-production
@@ -244,16 +245,21 @@ jobs:
             expected_access="anonymous"
           fi
 
+          health_auth=()
+          if [ -n "${DEMO_STUDIO_API_KEY:-}" ]; then
+            health_auth=(-H "Authorization: Bearer ${DEMO_STUDIO_API_KEY}")
+          fi
+
           ready=0
           for attempt in $(seq 1 60); do
-            code=$(curl -L -sS --connect-timeout 8 --max-time 40               -o /tmp/demo-health.json -w '%{http_code}'               "${base}/health?deploy=${GITHUB_SHA}" || true)
+            code=$(curl -L -sS --connect-timeout 8 --max-time 40 "${health_auth[@]}" -o /tmp/demo-health.json -w '%{http_code}'               "${base}/health/runtime?deploy=${GITHUB_SHA}" || true)
 
             if [ "${code}" = "200" ] && jq -e               --arg version "${expected_version}"               --arg mode "${expected_mode}"               --arg access "${expected_access}"               '(.ok == true) and (.service == "viiversion-demo-studio") and (.version == $version) and (.generationMode == $mode) and (.accessMode == $access)'               /tmp/demo-health.json >/dev/null 2>&1; then
               ready=1
               break
             fi
 
-            echo "Demo Studio container not ready yet (attempt ${attempt}, HTTP ${code})"
+            echo "Demo Studio runtime container not ready yet (attempt ${attempt}, HTTP ${code})"
             sleep 10
           done
 
@@ -402,3 +408,27 @@ jobs:
           test "$(stat -c%s /tmp/demo-production.mp4)" -gt 10000
           file /tmp/demo-production.mp4
           echo "Production generation and durable R2 artifact verified."
+
+      - name: Record verified production deployment outcome
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOY_OUTCOME: ${{ job.status }}
+        run: |
+          set -euo pipefail
+          if [ "${DEPLOY_OUTCOME}" = "success" ]; then
+            state=success
+            description="Demo Studio production deployment and smoke checks passed"
+          else
+            state=failure
+            description="Demo Studio production deployment or smoke check failed"
+          fi
+          jq -n --arg state "${state}" --arg description "${description}" \
+            '{state:$state,description:$description,context:"demo-studio/production-deploy"}' > /tmp/deploy-result.json
+          curl -fsS -X POST \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "Content-Type: application/json" \
+            --data-binary @/tmp/deploy-result.json \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" >/dev/null
