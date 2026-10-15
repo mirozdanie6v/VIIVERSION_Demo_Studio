@@ -1,0 +1,118 @@
+name: Read-only Cloudflare cost snapshot
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: [".github/workflows/cloudflare-cost-snapshot.yml"]
+
+permissions:
+  contents: read
+  statuses: write
+
+jobs:
+  cost-readonly:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Inspect Cloudflare usage data (read only)
+        id: usage
+        shell: bash
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}" || { echo "No token"; exit 1; }
+          api=https://api.cloudflare.com/client/v4
+          account="${CLOUDFLARE_ACCOUNT_ID:-}"
+          if [ -z "${account}" ]; then
+            if curl -fsS --max-time 30 "${api}/memberships?status=accepted&per_page=50" \
+              -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -o /tmp/memberships.json; then
+              account=$(jq -r '[.result[]?.account.id] | unique | if length == 1 then .[0] else empty end' /tmp/memberships.json)
+            fi
+          fi
+          if [ -z "${account}" ]; then
+            if curl -fsS --max-time 30 "${api}/zones?name=viiversion.com&per_page=5" \
+              -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -o /tmp/zones.json; then
+              account=$(jq -r '[.result[]?.account.id] | unique | if length == 1 then .[0] else empty end' /tmp/zones.json)
+            fi
+          fi
+          test -n "${account}" || { echo "Cannot resolve account"; exit 1; }
+          code=$(curl -sS -o /tmp/billable-usage.json -w '%{http_code}' --max-time 30 \
+             "${api}/accounts/${account}/billable-usage?from=2026-10-14&to=$(date -u +%Y-%m-%d)" \
+             -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}")
+          if [ "${code}" = 403 ]; then
+            echo "Billing Read permission missing: read-only token scope needed."
+            exit 3
+          fi
+          test "${code}" = 200 || { echo "Billing API returned HTTP ${code}"; exit 2; }
+          jq -e '.success == true and (.result | type == "array")' /tmp/billable-usage.json >/dev/null
+
+          python3 - <<'PY'
+          import json,os,re,subprocess
+          from decimal import Decimal
+          doc=json.load(open('/tmp/billable-usage.json'))
+          rows=doc['result']
+          charge=lambda row: Decimal(str(row.get('ContractedCost') or '0'))
+          def total_for(*terms):
+              return sum((charge(r) for r in rows if all(
+                term in str(r.get('ServiceName','')).lower() for term in terms)),Decimal('0'))
+          total=sum((charge(r) for r in rows),Decimal('0'))
+          memory=total_for('container','memory')
+          disk=total_for('container','disk')
+          cpu=total_for('container','cpu')
+          print('Read-only Cloudflare usage period from 2026-10-14; figures may lag by 24h.')
+          print('Cost-bearing rows:',len(rows),'Usage-based total USD:',total)
+          print('Container memory USD:',memory,'disk USD:',disk,'CPU USD:',cpu)
+          print('Workers Paid $5 fixed plan is excluded from this usage-only API.')
+          safe=lambda v:format(v.quantize(Decimal('0.01')),'f').replace('.','p')
+          for key,value in [
+            ('billable-total-usd',total),
+            ('container-memory-usd',memory),
+            ('container-disk-usd',disk),
+            ('container-cpu-usd',cpu),
+          ]:
+              context='demo-studio/'+key+'-'+safe(value)
+              status=json.dumps({
+                'state':'success',
+                'description':'Cloudflare daily billable-usage API; fixed plan excluded',
+                'context':context,
+              })
+              env=os.environ
+              subprocess.run([
+                'curl','-fsS','--max-time','20','-X','POST',
+                '-H','Authorization: Bearer '+env['GH_TOKEN'],
+                '-H','Accept: application/vnd.github+json',
+                '-H','Content-Type: application/json',
+                '--data-binary',status,
+                'https://api.github.com/repos/'+env['GITHUB_REPOSITORY']+'/statuses/'+env['GITHUB_SHA']
+              ],check=True,stdout=subprocess.DEVNULL)
+          PY
+      - name: Publish cost-read status
+        if: always()
+        shell: bash
+        env:
+          USAGE_OUTCOME: ${{ steps.usage.outcome }}
+        run: |
+          set -euo pipefail
+          if [ "${USAGE_OUTCOME}" = success ]; then
+            state=success
+            description="Cloudflare billable-usage read succeeded"
+          else
+            state=failure
+            description="Cloudflare billable-usage unavailable; check Billing Read permission"
+          fi
+          jq -n --arg state "${state}" --arg description "${description}" \
+            '{state:$state,description:$description,context:"demo-studio/cost-readonly"}' > /tmp/status.json
+          curl -fsS --max-time 20 -X POST \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "Content-Type: application/json" \
+            --data-binary @/tmp/status.json \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" >/dev/null
+      - name: Fail if usage data unavailable
+        if: steps.usage.outcome != 'success'
+        run: exit 1
