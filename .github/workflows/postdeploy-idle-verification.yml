@@ -1,0 +1,97 @@
+name: Post-deploy Demo Studio idle verification
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/postdeploy-idle-verification.yml"
+
+permissions:
+  contents: read
+  statuses: write
+
+jobs:
+  postdeploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - name: Verify live edge responses without video-container wakeup
+        id: verify
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          base=https://demostudio.viiversion.com
+          curl -fsS --connect-timeout 10 --max-time 30 "${base}/health?postdeploy=${GITHUB_SHA}" -o /tmp/health.json
+          jq -e '.ok == true and .service == "viiversion-demo-studio" and .version == "0.14.1" and .healthScope == "edge" and .containerChecked == false and (.generationMode == "hybrid" or .generationMode == "standard")' /tmp/health.json >/dev/null
+          head_code=$(curl -sS -o /dev/null -w '%{http_code}' --head --max-time 30 "${base}/health")
+          test "${head_code}" = "200"
+          curl -fsS --connect-timeout 10 --max-time 30 "${base}/" -o /tmp/landing.html
+          grep -Fq "Turn web apps into polished demo videos." /tmp/landing.html
+          echo "LIVE EDGE CHECK PASS: /health, HEAD /health and / are responding."
+
+          # Check the live Cloudflare Container app through read-only API.
+          # No REST call below starts, stops or modifies any container.
+          test -n "${CLOUDFLARE_API_TOKEN:-}" || { echo "Cloudflare token missing: idle check inconclusive"; exit 1; }
+          api=https://api.cloudflare.com/client/v4
+          account="${CLOUDFLARE_ACCOUNT_ID:-}"
+          if [ -z "${account}" ]; then
+            curl -fsS --max-time 30 "${api}/memberships?status=accepted&per_page=50" -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -o /tmp/memberships.json
+            account=$(jq -r '[.result[]?.account.id] | unique | if length == 1 then .[0] else empty end' /tmp/memberships.json)
+          fi
+          test -n "${account}" || { echo "Cloudflare account ambiguous: idle check inconclusive"; exit 1; }
+
+          curl -fsS --max-time 30 "${api}/accounts/${account}/containers/applications?per_page=500" \
+            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -o /tmp/apps.json
+          jq -e '.success == true' /tmp/apps.json >/dev/null
+          app_id=$(jq -r '[.result[] | select(.name == "viiversion-demo-studio" or (.name | ascii_downcase | contains("viiversion-demo-studio") and contains("demostudiocontainer"))) | .id] | if length == 1 then .[0] else empty end' /tmp/apps.json)
+          test -n "${app_id}" || { echo "Demo Studio container application was not uniquely identifiable"; exit 1; }
+
+          active_instances() {
+            curl -fsS --max-time 30 "${api}/accounts/${account}/containers/applications/${app_id}/instances-v2?state=active&per_page=1000" \
+              -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -o /tmp/instances.json
+            jq -e '.success == true and (.result | type == "array")' /tmp/instances.json >/dev/null
+            jq -e '(.result_info.next_page_token // null) == null' /tmp/instances.json >/dev/null
+            jq '.result | length' /tmp/instances.json
+          }
+          before=$(active_instances)
+          for i in 1 2 3 4 5; do
+            curl -fsS --max-time 30 "${base}/health?light=${i}" -o /tmp/health-iteration.json
+            jq -e '.healthScope == "edge" and .containerChecked == false' /tmp/health-iteration.json >/dev/null
+          done
+          after=$(active_instances)
+          echo "Active instances before edge health probes: ${before}; after: ${after}"
+          if [ "${before}" != "0" ] || [ "${after}" != "0" ]; then
+            echo "INCONCLUSIVE: container(s) active; may be legitimate generation work. No changes performed."
+            exit 1
+          fi
+          echo "LIVE IDLE CHECK PASS: health probes did not start Demo Studio containers."
+      - name: Publish verification state
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERIFY_OUTCOME: ${{ steps.verify.outcome }}
+        run: |
+          set -euo pipefail
+          if [ "${VERIFY_OUTCOME}" = success ]; then
+            state=success
+            description="Live edge health verified; zero containers before/after probes"
+          else
+            state=failure
+            description="Live edge or container check failed or inconclusive"
+          fi
+          jq -n --arg state "${state}" --arg description "${description}" '{state:$state,description:$description,context:"demo-studio/live-idle-verification"}' > /tmp/status.json
+          curl -fsS --max-time 30 -X POST \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "Content-Type: application/json" \
+            --data-binary @/tmp/status.json \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" >/dev/null
+      - name: Fail inconclusive checks
+        if: steps.verify.outcome != 'success'
+        run: exit 1
