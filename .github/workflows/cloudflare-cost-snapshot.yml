@@ -16,6 +16,7 @@ jobs:
     timeout-minutes: 10
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_BILLING_READ_TOKEN: ${{ secrets.CLOUDFLARE_BILLING_READ_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       GH_TOKEN: ${{ github.token }}
     steps:
@@ -52,12 +53,17 @@ jobs:
           fi
           test -n "${account}" || { echo "Cannot resolve account"; exit 1; }
           stage_ok account-resolved
+          test -n "${CLOUDFLARE_BILLING_READ_TOKEN:-}" || {
+            echo "Missing CLOUDFLARE_BILLING_READ_TOKEN secret with Account > Billing > Read permission."
+            exit 3
+          }
+          stage_ok billing-read-token-present
           code=$(curl -sS -o /tmp/billable-usage.json -w '%{http_code}' --max-time 30 \
              "${api}/accounts/${account}/billable-usage?from=2026-10-14&to=$(date -u +%Y-%m-%d)" \
-             -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}")
+             -H "Authorization: Bearer ${CLOUDFLARE_BILLING_READ_TOKEN}")
           stage_ok http-${code}
           if [ "${code}" = 403 ]; then
-            echo "Billing Read permission missing: read-only token scope needed."
+            echo "Dedicated Billing Read token was denied: verify Account > Billing > Read scope."
             exit 3
           fi
           test "${code}" = 200 || { echo "Billing API returned HTTP ${code}"; exit 2; }
