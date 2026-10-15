@@ -16,6 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
+      GH_TOKEN: ${{ github.token }}
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:
@@ -25,14 +26,28 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          stage_success() {
+            local context="$1"
+            jq -n --arg context "demo-studio/check-${context}" \
+              '{state:"success",description:"Read-only postdeploy stage passed",context:$context}' > /tmp/stage-status.json
+            curl -fsS --max-time 20 -X POST \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "Content-Type: application/json" \
+              --data-binary @/tmp/stage-status.json \
+              "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" >/dev/null
+          }
+          stage_success started
           base=https://demostudio.viiversion.com
           curl -fsS --connect-timeout 10 --max-time 30 "${base}/health?postdeploy=${GITHUB_SHA}" -o /tmp/health.json
           jq -e '.ok == true and .service == "viiversion-demo-studio" and .version == "0.14.1" and .healthScope == "edge" and .containerChecked == false and (.generationMode == "hybrid" or .generationMode == "standard")' /tmp/health.json >/dev/null
+          stage_success edge-json
           head_code=$(curl -sS -o /dev/null -w '%{http_code}' --head --max-time 30 "${base}/health")
           test "${head_code}" = "200"
           curl -fsS --connect-timeout 10 --max-time 30 "${base}/" -o /tmp/landing.html
           grep -Fq "Turn web apps into polished demo videos." /tmp/landing.html
           echo "LIVE EDGE CHECK PASS: /health, HEAD /health and / are responding."
+          stage_success edge-all
 
           # Check the live Cloudflare Container app through read-only API.
           # No REST call below starts, stops or modifies any container.
@@ -44,12 +59,14 @@ jobs:
             account=$(jq -r '[.result[]?.account.id] | unique | if length == 1 then .[0] else empty end' /tmp/memberships.json)
           fi
           test -n "${account}" || { echo "Cloudflare account ambiguous: idle check inconclusive"; exit 1; }
+          stage_success cloudflare-auth
 
           curl -fsS --max-time 30 "${api}/accounts/${account}/containers/applications?per_page=500" \
             -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -o /tmp/apps.json
           jq -e '.success == true' /tmp/apps.json >/dev/null
           app_id=$(jq -r '[.result[] | select(.name == "viiversion-demo-studio" or (.name | ascii_downcase | contains("viiversion-demo-studio") and contains("demostudiocontainer"))) | .id] | if length == 1 then .[0] else empty end' /tmp/apps.json)
           test -n "${app_id}" || { echo "Demo Studio container application was not uniquely identifiable"; exit 1; }
+          stage_success cloudflare-app
 
           active_instances() {
             curl -fsS --max-time 30 "${api}/accounts/${account}/containers/applications/${app_id}/instances-v2?state=active&per_page=1000" \
@@ -59,17 +76,20 @@ jobs:
             jq '.result | length' /tmp/instances.json
           }
           before=$(active_instances)
+          stage_success initial-instance-api
           for i in 1 2 3 4 5; do
             curl -fsS --max-time 30 "${base}/health?light=${i}" -o /tmp/health-iteration.json
             jq -e '.healthScope == "edge" and .containerChecked == false' /tmp/health-iteration.json >/dev/null
           done
           after=$(active_instances)
+          stage_success repeat-instance-api
           echo "Active instances before edge health probes: ${before}; after: ${after}"
           if [ "${before}" != "0" ] || [ "${after}" != "0" ]; then
             echo "INCONCLUSIVE: container(s) active; may be legitimate generation work. No changes performed."
             exit 1
           fi
           echo "LIVE IDLE CHECK PASS: health probes did not start Demo Studio containers."
+          stage_success idle-zero
       - name: Publish verification state
         if: always()
         shell: bash
