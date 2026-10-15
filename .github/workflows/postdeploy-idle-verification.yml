@@ -52,11 +52,18 @@ jobs:
           # Check the live Cloudflare Container app through read-only API.
           # No REST call below starts, stops or modifies any container.
           test -n "${CLOUDFLARE_API_TOKEN:-}" || { echo "Cloudflare token missing: idle check inconclusive"; exit 1; }
+          stage_success cloudflare-token
           api=https://api.cloudflare.com/client/v4
           account="${CLOUDFLARE_ACCOUNT_ID:-}"
           if [ -z "${account}" ]; then
-            curl -fsS --max-time 30 "${api}/memberships?status=accepted&per_page=50" -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -o /tmp/memberships.json
-            account=$(jq -r '[.result[]?.account.id] | unique | if length == 1 then .[0] else empty end' /tmp/memberships.json)
+            if curl -fsS --max-time 30 "${api}/memberships?status=accepted&per_page=50" -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -o /tmp/memberships.json; then
+              account=$(jq -r '[.result[]?.account.id] | unique | if length == 1 then .[0] else empty end' /tmp/memberships.json)
+            fi
+          fi
+          if [ -z "${account}" ]; then
+            if curl -fsS --max-time 30 "${api}/zones?name=viiversion.com&per_page=5" -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -o /tmp/zones.json; then
+              account=$(jq -r '[.result[]?.account.id] | unique | if length == 1 then .[0] else empty end' /tmp/zones.json)
+            fi
           fi
           test -n "${account}" || { echo "Cloudflare account ambiguous: idle check inconclusive"; exit 1; }
           stage_success cloudflare-auth
