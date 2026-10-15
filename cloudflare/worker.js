@@ -1166,6 +1166,10 @@ export default {
     // starts the container and must NOT be used for periodic uptime polling.
     if ((request.method === "GET" || request.method === "HEAD") &&
         url.pathname === "/health/runtime") {
+      if (env.DEMO_STUDIO_API_KEY &&
+          bearerToken(request) !== env.DEMO_STUDIO_API_KEY) {
+        return new Response("Forbidden", { status: 403 });
+      }
       url.pathname = "/health";
       return env.DEMO_STUDIO.getByName("primary").fetch(
         new Request(url.toString(), request),
