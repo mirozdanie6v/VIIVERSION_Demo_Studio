@@ -1,0 +1,78 @@
+{
+  "name": "Love Travel — AI Booking Experience (English, safe production demo)",
+  "baseUrl": "https://lovetravel.viiversion.com",
+  "viewport": {
+    "width": 1080,
+    "height": 1920
+  },
+  "defaultPauseMs": 650,
+  "presentation": {
+    "smartZoom": {
+      "scale": 1.08,
+      "mobileScale": 1.06,
+      "transitionMs": 480,
+      "settleMs": 200
+    },
+    "focusRing": {
+      "enabled": false
+    },
+    "clickRipple": {
+      "enabled": false
+    }
+  },
+  "steps": [
+    {
+      "action": "goto",
+      "url": "/",
+      "label": "Love Travel",
+      "narration": "What if your existing Bókun inventory could become a more personal booking experience?"
+    },
+    {
+      "action": "wait",
+      "ms": 2300,
+      "label": "Explore Love Travel",
+      "narration": "Meet Love Travel — a multilingual guest experience powered by VIIVERSION."
+    },
+    {
+      "action": "scroll",
+      "y": 550,
+      "label": "Discover excursions",
+      "narration": "Travelers discover excursions, compare options and explore experiences around Nha Trang."
+    },
+    {
+      "action": "wait",
+      "ms": 1400,
+      "label": "Bókun-connected catalog",
+      "narration": "Live tour information is connected to Bókun, so your existing booking platform remains central."
+    },
+    {
+      "action": "scroll",
+      "y": -550,
+      "label": "Return to home"
+    },
+    {
+      "action": "wait",
+      "ms": 1250,
+      "label": "AI travel assistance",
+      "narration": "An AI consultant can help guests choose the right trip in natural language."
+    },
+    {
+      "action": "wait",
+      "ms": 1800,
+      "label": "Real-time information",
+      "narration": "For Robinson Beach and Hòn Mun, the integration supports live availability and price checks."
+    },
+    {
+      "action": "wait",
+      "ms": 1700,
+      "label": "Booking integration",
+      "narration": "The Bókun booking connection has been tested. New bookings are disabled in this production demonstration."
+    },
+    {
+      "action": "wait",
+      "ms": 1500,
+      "label": "Love Travel x Bókun",
+      "narration": "Keep your Bókun workflow. Add an intelligent new way for customers to discover and book."
+    }
+  ]
+}
