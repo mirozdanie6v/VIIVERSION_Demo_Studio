@@ -1,0 +1,50 @@
+name: Love Travel AI Booking Experience
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'examples/love-travel-ai-booking-experience.json'
+      - '.github/workflows/love-travel-ai-booking-experience.yml'
+concurrency:
+  group: love-travel-ai-booking-experience
+  cancel-in-progress: true
+jobs:
+  capture-and-render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Capture production-safe Love Travel walkthrough
+        env:
+          DEMO_STUDIO_ALLOWED_HOSTS: lovetravel.viiversion.com
+          ALLOW_PRIVATE_TARGETS: "false"
+        run: npm run capture -- --scenario examples/love-travel-ai-booking-experience.json
+      - name: Resolve run directory
+        id: run
+        shell: bash
+        run: echo "dir=$(find artifacts -mindepth 1 -maxdepth 1 -type d | sort | tail -n 1)" >> "$GITHUB_OUTPUT"
+      - name: Render English business presentation
+        run: |
+          npm run render -- --run "${{ steps.run.outputs.dir }}" --preset 16:9 --brand "VIIVERSION" --title "Love Travel | AI Booking Experience" --cta "Already using Bókun? Bring AI to your booking experience." --cta-secondary "Contact VIIVERSION"
+      - name: Verify MP4 and editorial outputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          dir="${{ steps.run.outputs.dir }}"
+          test -s "$dir/capture.webm"
+          test -s "$dir/final-16x9.mp4"
+          ffprobe -v error -show_entries format=duration -of csv=p=0 "$dir/final-16x9.mp4"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: love-travel-ai-booking-experience
+          path: artifacts/
+          if-no-files-found: warn
