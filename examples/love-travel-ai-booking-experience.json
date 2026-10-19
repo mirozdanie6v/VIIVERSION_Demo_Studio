@@ -2,8 +2,8 @@
   "name": "Love Travel — AI Booking Experience (English, safe production demo)",
   "baseUrl": "https://lovetravel.viiversion.com",
   "viewport": {
-    "width": 1080,
-    "height": 1920
+    "width": 1600,
+    "height": 900
   },
   "defaultPauseMs": 650,
   "presentation": {
