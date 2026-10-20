@@ -1,21 +1,10 @@
 import { chromium } from 'playwright';
-const browser=await chromium.launch({headless:true});
-const page=await browser.newPage({viewport:{width:1440,height:900}});
-page.on('pageerror',e=>console.log('PAGEERROR',String(e).slice(0,500)));
-page.on('response',r=>{if(/api\/travel-commerce\/|api\/tours/.test(r.url()))console.log('API',r.status(),r.url().slice(0,130));});
-async function dump(label){
-  console.log('=== '+label+' '+page.url()+' ===');
-  console.log('BODY',JSON.stringify((await page.locator('body').innerText()).slice(0,4200)));
-  console.log('BUTTONS',JSON.stringify((await page.locator('button:visible').allTextContents()).slice(0,55)));
-  console.log('NAV',JSON.stringify(await page.locator('[data-app-tab], [data-tab], [data-testid]').evaluateAll(els=>els.slice(0,45).map(e=>({tag:e.tagName,text:(e.textContent||'').trim().slice(0,45),tab:e.dataset.appTab,testid:e.dataset.testid})))));
-  console.log('FORMS',await page.locator('textarea:visible, input:visible').count());
-}
-await page.goto('https://lovetravel.viiversion.com/',{waitUntil:'domcontentloaded',timeout:40000});
-await page.evaluate(()=>localStorage.setItem('max-tour-locale-v1','en'));
-await page.reload({waitUntil:'domcontentloaded'});
-await page.waitForTimeout(2800);
-await dump('ROOT');
-let ai=page.locator('[data-app-tab="assistant"]:visible,button:has-text("AI"):visible,button:has-text("ИИ"):visible').first();
-if(await ai.count()){await ai.click().catch(e=>console.log('AI_CLICK',String(e).slice(0,250)));await page.waitForTimeout(1200);await dump('AI_TAB');}
-await page.goto('https://lovetravel.viiversion.com/v2/',{waitUntil:'domcontentloaded',timeout:40000});await page.waitForTimeout(2300);await dump('V2');
+const browser=await chromium.launch({headless:true});const page=await browser.newPage({viewport:{width:1440,height:900}});
+page.on('pageerror',e=>console.log('PAGEERROR',String(e).slice(0,500)));page.on('response',r=>{if(/api\/tours|travel-commerce/.test(r.url()))console.log('API',r.status(),r.url().slice(0,150))});
+const dump=async(label)=>{console.log('=== '+label+' ===');console.log('BODY',JSON.stringify((await page.locator('body').innerText()).slice(0,5500)));console.log('BUTTONS',JSON.stringify((await page.locator('button:visible').allTextContents()).slice(0,65)));console.log('TEXTAREAS',await page.locator('textarea:visible').count());console.log('INPUTS',JSON.stringify(await page.locator('input:visible').evaluateAll(a=>a.map(x=>({placeholder:x.placeholder,type:x.type})))));console.log('TESTIDS',JSON.stringify(await page.locator('[data-testid]').evaluateAll(a=>a.slice(0,40).map(x=>x.dataset.testid))));};
+await page.goto('https://lovetravel.viiversion.com/v2/',{waitUntil:'domcontentloaded',timeout:45000});await page.waitForTimeout(7500);await dump('HOME');
+await page.getByRole('button',{name:'EN',exact:true}).first().click().catch(e=>console.log('EN',String(e).slice(0,200)));await page.waitForTimeout(1800);await dump('ENGLISH');
+await page.getByRole('button',{name:'Ask AI',exact:true}).last().click().catch(e=>console.log('AIERR',String(e).slice(0,200)));await page.waitForTimeout(2200);await dump('AI');
+const area=page.locator('textarea:visible').first();if(await area.count()){await area.fill('We are two adults visiting Nha Trang. We want a relaxed island excursion with beautiful snorkeling. Which tour would you recommend and what dates are available?');await area.press('Enter');await page.waitForTimeout(12000);await dump('AI ANSWER');}
+await page.getByRole('button',{name:'Tours',exact:true}).last().click().catch(e=>console.log('TOURSERR',String(e).slice(0,200)));await page.waitForTimeout(2800);await dump('TOURS');const card=page.locator('.tour-card:visible').first();if(await card.count()){await card.click();await page.waitForTimeout(2300);await dump('TOUR DETAIL');const trigger=page.locator('[data-date-picker-trigger]:visible').first();if(await trigger.count()){await trigger.click();await page.waitForTimeout(1900);await dump('DATE PICKER');}}
 await browser.close();
