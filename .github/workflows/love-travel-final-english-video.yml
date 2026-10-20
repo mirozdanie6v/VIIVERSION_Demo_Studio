@@ -1,0 +1,100 @@
+name: Love Travel Final English Video
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/love-travel-final-english-video.yml'
+permissions:
+  actions: read
+  contents: read
+jobs:
+  finish-video:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Fetch successful customer-journey capture from the QA-gated run
+        uses: actions/download-artifact@v4
+        with:
+          name: love-travel-ai-booking-experience
+          run-id: 39409274772
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: artifacts
+      - name: Install media and English neural voice
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+          python3 -m pip install --quiet edge-tts
+      - name: Produce narrated 1080p MP4 and readable synced subtitles
+        shell: bash
+        run: |
+          set -euo pipefail
+          dir=$(find artifacts -mindepth 1 -maxdepth 1 -type d | head -n 1)
+          test -s "$dir/capture.webm"
+          RUN_DIR="$dir" python3 - <<'PY'
+          import os,json,pathlib
+          d=pathlib.Path(os.environ['RUN_DIR'])
+          data=json.loads(pathlib.Path('examples/love-travel-ai-booking-experience.json').read_text())
+          texts=[s.get('voiceText',s.get('narration','')).strip() for s in data['steps']]
+          text=' '.join(x for x in texts if x)
+          (d/'narration.txt').write_text(text+'\n')
+          print('Voice script words:',len(text.split()))
+          PY
+          edge-tts --voice en-US-AriaNeural --rate=+6% --file "$dir/narration.txt" --write-media "$dir/voiceover.mp3"
+          RUN_DIR="$dir" python3 - <<'PY'
+          import json,os,pathlib,subprocess,math,textwrap
+          d=pathlib.Path(os.environ['RUN_DIR'])
+          def dur(f):
+            return float(subprocess.check_output(['ffprobe','-v','error','-show_entries','format=duration','-of','csv=p=0',str(f)],text=True).strip())
+          raw=dur(d/'capture.webm'); voice=dur(d/'voiceover.mp3')
+          print('RAW_DURATION',raw,'VOICE_DURATION',voice)
+          if raw<35: raise SystemExit('Captured source too short for a business presentation')
+          words=(d/'narration.txt').read_text().split()
+          cues=[]; line=[]; t=0.5
+          for word in words:
+            if (len(' '.join(line+[word]))>36 or len(line)>=7) and line:
+              cues.append(' '.join(line)); line=[]
+            line.append(word)
+          if line:cues.append(' '.join(line))
+          total=sum(max(1,len(x.replace(' ',''))) for x in cues)
+          def stamp(v):
+            ms=int(round(v*1000))
+            return f'{ms//3600000:02d}:{(ms//60000)%60:02d}:{(ms//1000)%60:02d},{ms%1000:03d}'
+          cursor=0.5; srt=[]
+          for i,c in enumerate(cues):
+            seconds=voice*max(1,len(c.replace(' ','')))/total
+            end=cursor+seconds
+            srt.append(f'{i+1}\n{stamp(cursor)} --> {stamp(end)}\n{c}\n')
+            cursor=end
+          (d/'narration.srt').write_text('\n'.join(srt))
+          out=max(raw+4.0,voice+2.0)
+          pad=out-raw
+          (d/'render.env').write_text(f'RAW_DURATION={raw:.3f}\nVOICE_DURATION={voice:.3f}\nOUTPUT_DURATION={out:.3f}\nPAD_DURATION={pad:.3f}\nOUTRO_START={out-4:.3f}\n')
+          print('OUTPUT_DURATION',out)
+          PY
+          set -a; source "$dir/render.env"; set +a
+          printf '%s\n' 'LOVE TRAVEL | AI BOOKING EXPERIENCE' > "$dir/intro.txt"
+          printf '%s\n' 'Already using Bókun? Contact VIIVERSION' > "$dir/outro.txt"
+          ffmpeg -hide_banner -y \
+            -i "$dir/capture.webm" -i "$dir/voiceover.mp3" \
+            -f lavfi -i "sine=frequency=110:sample_rate=44100:duration=$OUTPUT_DURATION" \
+            -f lavfi -i "sine=frequency=164.81:sample_rate=44100:duration=$OUTPUT_DURATION" \
+            -filter_complex "[0:v]scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2:color=0x101820,tpad=stop_mode=clone:stop_duration=$PAD_DURATION,subtitles='$dir/narration.srt':force_style='Fontname=DejaVu Sans,Fontsize=24,PrimaryColour=&H00FFFFFF,BackColour=&H66000000,BorderStyle=3,Alignment=2,MarginV=74,MarginL=105,MarginR=105',drawtext=textfile='$dir/intro.txt':fontcolor=white:fontsize=47:x=(w-text_w)/2:y=115:box=1:boxcolor=black@0.50:boxborderw=24:enable='between(t,0,2.8)',drawtext=textfile='$dir/outro.txt':fontcolor=white:fontsize=44:x=(w-text_w)/2:y=(h-text_h)/2:box=1:boxcolor=black@0.72:boxborderw=34:enable='gte(t,$OUTRO_START)'[v];[1:a]adelay=500:all=1,volume=1.05,apad[voice];[2:a]volume=0.014[a2];[3:a]volume=0.010[a3];[voice][a2][a3]amix=inputs=3:normalize=0,alimiter=limit=0.90[a]" \
+            -map '[v]' -map '[a]' -t "$OUTPUT_DURATION" -r 30 \
+            -c:v libx264 -preset veryfast -crf 20 -pix_fmt yuv420p \
+            -c:a aac -b:a 192k -movflags +faststart "$dir/Love-Travel-AI-Booking-Experience-EN.mp4"
+          test -s "$dir/Love-Travel-AI-Booking-Experience-EN.mp4"
+          ffprobe -v error -show_entries format=duration,size -of default=noprint_wrappers=1 "$dir/Love-Travel-AI-Booking-Experience-EN.mp4"
+          ffmpeg -hide_banner -y -ss 8 -i "$dir/Love-Travel-AI-Booking-Experience-EN.mp4" -frames:v 1 "$dir/qa-home.png"
+          ffmpeg -hide_banner -y -ss 35 -i "$dir/Love-Travel-AI-Booking-Experience-EN.mp4" -frames:v 1 "$dir/qa-ai.png"
+          ffmpeg -hide_banner -y -sseof -3 -i "$dir/Love-Travel-AI-Booking-Experience-EN.mp4" -frames:v 1 "$dir/qa-outro.png"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: love-travel-final-english-video
+          path: artifacts/
+          if-no-files-found: error
