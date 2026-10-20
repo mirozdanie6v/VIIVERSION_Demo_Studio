@@ -28,10 +28,15 @@
       "narration": "For tour operators already using Bókun, the next step is a better way to turn interest into bookings."
     },
     {
+      "action": "wait",
+      "ms": 8500,
+      "label": "Wait for live tour data"
+    },
+    {
       "action": "waitFor",
       "target": {
         "by": "css",
-        "value": "button[data-app-tab='home']:visible"
+        "value": "button[data-app-tab='home']:visible, button[data-app-tab='catalog']:visible"
       },
       "state": "visible",
       "timeoutMs": 30000
@@ -126,14 +131,14 @@
       "label": "AI considers the travel date"
     },
     {
-      "action": "waitForContentGrowth",
+      "action": "waitFor",
       "target": {
         "by": "css",
-        "value": ".ai-messages"
+        "value": ".ai-msg.bot:has-text('Finding options')"
       },
-      "minAddedChars": 28,
-      "timeoutMs": 40000,
-      "label": "Wait for tour advice"
+      "state": "hidden",
+      "timeoutMs": 60000,
+      "label": "Wait for completed AI consultation"
     },
     {
       "action": "wait",
