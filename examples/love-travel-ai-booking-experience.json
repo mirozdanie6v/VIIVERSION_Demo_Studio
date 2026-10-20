@@ -1,17 +1,17 @@
 {
-  "name": "Love Travel — AI Booking Experience (English, safe production demo)",
+  "name": "Love Travel — AI Booking Experience · Bókun-connected customer journey",
   "baseUrl": "https://lovetravel.viiversion.com",
   "viewport": {
-    "width": 1600,
+    "width": 1440,
     "height": 900
   },
-  "defaultPauseMs": 650,
+  "defaultPauseMs": 450,
   "presentation": {
     "smartZoom": {
       "scale": 1.08,
-      "mobileScale": 1.06,
+      "mobileScale": 1.04,
       "transitionMs": 480,
-      "settleMs": 200
+      "settleMs": 180
     },
     "focusRing": {
       "enabled": false
@@ -23,56 +23,239 @@
   "steps": [
     {
       "action": "goto",
-      "url": "/",
-      "label": "Love Travel",
-      "narration": "What if your existing Bókun inventory could become a more personal booking experience?"
+      "url": "/v2/",
+      "label": "Love Travel app",
+      "narration": "For tour operators already using Bókun, the next step is a better way to turn interest into bookings."
+    },
+    {
+      "action": "waitFor",
+      "target": {
+        "by": "css",
+        "value": "button[data-app-tab='home']:visible"
+      },
+      "state": "visible",
+      "timeoutMs": 30000
+    },
+    {
+      "action": "click",
+      "target": {
+        "by": "css",
+        "value": "button[data-locale='en']:visible"
+      },
+      "label": "English customer experience"
+    },
+    {
+      "action": "wait",
+      "ms": 2100,
+      "label": "Discover Nha Trang",
+      "narration": "This is Love Travel, a guest-friendly experience built around real tours from a Nha Trang operator."
+    },
+    {
+      "action": "click",
+      "target": {
+        "by": "css",
+        "value": "button[data-app-tab='assistant']:visible"
+      },
+      "label": "Ask the AI travel consultant"
+    },
+    {
+      "action": "waitFor",
+      "target": {
+        "by": "css",
+        "value": "textarea[name='message']:visible"
+      },
+      "state": "visible",
+      "timeoutMs": 18000
+    },
+    {
+      "action": "wait",
+      "ms": 1600,
+      "label": "Meet the AI consultant",
+      "narration": "Instead of searching endless filters, guests can simply explain what they want in everyday language."
+    },
+    {
+      "action": "fill",
+      "target": {
+        "by": "css",
+        "value": "textarea[name='message']:visible"
+      },
+      "value": "We are two adults visiting Nha Trang. We want a relaxed island excursion with beautiful snorkeling. Which tour would you recommend and what dates are available?",
+      "label": "Ask a real traveler question"
+    },
+    {
+      "action": "wait",
+      "ms": 1000,
+      "label": "Natural-language request"
+    },
+    {
+      "action": "press",
+      "target": {
+        "by": "css",
+        "value": "textarea[name='message']:visible"
+      },
+      "key": "Enter",
+      "label": "Send question"
+    },
+    {
+      "action": "waitFor",
+      "target": {
+        "by": "css",
+        "value": ".ai-msg.bot .ai-msg-text:visible"
+      },
+      "state": "visible",
+      "timeoutMs": 45000,
+      "label": "Wait for live AI reply"
+    },
+    {
+      "action": "wait",
+      "ms": 1900,
+      "label": "AI consultant responds",
+      "narration": "The assistant responds in context, asks the next useful question and keeps the conversation moving toward the right tour."
+    },
+    {
+      "action": "click",
+      "target": {
+        "by": "css",
+        "value": "button[data-ai-action='quick']:has-text('Tomorrow'):visible"
+      },
+      "label": "Provide travel date"
+    },
+    {
+      "action": "wait",
+      "ms": 2400,
+      "label": "AI considers the travel date"
+    },
+    {
+      "action": "waitForContentGrowth",
+      "target": {
+        "by": "css",
+        "value": ".ai-messages"
+      },
+      "minAddedChars": 28,
+      "timeoutMs": 40000,
+      "label": "Wait for tour advice"
     },
     {
       "action": "wait",
       "ms": 2300,
-      "label": "Explore Love Travel",
-      "narration": "Meet Love Travel — a multilingual guest experience powered by VIIVERSION."
+      "label": "Tour recommendation",
+      "narration": "Customers can compare relevant excursions while availability and pricing come from the existing Bókun-connected catalog."
     },
     {
-      "action": "scroll",
-      "y": 550,
-      "label": "Discover excursions",
-      "narration": "Travelers discover excursions, compare options and explore experiences around Nha Trang."
+      "action": "click",
+      "target": {
+        "by": "css",
+        "value": "button[data-app-tab='catalog']:visible"
+      },
+      "label": "Browse available tours"
     },
     {
-      "action": "wait",
-      "ms": 1400,
-      "label": "Bókun-connected catalog",
-      "narration": "Live tour information is connected to Bókun, so your existing booking platform remains central."
-    },
-    {
-      "action": "scroll",
-      "y": -550,
-      "label": "Return to home"
-    },
-    {
-      "action": "wait",
-      "ms": 1250,
-      "label": "AI travel assistance",
-      "narration": "An AI consultant can help guests choose the right trip in natural language."
+      "action": "waitFor",
+      "target": {
+        "by": "css",
+        "value": ".tour-card:visible"
+      },
+      "state": "visible",
+      "timeoutMs": 30000,
+      "label": "Wait for Bókun catalog"
     },
     {
       "action": "wait",
       "ms": 1800,
-      "label": "Real-time information",
-      "narration": "For Robinson Beach and Hòn Mun, the integration supports live availability and price checks."
+      "label": "Bókun-backed island tours",
+      "narration": "Here are Robinson Beach and Hòn Mun, with descriptions, live prices and departure information."
+    },
+    {
+      "action": "click",
+      "target": {
+        "by": "css",
+        "value": ".tour-card:visible >> nth=1"
+      },
+      "label": "Explore Hòn Mun snorkeling"
+    },
+    {
+      "action": "waitFor",
+      "target": {
+        "by": "css",
+        "value": "[data-date-picker-trigger]:visible"
+      },
+      "state": "visible",
+      "timeoutMs": 25000,
+      "label": "Wait for real departure calendar"
     },
     {
       "action": "wait",
-      "ms": 1700,
-      "label": "Booking integration",
-      "narration": "The Bókun booking connection has been tested. New bookings are disabled in this production demonstration."
+      "ms": 1800,
+      "label": "Tour experience and booking choices",
+      "narration": "The guest opens the tour, reviews the program and checks the dates offered by the operator."
+    },
+    {
+      "action": "click",
+      "target": {
+        "by": "css",
+        "value": "[data-date-picker-trigger]:visible"
+      },
+      "label": "Check available Bókun departures"
+    },
+    {
+      "action": "waitFor",
+      "target": {
+        "by": "css",
+        "value": "[data-preview-slot]:not([disabled]):visible"
+      },
+      "state": "visible",
+      "timeoutMs": 25000,
+      "label": "Wait for available departure"
     },
     {
       "action": "wait",
-      "ms": 1500,
-      "label": "Love Travel x Bókun",
-      "narration": "Keep your Bókun workflow. Add an intelligent new way for customers to discover and book."
+      "ms": 1300,
+      "label": "Live availability",
+      "narration": "The booking journey follows Bókun's actual availability rather than invented dates or prices."
+    },
+    {
+      "action": "click",
+      "target": {
+        "by": "css",
+        "value": "[data-preview-slot]:not([disabled]):visible >> nth=0"
+      },
+      "label": "Select an available departure"
+    },
+    {
+      "action": "waitFor",
+      "target": {
+        "by": "css",
+        "value": "[data-preview-rate]:visible"
+      },
+      "state": "visible",
+      "timeoutMs": 25000,
+      "label": "Wait for valid rate"
+    },
+    {
+      "action": "click",
+      "target": {
+        "by": "css",
+        "value": "[data-preview-rate]:visible >> nth=0"
+      },
+      "label": "Choose live available option"
+    },
+    {
+      "action": "wait",
+      "ms": 2200,
+      "label": "Check tour rate and price",
+      "narration": "The traveler selects a valid tour option before guest details and final confirmation."
+    },
+    {
+      "action": "wait",
+      "ms": 2600,
+      "label": "No production booking submitted",
+      "narration": "Love Travel adds an AI-first customer experience while Bókun remains the source for the operator's booking workflow."
+    },
+    {
+      "action": "wait",
+      "ms": 2100,
+      "label": "Contact VIIVERSION",
+      "narration": "Already using Bókun? Contact VIIVERSION to see how this customer experience can work for your business."
     }
   ]
 }
