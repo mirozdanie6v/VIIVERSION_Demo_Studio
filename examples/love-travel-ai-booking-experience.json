@@ -36,7 +36,7 @@
       "action": "waitFor",
       "target": {
         "by": "css",
-        "value": "button[data-app-tab='home']:visible, button[data-app-tab='catalog']:visible"
+        "value": "button[data-nav='catalog']:visible"
       },
       "state": "visible",
       "timeoutMs": 30000
@@ -59,7 +59,7 @@
       "action": "click",
       "target": {
         "by": "css",
-        "value": "button[data-app-tab='assistant']:visible"
+        "value": "button[data-nav='ai']:visible"
       },
       "label": "Ask the AI travel consultant"
     },
@@ -150,7 +150,7 @@
       "action": "click",
       "target": {
         "by": "css",
-        "value": "button[data-app-tab='catalog']:visible"
+        "value": "button[data-nav='catalog']:visible"
       },
       "label": "Browse available tours"
     },
@@ -158,7 +158,7 @@
       "action": "waitFor",
       "target": {
         "by": "css",
-        "value": ".tour-card:visible"
+        "value": ".lt-tour-card:visible"
       },
       "state": "visible",
       "timeoutMs": 30000,
@@ -174,7 +174,7 @@
       "action": "click",
       "target": {
         "by": "css",
-        "value": ".tour-card:visible >> nth=1"
+        "value": ".lt-tour-card:has-text('Hon Mun'):visible"
       },
       "label": "Explore Hòn Mun snorkeling"
     },
@@ -182,7 +182,7 @@
       "action": "waitFor",
       "target": {
         "by": "css",
-        "value": "[data-date-picker-trigger]:visible"
+        "value": "button:has-text('Date & time'):visible"
       },
       "state": "visible",
       "timeoutMs": 25000,
@@ -198,51 +198,15 @@
       "action": "click",
       "target": {
         "by": "css",
-        "value": "[data-date-picker-trigger]:visible"
+        "value": "button:has-text('Date & time'):visible"
       },
       "label": "Check available Bókun departures"
-    },
-    {
-      "action": "waitFor",
-      "target": {
-        "by": "css",
-        "value": "[data-preview-slot]:not([disabled]):visible"
-      },
-      "state": "visible",
-      "timeoutMs": 25000,
-      "label": "Wait for available departure"
     },
     {
       "action": "wait",
       "ms": 1300,
       "label": "Live availability",
       "narration": "The booking journey follows Bókun's actual availability rather than invented dates or prices."
-    },
-    {
-      "action": "click",
-      "target": {
-        "by": "css",
-        "value": "[data-preview-slot]:not([disabled]):visible >> nth=0"
-      },
-      "label": "Select an available departure"
-    },
-    {
-      "action": "waitFor",
-      "target": {
-        "by": "css",
-        "value": "[data-preview-rate]:visible"
-      },
-      "state": "visible",
-      "timeoutMs": 25000,
-      "label": "Wait for valid rate"
-    },
-    {
-      "action": "click",
-      "target": {
-        "by": "css",
-        "value": "[data-preview-rate]:visible >> nth=0"
-      },
-      "label": "Choose live available option"
     },
     {
       "action": "wait",
