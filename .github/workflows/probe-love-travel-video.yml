@@ -1,0 +1,20 @@
+name: Probe Love Travel UI
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/probe-love-travel-video.mjs'
+      - '.github/workflows/probe-love-travel-video.yml'
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: node scripts/probe-love-travel-video.mjs
